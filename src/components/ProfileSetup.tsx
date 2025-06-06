@@ -2245,7 +2245,7 @@ const ProfileSetup = () => {
                 {accountType
                   ? t(
                       "redirecting-message-with-role",
-                      t("redirecting-message-with-role-desc", `You will be redirected to your ${accountType} dashboard in a few seconds...`)
+                      t("redirecting-message-with-role-desc", `You will be redirected to your dashboard in a few seconds...`)
                     )
                   : t(
                       "redirecting-message",
@@ -2265,7 +2265,7 @@ const ProfileSetup = () => {
             {accountTypeDisplay 
               ? t(
                   "goto-role-dashboard",
-                  t("goto-role-dashboard-desc", `Go to ${accountTypeDisplay} Dashboard Now`)
+                  t("goto-role-dashboard-desc", `Go to Dashboard Now`)
                 )
               : t("goto-dashboard", "Go to Dashboard Now")}
           </Button>

@@ -25,7 +25,7 @@ const VerifyEmail = () => {
       "min-h-screen flex flex-col overflow-x-hidden",
       isDark ? "bg-background" : "bg-slate-50"
     )}>
-      <Navbar />
+      {/* <Navbar /> */}
       
       <div className="flex-grow pt-16 pb-12 flex flex-col items-center justify-center relative overflow-x-hidden">
         {/* Background blur circles - adjusted for better light theme visibility */}
@@ -43,14 +43,14 @@ const VerifyEmail = () => {
         />
         
         <motion.div
-          className="w-full max-w-md mx-auto px-4"
+          className="w-full max-w-xl mx-auto px-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
           {/* Card wrapper for better light theme contrast */}
           <div className={cn(
-            "rounded-xl p-6 shadow-lg",
+            "rounded-xl p-10 shadow-lg",
             isDark ? "bg-background/60 backdrop-blur-md border border-border/50" : "bg-white border border-slate-200"
           )}>
             <EmailVerification />

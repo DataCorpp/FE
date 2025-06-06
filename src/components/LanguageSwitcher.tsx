@@ -52,7 +52,7 @@ const LanguageSwitcher = () => {
               <span className="text-xl" role="img" aria-label={language.name}>
                 {language.flag}
               </span>
-              <span>{t(language.code === 'en' ? 'english' : 'japanese')}</span>
+              <span>{t(language.code === 'en' ? 'english' : language.code === 'ja' ? 'japanese' : language.name)}</span>
               {currentLanguage === language.code && (
                 <motion.div
                   initial={{ scale: 0 }}

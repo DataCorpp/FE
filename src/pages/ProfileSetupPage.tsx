@@ -15,7 +15,7 @@ const ProfileSetupPage = () => {
 
   return (
     <div className="min-h-screen flex flex-col overflow-x-hidden">
-      <Navbar />
+      {/* <Navbar /> */}
       
       <div className="flex-grow pt-16 pb-12 flex flex-col items-center justify-start relative overflow-x-hidden">
         {/* Background blur circles */}
