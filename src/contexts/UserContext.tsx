@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { authApi } from "@/lib/api"; // Import authApi
+import { ApiResponse } from "@/lib/api"; // Add this import
 
 export type UserRole = "manufacturer" | "brand" | "retailer";
 
@@ -39,6 +41,7 @@ interface UserData {
   image?: string; // Alternative URL to user image
   profilePic?: string; // URL to profile picture
   status: "online" | "away" | "busy"; // User's online status
+  emailVerified?: boolean; // Flag indicating if email is verified
   // Additional profile information
   phone?: string;
   website?: string;
@@ -50,21 +53,37 @@ interface UserData {
   retailerSettings?: RetailerSettings;
 }
 
+// Define a type for profile update data
+type ProfileUpdateData = Partial<Omit<UserData, 'id' | 'createdAt'>>;
+
+// Define a type for registration response data
+export interface RegistrationResponse {
+  _id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: string;
+  token: string;
+  verificationCode?: string;
+}
+
 interface UserContextType {
   role: UserRole;
   isAuthenticated: boolean;
   user: UserData | null;
   login: (email: string, password: string, role?: UserRole) => Promise<void>;
-  register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<void>;
+  register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<RegistrationResponse>;
   logout: () => void;
   switchRole: (newRole: UserRole) => void;
-  updateUserProfile: (updatedData: Partial<UserData>) => void;
+  updateUserProfile: (updatedData: Partial<UserData>) => Promise<void>;
   updateRoleSettings: <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>) => void;
   updateUserStatus: (status: "online" | "away" | "busy") => void;
   updateUserAvatar: (avatarUrl: string) => void;
   verifyEmail: (email: string, verificationCode: string) => Promise<void>;
-  resendVerificationEmail: (email: string) => Promise<void>;
-  updateProfile: (profileData: any) => Promise<void>;
+  resendVerificationEmail: (email: string) => Promise<ApiResponse>;
+  updateProfile: (profileData: ProfileUpdateData) => Promise<void>;
+  updateUserRole: (newRole: UserRole) => Promise<void>;
+  updateRoleSettingsInDb: <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>) => Promise<void>;
 }
 
 export const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -152,68 +171,58 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     setIsAuthenticated(true);
   };
 
-  const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<void> => {
-    // In a real app, this would make an API call to register the user
-    // For now, we'll simulate a successful registration
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Create role-specific settings based on the role
-    let roleSpecificSettings = {};
-    
-    if (userData.role === "manufacturer") {
-      roleSpecificSettings = {
-        manufacturerSettings: {
-          productionCapacity: 0,
-          certifications: [],
-          preferredCategories: [],
-          minimumOrderValue: 0
-        }
+  const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<RegistrationResponse> => {
+    try {
+      // Use authApi to register the user with the backend
+      const response = await authApi.register({
+        name: userData.name,
+        email: userData.email,
+        password: userData.password,
+        role: userData.role,
+        company: userData.companyName || undefined,
+        phone: userData.phone || undefined
+      });
+      
+      // Check if response has data with _id, which indicates a successful registration
+      if (!response.data || !response.data._id) {
+        throw new Error(response.data?.message || "Registration failed");
+      }
+      
+      // Create user object from response
+      const newUser: UserData = {
+        id: response.data._id || Math.random().toString(36).substr(2, 9),
+        name: userData.name,
+        email: userData.email,
+        companyName: userData.companyName || "",
+        role: userData.role,
+        profileComplete: false,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        notifications: 0,
+        avatar: "", 
+        status: "online",
+        emailVerified: false
       };
-    } else if (userData.role === "brand") {
-      roleSpecificSettings = {
-        brandSettings: {
-          marketSegments: [],
-          brandValues: [],
-          targetDemographics: [],
-          productCategories: []
-        }
-      };
-    } else if (userData.role === "retailer") {
-      roleSpecificSettings = {
-        retailerSettings: {
-          storeLocations: 0,
-          averageOrderValue: 0,
-          customerBase: [],
-          preferredCategories: []
-        }
-      };
+      
+      // Store the token in localStorage
+      if (response.data.token) {
+        localStorage.setItem("auth_token", response.data.token);
+      }
+      
+      // Save user to localStorage
+      localStorage.setItem("user", JSON.stringify(newUser));
+      
+      // Update state
+      setUser(newUser);
+      setRole(newUser.role);
+      setIsAuthenticated(true);
+      
+      // Return the response data (including any verificationCode for dev mode)
+      return response.data as RegistrationResponse;
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
     }
-    
-    // Create user with random ID and default values
-    const newUser: UserData = {
-      ...userData,
-      id: Math.random().toString(36).substr(2, 9),
-      profileComplete: false,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      notifications: 0,
-      avatar: "", // In a real app, this would come from the API
-      status: "online", // In a real app, this would come from the API
-      ...roleSpecificSettings
-    };
-    
-    // Omit password before storing in state
-    const { password, ...userWithoutPassword } = userData;
-    
-    // Save to localStorage for persistence
-    localStorage.setItem("user", JSON.stringify(newUser));
-    
-    // Update state
-    setUser(newUser);
-    setRole(newUser.role);
-    setIsAuthenticated(true);
   };
 
   const logout = (): void => {
@@ -242,26 +251,40 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const updateUserProfile = (updatedData: Partial<UserData>): void => {
+  const updateUserProfile = async (updatedData: Partial<UserData>): Promise<void> => {
     if (user) {
-      // Update user with new profile data
-      const updatedUser = {
-        ...user,
-        ...updatedData,
-        lastLogin: new Date().toISOString()
-      };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
+      try {
+        // Call API to update the user's profile in the database
+        const response = await authApi.updateProfile(updatedData);
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update user with new profile data
+        const updatedUser = {
+          ...user,
+          ...updatedData,
+        };
+        
+        // Save to localStorage
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        
+        // Update state
+        setUser(updatedUser);
+        
+        console.log("User profile updated in the database");
+      } catch (error) {
+        console.error("Profile update error:", error);
+        throw error;
+      }
     }
   };
 
   const updateRoleSettings = <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>): void => {
     if (user) {
       let updatedUser;
+      let settingsKey: string;
       
       // Update appropriate settings based on role
       if (role === "manufacturer" && user.manufacturerSettings) {
@@ -272,6 +295,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "manufacturerSettings";
       } else if (role === "brand" && user.brandSettings) {
         updatedUser = {
           ...user,
@@ -280,6 +304,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "brandSettings";
       } else if (role === "retailer" && user.retailerSettings) {
         updatedUser = {
           ...user,
@@ -288,9 +313,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "retailerSettings";
       } else {
         // If settings don't exist yet, create them
-        const settingsKey = `${role}Settings` as keyof UserData;
+        settingsKey = `${role}Settings` as keyof UserData;
         updatedUser = {
           ...user,
           [settingsKey]: settings
@@ -302,6 +328,89 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       
       // Update state
       setUser(updatedUser);
+      
+      // Update in database (fire and forget)
+      try {
+        // Create a payload with the role-specific settings under the appropriate key
+        const payload = {
+          [settingsKey]: updatedUser[settingsKey as keyof UserData]
+        };
+        
+        authApi.updateProfile(payload)
+          .then(response => {
+            if (!response.data.success) {
+              console.error("Failed to save role settings in database:", response.data.message);
+            } else {
+              console.log(`${settingsKey} updated in database`);
+            }
+          })
+          .catch(error => {
+            console.error("Error updating role settings in database:", error);
+          });
+      } catch (error) {
+        console.error("Error preparing role settings update:", error);
+      }
+    }
+  };
+
+  // Add a dedicated async function for updating role settings with await
+  const updateRoleSettingsInDb = async <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>): Promise<void> => {
+    if (user) {
+      try {
+        let settingsKey: string;
+        let updatedSettings: Record<string, unknown> = {};
+        
+        // Prepare settings based on role
+        if (role === "manufacturer") {
+          settingsKey = "manufacturerSettings";
+          updatedSettings = {
+            ...user.manufacturerSettings,
+            ...settings
+          };
+        } else if (role === "brand") {
+          settingsKey = "brandSettings";
+          updatedSettings = {
+            ...user.brandSettings,
+            ...settings
+          };
+        } else if (role === "retailer") {
+          settingsKey = "retailerSettings";
+          updatedSettings = {
+            ...user.retailerSettings,
+            ...settings
+          };
+        } else {
+          throw new Error("Invalid role type");
+        }
+        
+        // Update in the database
+        const response = await authApi.updateProfile({
+          [settingsKey]: updatedSettings
+        });
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update local user state and localStorage
+        const updatedUser = {
+          ...user,
+          [settingsKey]: updatedSettings
+        };
+        
+        // Save to localStorage
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        
+        // Update state
+        setUser(updatedUser);
+        
+        console.log(`${settingsKey} updated successfully in database`);
+      } catch (error) {
+        console.error("Role settings update error:", error);
+        throw error;
+      }
+    } else {
+      throw new Error("No user is logged in");
     }
   };
 
@@ -338,74 +447,119 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const verifyEmail = async (email: string, verificationCode: string): Promise<void> => {
-    // In a real app, this would make an API call to verify the email
-    // For now, we'll simulate successful verification
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Verify hard-coded verification code for demo purposes
-    if (verificationCode !== "123456") {
-      throw new Error("Invalid verification code");
-    }
-    
-    // If we got here, verification was successful
-    // In a real app, we would update the user's email verification status in the backend
-    
-    if (user) {
-      // Update user to mark email as verified
-      const updatedUser = {
-        ...user,
-        emailVerified: true,
-      };
+    try {
+      const response = await authApi.verifyEmail(email, verificationCode);
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
-    }
-  };
-
-  const resendVerificationEmail = async (email: string): Promise<void> => {
-    // In a real app, this would make an API call to resend the verification email
-    // For now, we'll simulate a successful resend
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // In a real app, we would trigger an email sending from the backend
-    console.log(`Verification email resent to ${email}`);
-    
-    // Nothing to update in the state for this operation
-  };
-
-  const updateProfile = async (profileData: any): Promise<void> => {
-    // In a real app, this would make an API call to update the user's profile
-    // For now, we'll simulate a successful profile update
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (user) {
-      // Update user with the new profile data
-      const updatedUser = {
-        ...user,
-        ...profileData,
-        profileComplete: true,
-        lastUpdated: new Date().toISOString(),
-      };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
-      
-      // If role was updated, update the role state as well
-      if (profileData.role && profileData.role !== user.role) {
-        setRole(profileData.role);
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
       }
+      
+      if (user) {
+        // Update user to mark email as verified
+        const updatedUser: UserData = {
+          ...user,
+          emailVerified: true,
+          status: "online"
+        };
+        
+        // Save to localStorage
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        
+        // Update state
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error("Email verification error:", error);
+      throw error;
+    }
+  };
+
+  const resendVerificationEmail = async (email: string) => {
+    try {
+      const response = await authApi.resendVerificationEmail(email);
+      
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
+      }
+      
+      // Return response data to access verificationCode in development mode
+      return response.data;
+    } catch (error) {
+      console.error("Resend verification email error:", error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (profileData: ProfileUpdateData): Promise<void> => {
+    try {
+      // Make a real API call to update the user's profile in the database
+      const response = await authApi.updateProfile(profileData);
+      
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
+      }
+      
+      if (user) {
+        // Update user with the new profile data
+        const updatedUser: UserData = {
+          ...user,
+          ...profileData,
+          profileComplete: profileData.profileComplete ?? user.profileComplete,
+        };
+        
+        // Save to localStorage with lastUpdated timestamp
+        const userWithMeta = {
+          ...updatedUser,
+          lastUpdated: new Date().toISOString()
+        };
+        localStorage.setItem("user", JSON.stringify(userWithMeta));
+        
+        // Update state with type-safe user object
+        setUser(updatedUser);
+        
+        // If role was updated, update the role state as well
+        if (profileData.role && profileData.role !== user.role) {
+          setRole(profileData.role);
+        }
+      }
+      
+      console.log("Profile updated successfully in database");
+    } catch (error) {
+      console.error("Profile update error:", error);
+      throw error;
+    }
+  };
+
+  const updateUserRole = async (newRole: UserRole): Promise<void> => {
+    if (user) {
+      try {
+        // Call API to update the user's role in the database
+        const response = await authApi.updateProfile({ role: newRole });
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update user with new role
+        const updatedUser = {
+          ...user,
+          role: newRole
+        };
+        
+        // Save to localStorage
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        
+        // Update state
+        setUser(updatedUser);
+        setRole(newRole);
+        
+        console.log(`User role updated to ${newRole} in the database`);
+      } catch (error) {
+        console.error("Role update error:", error);
+        throw error;
+      }
+    } else {
+      throw new Error("No user is logged in");
     }
   };
 
@@ -425,7 +579,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         updateUserAvatar,
         verifyEmail,
         resendVerificationEmail,
-        updateProfile
+        updateProfile,
+        updateUserRole,
+        updateRoleSettingsInDb
       }}
     >
       {children}

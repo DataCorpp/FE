@@ -27,7 +27,8 @@ import {
   Globe,
   MapPin,
   Save,
-  X
+  X,
+  Loader2
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -84,10 +85,12 @@ interface ProfileFormProps {
 }
 
 const ProfileForm = ({ onCancel }: ProfileFormProps) => {
-  const { role, user, updateUserProfile, updateRoleSettings } = useUser();
+  const { role, user, updateUserProfile, updateRoleSettingsInDb } = useUser();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBasicInfoUpdated, setIsBasicInfoUpdated] = useState(false);
+  const [isRoleInfoUpdated, setIsRoleInfoUpdated] = useState(false);
   const { t } = useTranslation();
   
   // Create initial values based on role
@@ -153,6 +156,8 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
   // Handle form submission
   const onSubmit = async (data: FormValues) => {
     setIsSubmitting(true);
+    setIsBasicInfoUpdated(false);
+    setIsRoleInfoUpdated(false);
     
     try {
       // Update base profile information
@@ -168,7 +173,8 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
       };
       
       // Call updateUserProfile to update base info
-      updateUserProfile(baseProfile);
+      await updateUserProfile(baseProfile);
+      setIsBasicInfoUpdated(true);
       
       // Process and update role-specific settings
       if (role === "manufacturer" && 'productionCapacity' in data) {
@@ -181,7 +187,8 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
           preferredCategories: user?.manufacturerSettings?.preferredCategories || [],
         };
         
-        updateRoleSettings(manufacturerSettings);
+        await updateRoleSettingsInDb(manufacturerSettings);
+        setIsRoleInfoUpdated(true);
       } else if (role === "brand" && 'marketSegments' in data) {
         const brandData = data as BrandFormValues;
         const brandSettings = {
@@ -192,7 +199,8 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
           productCategories: user?.brandSettings?.productCategories || [],
         };
         
-        updateRoleSettings(brandSettings);
+        await updateRoleSettingsInDb(brandSettings);
+        setIsRoleInfoUpdated(true);
       } else if (role === "retailer" && 'storeLocations' in data) {
         const retailerData = data as RetailerFormValues;
         const retailerSettings = {
@@ -203,24 +211,35 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
           preferredCategories: user?.retailerSettings?.preferredCategories || [],
         };
         
-        updateRoleSettings(retailerSettings);
+        await updateRoleSettingsInDb(retailerSettings);
+        setIsRoleInfoUpdated(true);
       }
       
       // Show success toast
       toast({
         title: t("profile-updated"),
-        description: t("profile-updated-message"),
+        description: t("profile-updated-message", "Your profile information has been successfully updated in the database."),
       });
       
       // Exit edit mode
       onCancel();
     } catch (error) {
       console.error("Error updating profile:", error);
-      toast({
-        title: t("update-failed"),
-        description: t("update-failed-message"),
-        variant: "destructive",
-      });
+      
+      // Show more specific error message based on what was updated
+      if (isBasicInfoUpdated && !isRoleInfoUpdated) {
+        toast({
+          title: t("partial-update", "Partial Update"),
+          description: t("role-info-failed", "Basic information was updated, but there was an error updating role-specific settings."),
+          variant: "destructive",
+        });
+      } else if (!isBasicInfoUpdated) {
+        toast({
+          title: t("update-failed", "Update Failed"),
+          description: t("update-failed-message", "Could not update your profile information. Please try again."),
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -555,6 +574,7 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
           variant="ghost" 
           size="icon" 
           onClick={onCancel}
+          disabled={isSubmitting}
         >
           <X className="w-5 h-5" />
         </Button>
@@ -572,12 +592,16 @@ const ProfileForm = ({ onCancel }: ProfileFormProps) => {
                 variant="outline" 
                 className="mr-4"
                 onClick={onCancel}
+                disabled={isSubmitting}
               >
                 {t("cancel")}
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
-                  t("saving")
+                  <div className="flex items-center">
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <span>{isBasicInfoUpdated ? t("updating-role-settings", "Updating role settings...") : t("updating-profile", "Updating profile...")}</span>
+                  </div>
                 ) : (
                   <>
                     <Save className="w-4 h-4 mr-2" />

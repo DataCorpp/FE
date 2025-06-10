@@ -1,82 +1,124 @@
-import axios from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
-// Sử dụng biến môi trường đúng chuẩn Vite
-const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// Use hardcoded URLs if environment variables are not available
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5001/api';
 
-// Base URL của API - nên được cấu hình từ biến môi trường
-const API_BASE_URL = 'http://localhost:5000/api';
+// Add console logs to help debug API connection issues
+console.log('API Base URL:', API_BASE_URL);
+console.log('AI API Base URL:', AI_API_BASE_URL);
+
+// Type definitions
+export interface ApiResponse<T = Record<string, unknown>> {
+  success?: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+  _id?: string;
+  name?: string;
+  email?: string;
+  role?: string;
+  status?: string;
+  token?: string;
+  verificationCode?: string;
+}
+
+export interface ProductData {
+  id?: string;
+  name: string;
+  description?: string;
+  price?: number;
+  brand?: string;
+  category?: string;
+  ingredients?: string[];
+  nutritionFacts?: Record<string, unknown>;
+  image?: string;
+  [key: string]: unknown; // For additional fields
+}
+
+export interface CrawlerTaskConfig {
+  depth: number;
+  maxPages: number;
+  selectors?: {
+    productContainer?: string;
+    name?: string;
+    price?: string;
+    description?: string;
+    image?: string;
+    ingredients?: string;
+    nutritionFacts?: string;
+    brand?: string;
+  };
+}
+
+export interface CrawlerTaskData {
+  url: string;
+  config: CrawlerTaskConfig;
+  userId: string;
+  autoSave?: boolean;
+  aiProvider?: 'default' | 'openai' | 'gemini' | 'claude';
+}
 
 // Tạo một instance axios với cấu hình chung
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+const createApiInstance = (baseURL: string): AxiosInstance => {
+  const instance = axios.create({
+    baseURL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
 
-// Thêm interceptor để xử lý token
-api.interceptors.request.use(
-  (config) => {
-    // Lấy token từ localStorage nếu có
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+  // Thêm interceptor để xử lý token
+  instance.interceptors.request.use(
+    (config) => {
+      // Lấy token từ localStorage nếu có
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+
+  return instance;
+};
+
+// Khởi tạo các instance API
+const api = createApiInstance(API_BASE_URL);
+const aiApi = createApiInstance(AI_API_BASE_URL);
 
 // API cho tính năng Web Crawler
 export const crawlerApi = {
   // Tạo nhiệm vụ crawl mới
-  createTask: (data: {
-    url: string;
-    config: {
-      depth: number;
-      maxPages: number;
-      selectors?: {
-        productContainer?: string;
-        name?: string;
-        price?: string;
-        description?: string;
-        image?: string;
-        ingredients?: string;
-        nutritionFacts?: string;
-        brand?: string;
-      };
-    };
-    userId: string;
-    autoSave?: boolean;
-    aiProvider?: 'default' | 'openai' | 'gemini' | 'claude';
-  }) => {
-    return api.post('/crawler/tasks', data);
+  createTask: (data: CrawlerTaskData) => {
+    return aiApi.post<ApiResponse>('/crawler/tasks', data);
   },
 
   // Lấy danh sách nhiệm vụ crawl
   getTasks: (page = 1, limit = 10, status?: string) => {
-    return api.get('/crawler/tasks', {
+    return aiApi.get<ApiResponse>('/crawler/tasks', {
       params: { page, limit, status },
     });
   },
 
   // Lấy chi tiết nhiệm vụ crawl
   getTask: (taskId: string) => {
-    return api.get(`/crawler/tasks/${taskId}`);
+    return aiApi.get<ApiResponse>(`/crawler/tasks/${taskId}`);
   },
 
   // Lấy kết quả crawl
   getResults: (taskId: string) => {
-    return api.get(`/crawler/results/${taskId}`);
+    return aiApi.get<ApiResponse>(`/crawler/results/${taskId}`);
   },
 
   // Xử lý kết quả crawl với AI
   processResult: (resultId: string) => {
-    return api.post(`/crawler/process/${resultId}`);
+    return aiApi.post<ApiResponse>(`/crawler/process/${resultId}`);
   },
 
   // Thêm sản phẩm từ kết quả crawl vào catalog
-  integrateProduct: (resultId: string, userId: string = 'admin', additionalParams = {}) => {
+  integrateProduct: (resultId: string, userId: string = 'admin', additionalParams: Record<string, unknown> = {}) => {
     const params = {
       userId,
       minimumOrderQuantity: 10,
@@ -99,36 +141,26 @@ export const crawlerApi = {
       params.currentAvailableStock = Number(params.currentAvailableStock);
     }
     
-    return api.post(`/crawler/integrate/${resultId}`, params);
+    return aiApi.post<ApiResponse>(`/crawler/integrate/${resultId}`, params);
   },
 
   // Xóa nhiệm vụ crawl
   deleteTask: (taskId: string) => {
-    return api.delete(`/crawler/tasks/${taskId}`);
+    return aiApi.delete<ApiResponse>(`/crawler/tasks/${taskId}`);
   },
 
   // Get queue status
-  getQueueStatus: async () => {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/crawler/queue`);
-      return response;
-    } catch (error) {
-      throw error;
-    }
+  getQueueStatus: () => {
+    return aiApi.get<ApiResponse>(`/crawler/queue`);
   },
 
   // Clear queue
-  clearQueue: async () => {
-    try {
-      const response = await axios.delete(`${API_BASE_URL}/crawler/queue`);
-      return response;
-    } catch (error) {
-      throw error;
-    }
+  clearQueue: () => {
+    return aiApi.delete<ApiResponse>(`/crawler/queue`);
   },
 
-  batchDeleteByStatus: async (status: string) => {
-    return await api.delete(`/crawler/tasks/status/${status}`);
+  batchDeleteByStatus: (status: string) => {
+    return aiApi.delete<ApiResponse>(`/crawler/tasks/status/${status}`);
   },
 };
 
@@ -146,38 +178,44 @@ export const productApi = {
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
   }) => {
-    return api.get('/products', { params });
+    return api.get<ApiResponse>('/products', { params });
   },
 
   // Lấy chi tiết sản phẩm
   getProduct: (productId: string) => {
-    return api.get(`/products/${productId}`);
+    return api.get<ApiResponse>(`/products/${productId}`);
   },
 
   // Tạo sản phẩm mới
-  createProduct: (data: any) => {
-    return api.post('/products', data);
+  createProduct: (data: ProductData) => {
+    return api.post<ApiResponse>('/products', data);
   },
 
   // Cập nhật sản phẩm
-  updateProduct: (productId: string, data: any) => {
-    return api.put(`/products/${productId}`, data);
+  updateProduct: (productId: string, data: ProductData) => {
+    return api.put<ApiResponse>(`/products/${productId}`, data);
   },
 
   // Xóa sản phẩm
   deleteProduct: (productId: string) => {
-    return api.delete(`/products/${productId}`);
+    return api.delete<ApiResponse>(`/products/${productId}`);
   },
 
   // Lấy dữ liệu bộ lọc (thương hiệu, danh mục, phạm vi giá)
   getFilters: () => {
-    return api.get('/products/filters');
+    return api.get<ApiResponse>('/products/filters');
   },
 
   // New methods for catalog products
-  getCatalogProducts: (params) => api.get('/catalog', { params }),
-  getCatalogProductById: (id) => api.get(`/catalog/${id}`),
-  updateCatalogProduct: (id, data) => {
+  getCatalogProducts: (params: Record<string, unknown>) => {
+    return aiApi.get<ApiResponse>('/catalog', { params });
+  },
+  
+  getCatalogProductById: (id: string) => {
+    return aiApi.get<ApiResponse>(`/catalog/${id}`);
+  },
+  
+  updateCatalogProduct: (id: string, data: Record<string, unknown>) => {
     // Ensure all numeric fields are properly formatted
     const cleanData = { ...data };
     
@@ -201,11 +239,97 @@ export const productApi = {
       }
     });
     
-    console.log('Sending update request with data:', cleanData);
-    return api.put(`/catalog/${id}`, cleanData);
+    return aiApi.put<ApiResponse>(`/catalog/${id}`, cleanData);
   },
-  deleteCatalogProduct: (id) => api.delete(`/catalog/${id}`),
-  getCatalogFilters: () => api.get('/catalog/filters'),
+  
+  deleteCatalogProduct: (id: string) => {
+    return aiApi.delete<ApiResponse>(`/catalog/${id}`);
+  },
+  
+  getCatalogFilters: () => {
+    return aiApi.get<ApiResponse>('/catalog/filters');
+  },
 };
 
-export default api;
+// API cho xác thực người dùng
+export const authApi = {
+  login: (email: string, password: string) => {
+    return api.post<ApiResponse>('/users/login', { email, password });
+  },
+  
+  register: (userData: {
+    email: string;
+    password: string;
+    name: string;
+    role: 'manufacturer' | 'brand' | 'retailer';
+    phone?: string;
+    company?: string;
+  }) => {
+    return api.post<ApiResponse>('/users', userData);
+  },
+  
+  verifyEmail: (email: string, verificationCode: string) => {
+    return api.post<ApiResponse>('/users/verify-email', { email, verificationCode });
+  },
+  
+  resendVerificationEmail: (email: string) => {
+    return api.post<ApiResponse>('/users/resend-verification', { email });
+  },
+  
+  requestPasswordReset: (email: string) => {
+    return api.post<ApiResponse>('/users/forgot-password', { email });
+  },
+  
+  resetPassword: (token: string, password: string) => {
+    return api.post<ApiResponse>('/users/reset-password', { token, password });
+  },
+  
+  getCurrentUser: () => {
+    return api.get<ApiResponse>('/users/me');
+  },
+  
+  updateProfile: (userData: Partial<ProductData>) => {
+    return api.put<ApiResponse>('/users/profile', userData);
+  },
+  
+  logout: () => {
+    localStorage.removeItem('auth_token');
+    return Promise.resolve();
+  }
+};
+
+// API cho Admin
+export const adminApi = {
+  getUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }) => {
+    return api.get<ApiResponse>('/admin/users', { params });
+  },
+  
+  getUserById: (userId: string) => {
+    return api.get<ApiResponse>(`/admin/users/${userId}`);
+  },
+  
+  updateUser: (userId: string, userData: Record<string, unknown>) => {
+    return api.put<ApiResponse>(`/admin/users/${userId}`, userData);
+  },
+  
+  deleteUser: (userId: string) => {
+    return api.delete<ApiResponse>(`/admin/users/${userId}`);
+  },
+  
+  getActivity: (params?: { page?: number; limit?: number }) => {
+    return api.get<ApiResponse>('/admin/activity', { params });
+  },
+  
+  getAnalytics: () => {
+    return api.get<ApiResponse>('/admin/analytics');
+  }
+};
+
+export default {
+  api,
+  aiApi,
+  authApi,
+  productApi,
+  crawlerApi,
+  adminApi
+};

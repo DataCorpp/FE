@@ -140,8 +140,11 @@ const ProfileSetup = () => {
   const [selectedAccountType, setSelectedAccountType] =
     useState<AccountType | null>(null);
   const { toast } = useToast();
-  const { updateProfile, user } = useUser();
+  const { updateProfile, user, updateUserRole } = useUser();
   const navigate = useNavigate();
+  
+  // Role update status
+  const [isRoleUpdating, setIsRoleUpdating] = useState(false);
 
   // Define form
   const form = useForm<ProfileSetupFormValues>({
@@ -162,10 +165,34 @@ const ProfileSetup = () => {
     },
   });
 
-  // Handle account type selection
-  const handleAccountTypeSelect = (type: AccountType) => {
-    setSelectedAccountType(type);
-    form.setValue("accountType", type);
+  // Handle account type selection with database update
+  const handleAccountTypeSelect = async (type: AccountType) => {
+    if (type === selectedAccountType) return; // Don't update if same role is selected
+    
+    setIsRoleUpdating(true);
+    
+    try {
+      // Update in the database
+      await updateUserRole(type);
+      
+      // Update local state
+      setSelectedAccountType(type);
+      form.setValue("accountType", type);
+      
+      toast({
+        title: t("role-updated", "Role Updated"),
+        description: t("role-update-success", `Your role has been updated to ${type.charAt(0).toUpperCase() + type.slice(1)}`),
+      });
+    } catch (error) {
+      console.error("Role update error:", error);
+      toast({
+        title: t("role-update-failed", "Role Update Failed"),
+        description: t("role-update-failed-desc", "Could not update your role. Please try again."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsRoleUpdating(false);
+    }
   };
 
   // Move to details step with improved validation feedback
@@ -246,7 +273,7 @@ const ProfileSetup = () => {
 
       const accountType = selectedAccountType || data.accountType;
 
-      // Update user profile
+      // Update user profile in the database with explicit profileComplete flag
       await updateProfile({
         ...data,
         profileComplete: true,
@@ -301,7 +328,7 @@ const ProfileSetup = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Manufacturer Card */}
         <motion.div
-          whileHover={{ scale: 1.02, y: -5 }}
+          whileHover={{ scale: isRoleUpdating ? 1 : 1.02, y: isRoleUpdating ? 0 : -5 }}
           transition={{ type: "spring", stiffness: 300, damping: 10 }}
         >
           <Card
@@ -312,8 +339,8 @@ const ProfileSetup = () => {
                     "hover:border-primary/50",
                     isDark ? "" : "bg-white hover:bg-slate-50"
                   )
-            }`}
-            onClick={() => handleAccountTypeSelect("manufacturer")}
+            } ${isRoleUpdating ? "opacity-70 cursor-not-allowed" : ""}`}
+            onClick={() => !isRoleUpdating && handleAccountTypeSelect("manufacturer")}
           >
             <CardHeader className="pb-2 pt-6 relative">
               {selectedAccountType === "manufacturer" && (
@@ -323,7 +350,13 @@ const ProfileSetup = () => {
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 10 }}
                 >
-                  {t("selected", "Selected")}
+                  {isRoleUpdating && selectedAccountType === "manufacturer" ? (
+                    <span className="flex items-center">
+                      <span className="animate-pulse mr-1">{t("updating", "Updating...")}</span>
+                    </span>
+                  ) : (
+                    t("selected", "Selected")
+                  )}
                 </motion.div>
               )}
               <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -394,7 +427,7 @@ const ProfileSetup = () => {
 
         {/* Brand Card */}
         <motion.div
-          whileHover={{ scale: 1.02, y: -5 }}
+          whileHover={{ scale: isRoleUpdating ? 1 : 1.02, y: isRoleUpdating ? 0 : -5 }}
           transition={{ type: "spring", stiffness: 300, damping: 10 }}
         >
           <Card
@@ -405,8 +438,8 @@ const ProfileSetup = () => {
                     "hover:border-primary/50",
                     isDark ? "" : "bg-white hover:bg-slate-50"
                   )
-            }`}
-            onClick={() => handleAccountTypeSelect("brand")}
+            } ${isRoleUpdating ? "opacity-70 cursor-not-allowed" : ""}`}
+            onClick={() => !isRoleUpdating && handleAccountTypeSelect("brand")}
           >
             <CardHeader className="pb-2 pt-6 relative">
               {selectedAccountType === "brand" && (
@@ -416,7 +449,13 @@ const ProfileSetup = () => {
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 10 }}
                 >
-                  {t("selected", "Selected")}
+                  {isRoleUpdating && selectedAccountType === "brand" ? (
+                    <span className="flex items-center">
+                      <span className="animate-pulse mr-1">{t("updating", "Updating...")}</span>
+                    </span>
+                  ) : (
+                    t("selected", "Selected")
+                  )}
                 </motion.div>
               )}
               <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -473,7 +512,7 @@ const ProfileSetup = () => {
 
         {/* Retailer Card */}
         <motion.div
-          whileHover={{ scale: 1.02, y: -5 }}
+          whileHover={{ scale: isRoleUpdating ? 1 : 1.02, y: isRoleUpdating ? 0 : -5 }}
           transition={{ type: "spring", stiffness: 300, damping: 10 }}
         >
           <Card
@@ -484,8 +523,8 @@ const ProfileSetup = () => {
                     "hover:border-primary/50",
                     isDark ? "" : "bg-white hover:bg-slate-50"
                   )
-            }`}
-            onClick={() => handleAccountTypeSelect("retailer")}
+            } ${isRoleUpdating ? "opacity-70 cursor-not-allowed" : ""}`}
+            onClick={() => !isRoleUpdating && handleAccountTypeSelect("retailer")}
           >
             <CardHeader className="pb-2 pt-6 relative">
               {selectedAccountType === "retailer" && (
@@ -495,7 +534,13 @@ const ProfileSetup = () => {
                   animate={{ scale: 1 }}
                   transition={{ type: "spring", stiffness: 500, damping: 10 }}
                 >
-                  {t("selected", "Selected")}
+                  {isRoleUpdating && selectedAccountType === "retailer" ? (
+                    <span className="flex items-center">
+                      <span className="animate-pulse mr-1">{t("updating", "Updating...")}</span>
+                    </span>
+                  ) : (
+                    t("selected", "Selected")
+                  )}
                 </motion.div>
               )}
               <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -566,9 +611,9 @@ const ProfileSetup = () => {
             "w-full max-w-xs py-6 text-base",
             isDark ? "" : "shadow-sm"
           )}
-          disabled={!selectedAccountType}
+          disabled={!selectedAccountType || isRoleUpdating}
         >
-          {t("continue", "Continue")}
+          {isRoleUpdating ? t("please-wait", "Please Wait...") : t("continue", "Continue")}
         </Button>
       </div>
     </motion.div>

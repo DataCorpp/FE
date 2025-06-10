@@ -14,17 +14,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, UserRole } from "@/contexts/UserContext";
+import { useUser, RegistrationResponse } from "@/contexts/UserContext";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Separator } from "@/components/ui/separator";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import axios, { AxiosError } from "axios";
 
 const RegisterForm = () => {
   const { t } = useTranslation();
@@ -35,15 +29,18 @@ const RegisterForm = () => {
 
   // Form schema
   const formSchema = z.object({
-    name: z.string().min(2, { message: t('name-min-length', "Name must be at least 2 characters") }),
-    email: z.string().email({ message: t('invalid-email', "Please enter a valid email address") }),
-    password: z.string().min(8, { message: t('password-min-length', "Password must be at least 8 characters") }),
-    confirmPassword: z.string().min(8, { message: t('password-min-length', "Password must be at least 8 characters") }),
-    role: z.enum(["manufacturer", "brand", "retailer"] as const, {
-      required_error: t('role-required', "Please select a role"),
-    }),
+    name: z.string().min(2, { message: "Name must be at least 2 characters" }),
+    email: z.string().email({ message: "Please enter a valid email address" }),
+    password: z.string()
+      .min(8, { message: "Password must be at least 8 characters" })
+      .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
+      .regex(/[\d\W]/, { message: "Password must contain at least one number or special character" }),
+    confirmPassword: z.string()
+      .min(8, { message: "Password must be at least 8 characters" })
+      .regex(/[A-Z]/, { message: "Password must contain at least one uppercase letter" })
+      .regex(/[\d\W]/, { message: "Password must contain at least one number or special character" }),
   }).refine((data) => data.password === data.confirmPassword, {
-    message: t('passwords-do-not-match', "Passwords do not match"),
+    message: "Passwords do not match",
     path: ["confirmPassword"],
   });
 
@@ -57,7 +54,6 @@ const RegisterForm = () => {
       email: "",
       password: "",
       confirmPassword: "",
-      role: "manufacturer",
     },
   });
 
@@ -66,83 +62,156 @@ const RegisterForm = () => {
     setIsLoading(true);
     
     try {
-      // Send verification email and proceed to verification step
-      await register({
-        name: data.name,
-        email: data.email,
-        password: data.password,
+      console.log('🚀 Attempting to register user...');
+      // Register the user with pending status
+      const response = await register({
+        name: data.name ?? "",
+        email: data.email ?? "",
+        password: data.password ?? "",
         status: 'online',
-        role: data.role,
+        role: 'manufacturer',
         companyName: 'pending',
       });
       
-      toast({
-        title: t('verification-email-sent', 'Verification email sent'),
-        description: t('verification-email-description', 'Please check your email to verify your account.'),
+      // Set verification timer in localStorage - starting from registration
+      localStorage.setItem("verificationStartTime", JSON.stringify({
+        email: data.email,
+        timestamp: Date.now()
+      }));
+      
+      // Handle the case where the server is in development mode with no email config
+      // The API will return verificationCode in the response for development purposes
+      if (response && response.verificationCode) {
+        console.log('Development mode detected! Using verification code from response.');
+        
+        toast({
+          title: "Development Mode",
+          description: (
+            <div className="space-y-2">
+              <p>Email service not configured. Using verification code from response:</p>
+              <p className="font-mono bg-secondary p-2 rounded text-center text-lg">
+                {response.verificationCode}
+              </p>
+              <p className="text-sm opacity-80">This code will expire in 1 minute.</p>
+            </div>
+          ),
+        });
+      } else {
+        toast({
+          title: "Verification email sent",
+          description: "We've sent a 6-digit verification code to your email. The code will expire in 1 minute.",
+        });
+      }
+      
+      // Check if the user was automatically activated in development mode
+      if (response && response.status === 'active') {
+        toast({
+          title: "Account activated",
+          description: "Your account has been automatically activated in development mode.",
+        });
+        
+        // Redirect to login page
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
+      } else {
+        // Redirect to email verification page
+        navigate("/verify-email?email=" + encodeURIComponent(data.email ?? ""));
+      }
+    } catch (error) {
+      console.error("❌ Registration error:", error);
+      
+      // Improved error message extraction
+      const errorMessage = axios.isAxiosError(error) 
+        ? error.response?.data?.message || error.message 
+        : error instanceof Error 
+          ? error.message 
+          : "There was a problem with your registration. Please try again.";
+      
+      console.error("Error details:", {
+        message: errorMessage,
+        response: axios.isAxiosError(error) ? error.response?.data : undefined,
+        status: axios.isAxiosError(error) ? error.response?.status : undefined
       });
       
-      // Redirect to email verification page
-      navigate("/verify-email?email=" + encodeURIComponent(data.email));
-    } catch (error) {
-      console.error("Registration error:", error);
-      toast({
-        title: t('registration-failed', 'Registration failed'),
-        description: t('registration-problem', 'There was a problem with your registration.'),
-        variant: "destructive",
-      });
+      // Special handling for "User already exists" error
+      if (axios.isAxiosError(error) && error.response?.data?.message === "User already exists") {
+        toast({
+          title: "Email already registered",
+          description: (
+            <div className="flex flex-col space-y-2">
+              <p>This email is already registered. Please use a different email or sign in instead.</p>
+              <Button variant="link" className="p-0 self-start" onClick={() => navigate("/login")}>
+                Go to login page
+              </Button>
+            </div>
+          ),
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Registration failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+      
+      // Clear the password fields on error
+      form.setValue("password", "");
+      form.setValue("confirmPassword", "");
     } finally {
       setIsLoading(false);
     }
   };
 
   // Social registration handlers
-  const handleGoogleRegister = async () => {
-    try {
-      // Implement Google OAuth
-      toast({
-        title: "Google Registration",
-        description: "Google authentication will be implemented here.",
-      });
-    } catch (error) {
-      toast({
-        title: "Registration failed",
-        description: "Could not register with Google.",
-        variant: "destructive",
-      });
-    }
-  };
+  // const handleGoogleRegister = async () => {
+  //   try {
+  //     // Implement Google OAuth
+  //     toast({
+  //       title: "Google Registration",
+  //       description: "Google authentication will be implemented here.",
+  //     });
+  //   } catch (error) {
+  //     toast({
+  //       title: "Registration failed",
+  //       description: "Could not register with Google.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
 
-  const handleLineRegister = async () => {
-    try {
-      // Implement Line OAuth
-      toast({
-        title: "Line Registration",
-        description: "Line authentication will be implemented here.",
-      });
-    } catch (error) {
-      toast({
-        title: "Registration failed",
-        description: "Could not register with Line.",
-        variant: "destructive",
-      });
-    }
-  };
+  // const handleLineRegister = async () => {
+  //   try {
+  //     // Implement Line OAuth
+  //     toast({
+  //       title: "Line Registration",
+  //       description: "Line authentication will be implemented here.",
+  //     });
+  //   } catch (error) {
+  //     toast({
+  //       title: "Registration failed",
+  //       description: "Could not register with Line.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
 
-  const handleOutlookRegister = async () => {
-    try {
-      // Implement Outlook OAuth
-      toast({
-        title: "Outlook Registration",
-        description: "Outlook authentication will be implemented here.",
-      });
-    } catch (error) {
-      toast({
-        title: "Registration failed",
-        description: "Could not register with Outlook.",
-        variant: "destructive",
-      });
-    }
-  };
+  // const handleOutlookRegister = async () => {
+  //   try {
+  //     // Implement Outlook OAuth
+  //     toast({
+  //       title: "Outlook Registration",
+  //       description: "Outlook authentication will be implemented here.",
+  //     });
+  //   } catch (error) {
+  //     toast({
+  //       title: "Registration failed",
+  //       description: "Could not register with Outlook.",
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
 
   return (
     <div className="bg-background/80 dark:bg-background/60 backdrop-blur-md shadow-lg dark:shadow-primary/5 border border-border/40 dark:border-border/20 p-8 rounded-xl w-full max-w-md relative overflow-hidden">
@@ -266,7 +335,7 @@ const RegisterForm = () => {
       </motion.div>
 
       {/* Social Login Options */}
-      <motion.div 
+      {/* <motion.div 
         className="mb-6 space-y-3 relative z-10"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -337,13 +406,13 @@ const RegisterForm = () => {
             {t('continue-with-outlook', 'Continue with Outlook')}
           </span>
         </Button>
-      </motion.div>
+      </motion.div> */}
 
-      <div className="flex items-center gap-2 my-6 relative z-10">
+      {/* <div className="flex items-center gap-2 my-6 relative z-10">
         <Separator className="flex-1 bg-border/50 dark:bg-border/30" />
         <span className="text-xs text-muted-foreground px-2">{t('or-continue-with', 'or continue with')}</span>
         <Separator className="flex-1 bg-border/50 dark:bg-border/30" />
-      </div>
+      </div> */}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 relative z-10">
@@ -383,32 +452,6 @@ const RegisterForm = () => {
             )}
           />
           
-          {/* <FormField
-            control={form.control}
-            name="role"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel className="text-foreground">{t('role', 'Role')}</FormLabel>
-                <Select 
-                  onValueChange={field.onChange} 
-                  defaultValue={field.value}
-                >
-                  <FormControl>
-                    <SelectTrigger className="bg-background/70 dark:bg-background/50 border-border/50 dark:border-border/30 focus:border-primary focus:ring-1 focus:ring-primary">
-                      <SelectValue placeholder={t('select-role', 'Select a role')} />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="manufacturer">{t('manufacturer', 'Manufacturer')}</SelectItem>
-                    <SelectItem value="brand">{t('brand', 'Brand')}</SelectItem>
-                    <SelectItem value="retailer">{t('retailer', 'Retailer')}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
-            )}
-          /> */}
-          
           <FormField
             control={form.control}
             name="password"
@@ -418,11 +461,14 @@ const RegisterForm = () => {
                 <FormControl>
                   <Input 
                     type="password" 
-                    placeholder={t('password-placeholder', '********')} 
+                    placeholder="********" 
                     {...field}
                     className="bg-background/70 dark:bg-background/50 border-border/50 dark:border-border/30 focus:border-primary focus:ring-1 focus:ring-primary" 
                   />
                 </FormControl>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {t('password-requirements', 'Password must be at least 8 characters, contain one uppercase letter, and one number or special character.')}
+                </div>
                 <FormMessage />
               </FormItem>
             )}

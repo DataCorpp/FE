@@ -41,15 +41,57 @@ const EmailVerification = () => {
   const email = searchParams.get("email") || "";
   const { verifyEmail, resendVerificationEmail } = useUser();
 
+  // Initialize countdown from localStorage if it exists - runs on component mount
+  useEffect(() => {
+    try {
+      const verificationData = localStorage.getItem("verificationStartTime");
+      if (verificationData) {
+        const { email: storedEmail, timestamp } = JSON.parse(verificationData);
+        
+        // Only use the stored time if it's for the current email address
+        if (storedEmail === email) {
+          const elapsedSeconds = Math.floor((Date.now() - timestamp) / 1000);
+          const remainingSeconds = Math.max(0, 60 - elapsedSeconds);
+          
+          // Only set countdown if there's time remaining
+          if (remainingSeconds > 0) {
+            setCountdown(remainingSeconds);
+            console.log(`Countdown initialized with ${remainingSeconds} seconds remaining`);
+          } else {
+            // If countdown expired, remove from localStorage
+            localStorage.removeItem("verificationStartTime");
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error parsing verification start time:", error);
+    }
+  }, [email]);
+
   // Handle countdown for resend button
   useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
     if (countdown > 0) {
-      const timer = setTimeout(() => {
+      timer = setTimeout(() => {
         setCountdown(countdown - 1);
+        
+        // Show toast notification when countdown completes
+        if (countdown === 1) {
+          toast({
+            title: t("resend-available", "Resend Available"),
+            description: t("can-resend-now", "You can now request a new verification code."),
+          });
+          // Remove from localStorage when countdown finishes
+          localStorage.removeItem("verificationStartTime");
+        }
       }, 1000);
-      return () => clearTimeout(timer);
     }
-  }, [countdown]);
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [countdown, toast, t]);
 
   // Define form
   const form = useForm<FormValues>({
@@ -110,14 +152,35 @@ const EmailVerification = () => {
     
     try {
       // Resend verification email
-      await resendVerificationEmail(email);
+      const response = await resendVerificationEmail(email);
       
-      toast({
-        title: t("email-sent", "Email Sent"),
-        description: t("verification-email-resent", "Verification email has been resent to your email address."),
-      });
+      // Store the new verification start time
+      localStorage.setItem("verificationStartTime", JSON.stringify({
+        email: email,
+        timestamp: Date.now()
+      }));
       
-      // Start countdown
+      // Check if the response includes a verification code (in development mode)
+      if (response && response.verificationCode) {
+        toast({
+          title: t("email-sent", "Development Mode"),
+          description: (
+            <div className="space-y-2">
+              <p>{t("verification-email-resent", "Verification code generated:")}</p>
+              <p className="font-mono bg-secondary p-2 rounded text-center text-lg">
+                {response.verificationCode}
+              </p>
+            </div>
+          ),
+        });
+      } else {
+        toast({
+          title: t("email-sent", "Email Sent"),
+          description: t("verification-email-resent", "Verification email has been resent to your email address."),
+        });
+      }
+      
+      // Start countdown timer for 60 seconds exactly
       setCountdown(60);
     } catch (error) {
       console.error("Resend error:", error);
@@ -342,18 +405,24 @@ const EmailVerification = () => {
         <p className="text-sm text-muted-foreground">
           {t("didnt-receive-code", "Didn't receive the code?")}
         </p>
-        <Button 
-          variant="link" 
-          onClick={handleResendCode}
-          disabled={countdown > 0 || resendLoading}
-          className="mt-1 h-auto p-0"
-        >
-          {countdown > 0 
-            ? `${t("resend-in", "Resend in")} ${countdown}s` 
-            : resendLoading 
+        <div className="flex flex-col items-center">
+          <Button 
+            variant="link" 
+            onClick={handleResendCode}
+            disabled={countdown > 0 || resendLoading}
+            className="mt-1 h-auto p-0"
+          >
+            {resendLoading 
               ? t("sending", "Sending...") 
               : t("resend-code", "Resend code")}
-        </Button>
+          </Button>
+          
+          {countdown > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {t("available-in", "Available in")} <span className="font-medium text-primary">{countdown}s</span>
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Step Indicator */}
