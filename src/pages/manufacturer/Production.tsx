@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { productApi, foodProductApi } from "@/lib/api";
 import {
   Card,
   CardContent,
@@ -320,76 +321,40 @@ const styles = `
   }
 `;
 
-// Mock production data
-const productionLines = [
-  {
-    id: 1,
-    name: "Line A",
-    status: "Active",
-    product: "Organic Cereal",
-    efficiency: 92,
-    daily_capacity: "10,000 units",
-    next_maintenance: "2023-10-15",
-  },
-  {
-    id: 2,
-    name: "Line B",
-    status: "Maintenance",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "8,000 units",
-    next_maintenance: "2023-10-02",
-  },
-  {
-    id: 3,
-    name: "Line C",
-    status: "Active",
-    product: "Protein Bars",
-    efficiency: 87,
-    daily_capacity: "15,000 units",
-    next_maintenance: "2023-11-05",
-  },
-  {
-    id: 4,
-    name: "Line D",
-    status: "Active",
-    product: "Granola Packaging",
-    efficiency: 95,
-    daily_capacity: "12,000 units",
-    next_maintenance: "2023-10-22",
-  },
-  {
-    id: 5,
-    name: "Line E",
-    status: "Idle",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "9,000 units",
-    next_maintenance: "2023-10-18",
-  },
-];
+// Food product specific data interface
+interface FoodProductData {
+  flavorType: string[];
+  ingredients: string[];
+  usage: string[];
+  packagingSize: string;
+  shelfLife: string;
+  manufacturerRegion: string;
+}
 
-// Mock alerts
-const alerts = [
-  {
-    id: 1,
-    type: "warning",
-    message: "Line B maintenance scheduled for tomorrow",
-    time: "2 hours ago",
-  },
-  {
-    id: 2,
-    type: "critical",
-    message: "Raw material shortage for Line C",
-    time: "1 day ago",
-  },
-  {
-    id: 3,
-    type: "info",
-    message: "Quality check passed for Line A",
-    time: "3 days ago",
-  },
-];
+// ProductData interface for API
+interface ProductData {
+  name: string;
+  description: string;
+  category: string;
+  price: number;
+  brand?: string;
+  minimumOrderQuantity: number;
+  dailyCapacity: number;
+  unitType: string;
+  currentAvailableStock: number;
+  leadTime: string;
+  leadTimeUnit: string;
+  sustainable: boolean;
+  productType: string;
+  image: string;
+  flavorType?: string[];
+  ingredients?: string[];
+  usage?: string[];
+  packagingSize?: string;
+  shelfLife?: string;
+  manufacturerName?: string;
+  manufacturerRegion?: string;
+}
 
 // Product interface
 interface Product {
@@ -413,118 +378,11 @@ interface Product {
   reorderPoint: number;
   rating?: number; // Optional field, filled by matching users, not by manufacturers
   sustainable: boolean; // This is a product characteristic determined by the manufacturer
+  foodProductData?: FoodProductData; // Optional field for food product specific data
 }
 
-// Mock products data
-const initialProducts: Product[] = [
-  {
-    id: 1,
-    name: "Organic Cereal",
-    category: "Food",
-    sku: "ORG-CER-001",
-    minOrderQuantity: 1000,
-    dailyCapacity: 10000,
-    unitType: "boxes",
-    currentAvailable: 5200,
-    pricePerUnit: 4.99,
-    productType: "Finished Good",
-    image: "/placeholder.svg",
-    createdAt: "2023-05-15",
-    description:
-      "Organic breakfast cereal made with whole grains and natural sweeteners",
-    updatedAt: "2023-08-10",
-    lastProduced: "2023-08-10",
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    reorderPoint: 0,
-    sustainable: true,
-    // rating será preenchido pelos usuários que procuram matching
-  },
-  {
-    id: 2,
-    name: "Protein Bars",
-    category: "Food",
-    sku: "PRO-BAR-002",
-    minOrderQuantity: 2000,
-    dailyCapacity: 8000,
-    unitType: "units",
-    currentAvailable: 3600,
-    pricePerUnit: 2.49,
-    productType: "Finished Good",
-    image: "/placeholder.svg",
-    createdAt: "2023-06-22",
-    description: "High-protein snack bars for active lifestyles",
-    updatedAt: "2023-07-30",
-    lastProduced: "2023-07-30",
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    reorderPoint: 0,
-    sustainable: false,
-  },
-  {
-    id: 3,
-    name: "Granola Packaging",
-    category: "Packaging",
-    sku: "GRA-PKG-003",
-    minOrderQuantity: 5000,
-    dailyCapacity: 15000,
-    unitType: "units",
-    currentAvailable: 8200,
-    pricePerUnit: 1.25,
-    productType: "Packaging Material",
-    image: "/placeholder.svg",
-    createdAt: "2023-04-10",
-    description: "Eco-friendly packaging for granola products",
-    updatedAt: "2023-09-05",
-    lastProduced: "2023-09-05",
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    reorderPoint: 0,
-    sustainable: true,
-  },
-  {
-    id: 4,
-    name: "Energy Drink Mix",
-    category: "Beverage",
-    sku: "ENE-DRK-004",
-    minOrderQuantity: 1500,
-    dailyCapacity: 5000,
-    unitType: "sachets",
-    currentAvailable: 1200,
-    pricePerUnit: 3.75,
-    productType: "Raw Material",
-    image: "/placeholder.svg",
-    createdAt: "2023-07-05",
-    description: "Powdered energy drink mix with electrolytes and vitamins",
-    updatedAt: "2023-09-12",
-    lastProduced: "2023-09-12",
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    reorderPoint: 0,
-    sustainable: false,
-  },
-  {
-    id: 5,
-    name: "Vitamin Supplements",
-    category: "Health",
-    sku: "VIT-SUP-005",
-    minOrderQuantity: 3000,
-    dailyCapacity: 12000,
-    unitType: "bottles",
-    currentAvailable: 0,
-    pricePerUnit: 7.99,
-    productType: "Component",
-    image: "/placeholder.svg",
-    createdAt: "2023-03-18",
-    description: "Daily multivitamin supplements for general health",
-    updatedAt: "2023-06-25",
-    lastProduced: "2023-06-25",
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    reorderPoint: 0,
-    sustainable: true,
-  },
-];
+// Empty products array to be filled from the database
+const initialProducts: Product[] = [];
 
 // ProductionLine interface
 interface ProductionLine {
@@ -843,6 +701,142 @@ export const Production = () => {
   const [selectedProductDetails, setSelectedProductDetails] =
     useState<Product | null>(null);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
+    
+  // Fetch products on component mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setIsLoading(true);
+      try {
+        // Try to get products from local storage first (for development)
+        const localProducts = localStorage.getItem('products');
+        const localFoodProducts = localStorage.getItem('foodProducts');
+        let mappedProducts = [];
+
+        if (localProducts) {
+          const parsedProducts = JSON.parse(localProducts);
+          // Map the data to match our Product interface
+          mappedProducts = parsedProducts.map((product: ProductData, index: number) => ({
+            id: index + 1,
+            name: product.name,
+            category: product.category,
+            sku: product.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+            minOrderQuantity: product.minimumOrderQuantity || product.minOrderQuantity,
+            dailyCapacity: product.dailyCapacity,
+            unitType: product.unitType,
+            currentAvailable: product.currentAvailableStock || product.currentAvailable,
+            pricePerUnit: product.price || product.pricePerUnit,
+            productType: product.productType,
+            image: product.image,
+            createdAt: product.createdAt || new Date().toISOString(),
+            description: product.description,
+            updatedAt: product.updatedAt || new Date().toISOString(),
+            lastProduced: product.lastProduced || new Date().toISOString(),
+            leadTime: product.leadTime,
+            leadTimeUnit: product.leadTimeUnit,
+            reorderPoint: product.reorderPoint || Math.floor((product.minimumOrderQuantity || product.minOrderQuantity) * 0.5),
+            sustainable: product.sustainable,
+            // If it's a food product, include the food product data
+            ...(product.flavorType && {
+              foodProductData: {
+                flavorType: product.flavorType,
+                ingredients: product.ingredients,
+                usage: product.usage,
+                packagingSize: product.packagingSize,
+                shelfLife: product.shelfLife,
+                manufacturerRegion: product.manufacturerRegion,
+              }
+            })
+          }));
+        }
+        
+        // Load food products from separate localStorage if they exist
+        if (localFoodProducts) {
+          try {
+            const parsedFoodProducts = JSON.parse(localFoodProducts);
+            
+            // Check if any food products already exist in the main product list
+            const foodProductNames = new Set(mappedProducts
+              .filter(p => p.productType === 'Food Product')
+              .map(p => p.name));
+            
+            // Map food products to Product interface
+            const foodProducts = parsedFoodProducts
+              .filter((fp: any) => !foodProductNames.has(fp.productName)) // Skip duplicates
+              .map((foodProduct: any, index: number) => ({
+                id: mappedProducts.length + index + 1,
+                name: foodProduct.productName,
+                category: foodProduct.category,
+                sku: `SKU-FOOD-${Math.floor(Math.random() * 90000) + 10000}`,
+                minOrderQuantity: 1000,
+                dailyCapacity: 5000,
+                unitType: 'units',
+                currentAvailable: 1000,
+                pricePerUnit: 0,
+                productType: 'Food Product',
+                image: '/placeholder.svg',
+                createdAt: foodProduct.createdAt || new Date().toISOString(),
+                description: `${foodProduct.productName} - Food product`,
+                updatedAt: new Date().toISOString(),
+                lastProduced: new Date().toISOString(),
+                leadTime: '1-2',
+                leadTimeUnit: 'weeks',
+                reorderPoint: 500,
+                sustainable: true,
+                foodProductData: {
+                  flavorType: foodProduct.flavorType || [],
+                  ingredients: foodProduct.ingredients || [],
+                  usage: foodProduct.usage || [],
+                  packagingSize: foodProduct.packagingSize || '',
+                  shelfLife: foodProduct.shelfLife || '',
+                  manufacturerRegion: foodProduct.manufacturerRegion || '',
+                }
+              }));
+              
+            // Combine regular products with food products
+            mappedProducts = [...mappedProducts, ...foodProducts];
+            console.log('Loaded food products:', foodProducts.length);
+          } catch (error) {
+            console.error('Error processing food products from localStorage:', error);
+          }
+        }
+        
+        setProducts(mappedProducts);
+
+        // In a real app, you would fetch from API here
+        // Try to fetch from API - uncomment when backend is ready
+        // const response = await productApi.getProducts();
+        // if (response.data && response.data.data) {
+        //   setProducts(response.data.data);
+        // }
+        
+        // Fetch food products from API - uncomment when backend is ready
+        /* 
+        try {
+          const foodProductsResponse = await foodProductApi.getFoodProducts();
+          if (foodProductsResponse.data) {
+            // Process and add food products to the list
+            // ...
+          }
+        } catch (foodError) {
+          console.error('Error fetching food products:', foodError);
+        }
+        */
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        toast({
+          title: "Error",
+          description: "Failed to fetch products. Please try again later.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isAuthenticated && role === "manufacturer") {
+      fetchProducts();
+    }
+  }, [isAuthenticated, role, toast]);
 
   // Production Line States
   const [productionLines, setProductionLines] = useState<ProductionLine[]>(
@@ -926,13 +920,16 @@ export const Production = () => {
   ];
 
   // Create a new product
-  const handleCreateProduct = (
+  const handleCreateProduct = async (
     newProduct: Omit<
       Product,
       "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku"
     >
   ) => {
-    // Tự động tạo SKU
+    setIsLoading(true);
+    
+    try {
+      // Generate SKU
     const randomSKU = `SKU-${Math.floor(Math.random() * 90000) + 10000}`;
 
     const productToAdd = {
@@ -942,54 +939,212 @@ export const Production = () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       lastProduced: new Date().toISOString(),
-      reorderPoint: Math.floor(newProduct.minOrderQuantity * 0.5), // Mặc định là 50% của MOQ
-    };
-
+        reorderPoint: Math.floor(newProduct.minOrderQuantity * 0.5), // Default to 50% of MOQ
+      };
+  
+      // Prepare data for API (when backend is ready)
+      const apiData: ProductData = {
+        name: productToAdd.name,
+        description: productToAdd.description,
+        category: productToAdd.category,
+        price: Number(productToAdd.pricePerUnit),
+        brand: user?.companyName || 'Unknown',
+        minimumOrderQuantity: productToAdd.minOrderQuantity,
+        dailyCapacity: productToAdd.dailyCapacity,
+        unitType: productToAdd.unitType,
+        currentAvailableStock: productToAdd.currentAvailable,
+        leadTime: productToAdd.leadTime,
+        leadTimeUnit: productToAdd.leadTimeUnit,
+        sustainable: productToAdd.sustainable,
+        productType: productToAdd.productType,
+        image: productToAdd.image || '/placeholder.svg',
+      };
+      
+      // Add food product specific data if it exists
+      if (productToAdd.productType === 'Food Product' && productToAdd.foodProductData) {
+        Object.assign(apiData, {
+          flavorType: productToAdd.foodProductData.flavorType,
+          ingredients: productToAdd.foodProductData.ingredients,
+          usage: productToAdd.foodProductData.usage,
+          packagingSize: productToAdd.foodProductData.packagingSize,
+          shelfLife: productToAdd.foodProductData.shelfLife,
+          manufacturerName: user?.companyName || 'Unknown',
+          manufacturerRegion: productToAdd.foodProductData.manufacturerRegion,
+        });
+      }
+      
+      // Save to API (uncomment when backend is ready)
+      // const response = await productApi.createProduct(apiData);
+      // console.log('Product created:', response.data);
+      
+      // Save to localStorage for demonstration
+      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+      localStorage.setItem('products', JSON.stringify([...existingProducts, apiData]));
+      
+      // Update UI
     setProducts([...products, productToAdd]);
+      
     toast({
       title: t('production-product-created', "Product created"),
       description: t('production-product-added', "{{name}} has been added to your product list.", { name: productToAdd.name }),
     });
+      
     setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error('Error creating product:', error);
+      toast({
+        title: t('production-error', "Error"),
+        description: t('production-create-error', "Failed to create product. Please try again."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Update an existing product
-  const handleUpdateProduct = (updatedProduct: Product) => {
+  const handleUpdateProduct = async (updatedProduct: Product) => {
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      // Prepare data for API
+      const apiData: ProductData = {
+        name: updatedProduct.name,
+        description: updatedProduct.description,
+        category: updatedProduct.category,
+        price: Number(updatedProduct.pricePerUnit),
+        brand: user?.companyName || 'Unknown',
+        minimumOrderQuantity: updatedProduct.minOrderQuantity,
+        dailyCapacity: updatedProduct.dailyCapacity,
+        unitType: updatedProduct.unitType,
+        currentAvailableStock: updatedProduct.currentAvailable,
+        leadTime: updatedProduct.leadTime,
+        leadTimeUnit: updatedProduct.leadTimeUnit,
+        sustainable: updatedProduct.sustainable,
+        productType: updatedProduct.productType,
+        image: updatedProduct.image || '/placeholder.svg',
+      };
+      
+      // Add food product specific data if it exists
+      if (updatedProduct.productType === 'Food Product' && updatedProduct.foodProductData) {
+        Object.assign(apiData, {
+          flavorType: updatedProduct.foodProductData.flavorType,
+          ingredients: updatedProduct.foodProductData.ingredients,
+          usage: updatedProduct.foodProductData.usage,
+          packagingSize: updatedProduct.foodProductData.packagingSize,
+          shelfLife: updatedProduct.foodProductData.shelfLife,
+          manufacturerName: user?.companyName || 'Unknown',
+          manufacturerRegion: updatedProduct.foodProductData.manufacturerRegion,
+        });
+      }
+      
+      // Call API (uncomment when backend is ready)
+      // const response = await productApi.updateProduct(String(updatedProduct.id), apiData);
+      // console.log('Product updated:', response.data);
+      
+      // Update localStorage
+      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+      const updatedProducts = existingProducts.map((p: ProductData) => 
+        p.name === updatedProduct.name ? apiData : p
+      );
+      localStorage.setItem('products', JSON.stringify(updatedProducts));
+      
+      // Update UI
       setProducts(
         products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
       );
-      setIsLoading(false);
-      setIsEditDialogOpen(false);
 
       toast({
         title: t('production-product-updated', "Product updated"),
         description: t('production-product-updated-successfully', "{{name}} has been updated successfully.", { name: updatedProduct.name }),
         variant: "default",
       });
-    }, 600);
+      
+      setIsEditDialogOpen(false);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast({
+        title: t('production-error', "Error"),
+        description: t('production-update-error', "Failed to update product. Please try again."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Delete a product
-  const handleDeleteProduct = (id: number) => {
+    const handleDeleteProduct = async (id: number) => {
     setIsLoading(true);
 
-    // Simulate API call
-    setTimeout(() => {
-      const productName = products.find((p) => p.id === id)?.name;
+    try {
+      const productToDelete = products.find((p) => p.id === id);
+      if (!productToDelete) {
+        throw new Error("Product not found");
+      }
+      
+      // Call API (uncomment when backend is ready)
+      // await productApi.deleteProduct(String(id));
+      
+      // Update localStorage for regular products
+      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+      const updatedProducts = existingProducts.filter((p: { name: string }) => 
+        p.name !== productToDelete.name
+      );
+      localStorage.setItem('products', JSON.stringify(updatedProducts));
+      
+             // If it's a food product, remove from both localStorage and MongoDB
+      if (productToDelete.productType === 'Food Product') {
+        try {
+          // Xóa khỏi localStorage
+          const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
+          const updatedFoodProducts = existingFoodProducts.filter((p: { productName: string }) => 
+            p.productName !== productToDelete.name
+          );
+          localStorage.setItem('foodProducts', JSON.stringify(updatedFoodProducts));
+          
+          // Xóa khỏi MongoDB
+          try {
+                         await foodProductApi.deleteFoodProduct(String(id));
+             console.log('Food product has been deleted from MongoDB');
+             toast({
+               title: "Success",
+               description: "Food product has been deleted from MongoDB",
+               variant: "default",
+             });
+           } catch (foodError) {
+             console.error('Error deleting food product from MongoDB:', foodError);
+             toast({
+               title: "MongoDB Error",
+               description: "Unable to delete from MongoDB. Deleted from localStorage instead.",
+               variant: "destructive",
+             });
+          }
+        } catch (localStorageError) {
+          console.error('Error removing food product from localStorage:', localStorageError);
+        }
+      }
+      
+      // Update UI
       setProducts(products.filter((p) => p.id !== id));
-      setIsLoading(false);
-      setIsDeleteDialogOpen(false);
 
       toast({
         title: t('production-product-deleted', "Product deleted"),
-        description: t('production-product-removed', "{{name}} has been removed.", { name: productName }),
+        description: t('production-product-removed', "{{name}} has been removed.", { name: productToDelete.name }),
         variant: "default",
       });
-    }, 600);
+      
+      setIsDeleteDialogOpen(false);
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      toast({
+        title: t('production-error', "Error"),
+        description: t('production-delete-error', "Failed to delete product. Please try again."),
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Open edit dialog for creating or updating a product
@@ -3247,6 +3402,11 @@ const ProductForm: React.FC<ProductFormProps> = ({
   isLoading,
 }) => {
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const { user } = useUser();
+  const [currentStep, setCurrentStep] = useState<'typeSelection' | 'details'>(product ? 'details' : 'typeSelection');
+  const [selectedProductType, setSelectedProductType] = useState<string>(product?.productType || "");
+  
   const [formData, setFormData] = useState<Partial<Product>>(
     product
       ? { ...product }
@@ -3258,19 +3418,31 @@ const ProductForm: React.FC<ProductFormProps> = ({
           unitType: "units",
           currentAvailable: 0,
           pricePerUnit: 0,
-          productType: "Finished Good",
+          productType: "",
           image: "",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           lastProduced: new Date().toISOString(),
-          reorderPoint: Math.floor(1000 * 0.5), // Mặc định là 50% của MOQ
+          reorderPoint: Math.floor(1000 * 0.5), // Default to 50% of MOQ
           leadTime: "1-2",
           leadTimeUnit: "weeks",
           sustainable: false,
         }
   );
+  
+  // Food product specific fields
+  const [foodProductData, setFoodProductData] = useState({
+    flavorType: [] as string[],
+    ingredients: [] as string[],
+    usage: [] as string[],
+    packagingSize: "",
+    shelfLife: "",
+    manufacturerRegion: "",
+  });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isDragging, setIsDragging] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -3344,6 +3516,42 @@ const ProductForm: React.FC<ProductFormProps> = ({
     });
   };
 
+  const handleFoodProductChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value } = e.target;
+    setFoodProductData({
+      ...foodProductData,
+      [name]: value,
+    });
+  };
+
+  const handleFlavorTypeChange = (flavor: string) => {
+    setFoodProductData(prev => {
+      if (prev.flavorType.includes(flavor)) {
+        return {
+          ...prev,
+          flavorType: prev.flavorType.filter(f => f !== flavor)
+        };
+      } else {
+        return {
+          ...prev,
+          flavorType: [...prev.flavorType, flavor]
+        };
+      }
+    });
+  };
+
+  const handleArrayInputChange = (field: 'ingredients' | 'usage', value: string) => {
+    if (value.trim()) {
+      const values = value.split(',').map(item => item.trim());
+      setFoodProductData(prev => ({
+        ...prev,
+        [field]: values
+      }));
+    }
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -3376,25 +3584,207 @@ const ProductForm: React.FC<ProductFormProps> = ({
       newErrors.unitType = "Unit type is required";
     }
 
+    // Validate food product fields if product type is Food
+    if (selectedProductType === 'Food Product') {
+      if (foodProductData.flavorType.length === 0) {
+        newErrors.flavorType = "At least one flavor type is required";
+      }
+      
+      if (!foodProductData.ingredients || foodProductData.ingredients.length === 0) {
+        newErrors.ingredients = "Ingredients are required";
+      }
+      
+      if (!foodProductData.packagingSize) {
+        newErrors.packagingSize = "Packaging size is required";
+      }
+      
+      if (!foodProductData.shelfLife) {
+        newErrors.shelfLife = "Shelf life is required";
+      }
+    }
+
     setErrors(newErrors);
 
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleProductTypeSelect = (type: string) => {
+    setSelectedProductType(type);
+    setFormData({
+      ...formData,
+      productType: type,
+    });
+    setCurrentStep('details');
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (validateForm()) {
+      setSubmitLoading(true);
+      
+      try {
+        // Debug: Check if authentication token exists
+        const token = localStorage.getItem('auth_token');
+        console.log('Auth token exists:', !!token);
+        
+        // Prepare data based on product type
+        let productData: ProductData = {
+          name: formData.name,
+          description: formData.description,
+          category: formData.category,
+          price: Number(formData.pricePerUnit),
+          brand: user?.companyName || 'Unknown',
+          minimumOrderQuantity: formData.minOrderQuantity,
+          dailyCapacity: formData.dailyCapacity,
+          unitType: formData.unitType,
+          currentAvailableStock: formData.currentAvailable,
+          leadTime: formData.leadTime,
+          leadTimeUnit: formData.leadTimeUnit,
+          sustainable: formData.sustainable,
+          productType: selectedProductType,
+          image: formData.image || '/placeholder.svg',
+        };
+        
+        // Save to Food Product database if applicable
+        if (selectedProductType === 'Food Product') {
+          // Add specific fields for product data
+          productData = {
+            ...productData,
+            flavorType: foodProductData.flavorType,
+            ingredients: foodProductData.ingredients,
+            usage: foodProductData.usage,
+            packagingSize: foodProductData.packagingSize,
+            shelfLife: foodProductData.shelfLife,
+            manufacturerName: user?.companyName || 'Unknown',
+            manufacturerRegion: foodProductData.manufacturerRegion,
+          };
+          
+          // Prepare food product specific data for the database
+          const foodProductDataForApi = {
+            productName: formData.name,
+            category: formData.category,
+            flavorType: foodProductData.flavorType,
+            ingredients: foodProductData.ingredients,
+            usage: foodProductData.usage,
+            packagingSize: foodProductData.packagingSize,
+            shelfLife: foodProductData.shelfLife,
+            manufacturerName: user?.companyName || 'Unknown', 
+            manufacturerRegion: foodProductData.manufacturerRegion,
+          };
+          
+          // Lưu food product vào MongoDB thông qua API
+          try {
+            // Cập nhật lưu trữ localStorage (để duy trì tương thích)
+            const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
+            const newFoodProduct = {
+              ...foodProductDataForApi,
+              id: existingFoodProducts.length + 1,
+              createdAt: new Date().toISOString(),
+            };
+            localStorage.setItem('foodProducts', JSON.stringify([...existingFoodProducts, newFoodProduct]));
+            
+            // Gửi dữ liệu đến MongoDB thông qua API 
+            try {
+              console.log('Sending food product to API:', foodProductDataForApi);
+              const foodProductResponse = await foodProductApi.createFoodProduct(foodProductDataForApi);
+              console.log('Food product has been saved to MongoDB:', foodProductResponse.data);
+              
+              toast({
+                title: "Success",
+                description: "Food product has been saved to MongoDB database",
+                variant: "default",
+              });
+            } catch (foodError) {
+              console.error('Error saving food product to MongoDB:', foodError);
+              toast({
+                title: "MongoDB Error",
+                description: "Unable to save to MongoDB. Saved to localStorage instead.",
+                variant: "destructive",
+              });
+            }
+          } catch (localStorageError) {
+            console.error('Error saving to localStorage:', localStorageError);
+          }
+        }
+
+        const finalProductData = {
+          ...formData,
+          // Add food product specific data if type is Food
+          ...(selectedProductType === 'Food Product' && {
+            foodProductData
+          })
+        };
+
       if (product) {
-        // Update existing product
+          // Update existing product using onSubmit for UI update
         onSubmit({
           ...product,
-          ...formData,
+            ...finalProductData,
         } as Product);
+          
+          // When backend API is ready:
+          // if (product.id) {
+          //   await productApi.updateProduct(product.id.toString(), productData);
+          // }
+          
+          // Update food product if applicable
+          if (product.productType === 'Food Product' && product.id) {
+            try {
+              const foodProductUpdateData = {
+                productName: formData.name,
+                category: formData.category,
+                flavorType: foodProductData.flavorType,
+                ingredients: foodProductData.ingredients,
+                usage: foodProductData.usage,
+                packagingSize: foodProductData.packagingSize,
+                shelfLife: foodProductData.shelfLife,
+                manufacturerName: user?.companyName || 'Unknown',
+                manufacturerRegion: foodProductData.manufacturerRegion,
+              };
+              
+              // Cập nhật trong cả localStorage và MongoDB
+              try {
+                // Cập nhật localStorage
+                const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
+                const updatedProducts = existingFoodProducts.map((fp: any) => 
+                  fp.productName === formData.name ? {...fp, ...foodProductUpdateData} : fp
+                );
+                localStorage.setItem('foodProducts', JSON.stringify(updatedProducts));
+                
+                // Cập nhật MongoDB qua API
+                try {
+                  const foodProductResponse = await foodProductApi.updateFoodProduct(String(product.id), foodProductUpdateData);
+                  console.log('Food product has been updated in MongoDB:', foodProductResponse.data);
+                  toast({
+                    title: "Success",
+                    description: "Food product has been updated in MongoDB",
+                    variant: "default",
+                  });
+                } catch (foodError) {
+                  console.error('Error updating food product in MongoDB:', foodError);
+                  toast({
+                    title: "MongoDB Error",
+                    description: "Unable to update MongoDB. Updated in localStorage instead.",
+                    variant: "destructive",
+                  });
+                }
+              } catch (localStorageError) {
+                console.error('Error updating localStorage:', localStorageError);
+              }
+            } catch (foodError) {
+              console.error('Error updating food product:', foodError);
+            }
+          }
+          
+          toast({
+            title: "Product Updated",
+            description: "Your product has been updated successfully.",
+          });
       } else {
         // Create new product
         onSubmit(
-          formData as Omit<
+            finalProductData as Omit<
             Product,
             | "id"
             | "createdAt"
@@ -3404,9 +3794,190 @@ const ProductForm: React.FC<ProductFormProps> = ({
             | "sku"
           >
         );
+          
+          // When backend API is ready:
+          // const response = await productApi.createProduct(productData);
+          // console.log('Product created:', response.data);
+          
+          // Save product data to localStorage for demonstration
+          const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
+          localStorage.setItem('products', JSON.stringify([...existingProducts, productData]));
+          
+          toast({
+            title: "Product Created",
+            description: "Your product has been saved to the database.",
+            variant: "default",
+          });
+        }
+      } catch (error) {
+        console.error('Error saving product:', error);
+        toast({
+          title: "Error",
+          description: "There was an error saving your product. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setSubmitLoading(false);
       }
     }
   };
+
+  // Product type selection screen
+  if (currentStep === 'typeSelection') {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="space-y-6"
+      >
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-primary/70 text-transparent bg-clip-text">{t('production-select-product-type', 'Select Product Type')}</h2>
+          <p className="text-muted-foreground">{t('production-select-type-description', 'Choose a product type to customize input fields')}</p>
+        </div>
+        
+        <div className="mx-auto max-w-xl mb-8 p-4 rounded-lg border border-primary/20 bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 p-2 rounded-full">
+              <Info className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-sm">
+              <p className="font-medium">Your product type determines what specific information we'll collect.</p>
+              <p className="text-muted-foreground">Each product type has customized fields relevant to that category.</p>
+            </div>
+          </div>
+        </div>
+        
+                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Food Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                   <Package className="h-8 w-8 text-primary" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Food Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   Food items, ingredients, and fermented products
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+           
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Natural Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
+                   <Zap className="h-8 w-8 text-green-500" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Natural Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   Organic, natural, or sustainably sourced products
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+           
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Healthy Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center mb-4">
+                   <Activity className="h-8 w-8 text-blue-500" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Healthy Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   Health supplements, nutritional products
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+           
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Beverage Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-cyan-500/10 flex items-center justify-center mb-4">
+                   <DollarSign className="h-8 w-8 text-cyan-500" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Beverage Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   Drinks, liquids, and brewing ingredients
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+           
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Packaging Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center mb-4">
+                   <PackageCheck className="h-8 w-8 text-purple-500" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Packaging Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   Containers, wrappers, and packaging solutions
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+           
+           <motion.div 
+             whileHover={{ scale: 1.03 }}
+             whileTap={{ scale: 0.98 }}
+             transition={{ type: "spring", stiffness: 400, damping: 10 }}
+           >
+             <Card 
+               className="cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
+               onClick={() => handleProductTypeSelect('Other Product')}
+             >
+               <CardContent className="flex flex-col items-center justify-center p-6">
+                 <div className="w-16 h-16 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+                   <Box className="h-8 w-8 text-amber-500" />
+                 </div>
+                 <h3 className="text-xl font-semibold mb-2">Other Product</h3>
+                 <p className="text-muted-foreground text-center text-sm">
+                   General merchandise and other product types
+                 </p>
+               </CardContent>
+             </Card>
+           </motion.div>
+         </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.form
@@ -3416,6 +3987,19 @@ const ProductForm: React.FC<ProductFormProps> = ({
       transition={{ duration: 0.3 }}
       className="space-y-6"
     >
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">{t('production-create-product-details', 'Product Details')}</h2>
+        <Button 
+          variant="outline" 
+          type="button" 
+          size="sm"
+          onClick={() => setCurrentStep('typeSelection')}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          {t('production-change-type', 'Change Type')}
+        </Button>
+      </div>
+      
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
         initial={{ opacity: 0, y: 20 }}
@@ -3462,12 +4046,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
               <SelectValue placeholder={t('production-select-category', "Select a category")} />
             </SelectTrigger>
             <SelectContent>
+              {selectedProductType === 'Food Product' ? (
+                <>
+                  <SelectItem value="Soy Sauce">Soy Sauce</SelectItem>
+                  <SelectItem value="Miso">Miso</SelectItem>
+                  <SelectItem value="Tofu">Tofu</SelectItem>
+                  <SelectItem value="Fermented">Fermented Products</SelectItem>
+                  <SelectItem value="Dried Foods">Dried Foods</SelectItem>
+                  <SelectItem value="Condiments">Condiments</SelectItem>
+                  <SelectItem value="Spices">Spices</SelectItem>
+                </>
+              ) : (
+                <>
               <SelectItem value="Food">{t('production-food', "Food")}</SelectItem>
               <SelectItem value="Beverage">{t('production-beverage', "Beverage")}</SelectItem>
               <SelectItem value="Health">{t('production-health', "Health")}</SelectItem>
               <SelectItem value="Packaging">{t('production-packaging', "Packaging")}</SelectItem>
               <SelectItem value="Ingredients">{t('production-ingredients', "Ingredients")}</SelectItem>
               <SelectItem value="Other">{t('production-other', "Other")}</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
           {errors.category && (
@@ -3601,29 +4199,26 @@ const ProductForm: React.FC<ProductFormProps> = ({
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="productType" className="text-base">
-            {t('production-product-type', 'Product Type')}
-          </Label>
-          <Select
-            name="productType"
-            value={formData.productType}
-            onValueChange={(value) =>
-              setFormData({ ...formData, productType: value })
-            }
-          >
-            <SelectTrigger className="enhanced-input form-field-animation">
-              <SelectValue placeholder={t('production-select-product-type', 'Select product type')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Finished Good">{t('production-finished-good', 'Finished Good')}</SelectItem>
-              <SelectItem value="Raw Material">{t('production-raw-material', 'Raw Material')}</SelectItem>
-              <SelectItem value="Component">{t('production-component', 'Component')}</SelectItem>
-              <SelectItem value="Packaging Material">{t('production-packaging-material', 'Packaging Material')}</SelectItem>
-              <SelectItem value="Semi-finished Good">{t('production-semi-finished', 'Semi-finished Good')}</SelectItem>
-              <SelectItem value="Bulk Product">{t('production-bulk-product', 'Bulk Product')}</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-2 flex items-center">
+          <div className="flex-1 pt-6">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="sustainable"
+                name="sustainable"
+                checked={formData.sustainable}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, sustainable: checked as boolean })
+                }
+              />
+              <label
+                htmlFor="sustainable"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
+              >
+                <Zap className="h-4 w-4 mr-2 text-green-600" />
+                Sustainable Product
+              </label>
+            </div>
+          </div>
         </div>
       </motion.div>
 
@@ -3667,35 +4262,244 @@ const ProductForm: React.FC<ProductFormProps> = ({
             </SelectContent>
           </Select>
         </div>
+      </motion.div>
 
-        <div className="space-y-2 flex items-center">
-          <div className="flex-1 pt-6">
-            <div className="flex items-center space-x-2">
+      {/* Food Product specific fields */}
+      {selectedProductType === 'Food Product' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="space-y-6 border-t pt-6 mt-6 bg-primary/5 p-6 rounded-lg"
+        >
+          <h3 className="text-lg font-semibold flex items-center text-primary">
+            <Package className="h-5 w-5 mr-2" />
+            Food Product Details
+          </h3>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-base flex items-center">
+                <span className="bg-primary/10 p-1 rounded-md mr-2">
+                  <Star className="h-4 w-4 text-primary" />
+                </span>
+                Flavor Profile
+              </Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                {['salty', 'sweet', 'spicy', 'umami', 'sour'].map(flavor => (
+                  <div key={flavor} className="flex items-center space-x-2">
               <Checkbox
-                id="sustainable"
-                name="sustainable"
-                checked={formData.sustainable}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, sustainable: checked as boolean })
-                }
-              />
-              <label
-                htmlFor="sustainable"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
-              >
-                <Zap className="h-4 w-4 mr-2 text-green-600" />
-                Sustainable Product
-              </label>
+                      id={`flavor-${flavor}`}
+                      checked={foodProductData.flavorType.includes(flavor)}
+                      onCheckedChange={() => handleFlavorTypeChange(flavor)}
+                      className="data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                    />
+                    <Label 
+                      htmlFor={`flavor-${flavor}`}
+                      className="capitalize cursor-pointer hover:text-primary transition-colors"
+                    >
+                      {flavor}
+                    </Label>
             </div>
+                ))}
+              </div>
+              {errors.flavorType && (
+                <p className="text-sm text-destructive">{errors.flavorType}</p>
+              )}
+            </div>
+            
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+               <div className="space-y-2">
+                 <Label htmlFor="ingredients" className="text-base flex items-center">
+                   <span className="bg-primary/10 p-1 rounded-md mr-2">
+                     <Layers className="h-4 w-4 text-primary" />
+                   </span>
+                   Ingredients
+                 </Label>
+                 <div className="relative">
+                   <Textarea
+                     id="ingredients"
+                     placeholder="Enter ingredients separated by commas"
+                     className="enhanced-input form-field-animation min-h-[120px] pr-8"
+                     value={foodProductData.ingredients.join(', ')}
+                     onChange={(e) => handleArrayInputChange('ingredients', e.target.value)}
+                   />
+                   <div className="absolute right-3 top-3 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md">
+                     Comma separated
+                   </div>
+                 </div>
+                 {errors.ingredients && (
+                   <p className="text-sm text-destructive">{errors.ingredients}</p>
+                 )}
+                 {foodProductData.ingredients.length > 0 && (
+                   <div className="flex flex-wrap gap-1 mt-2">
+                     {foodProductData.ingredients.map((ingredient, index) => (
+                       <Badge key={index} variant="outline" className="bg-primary/10 hover:bg-primary/20">
+                         {ingredient.trim()}
+                       </Badge>
+                     ))}
+                   </div>
+                 )}
+               </div>
+               
+               <div className="space-y-2">
+                 <Label htmlFor="usage" className="text-base flex items-center">
+                   <span className="bg-primary/10 p-1 rounded-md mr-2">
+                     <FileText className="h-4 w-4 text-primary" />
+                   </span>
+                   Usage Examples
+                 </Label>
+                 <div className="relative">
+                   <Textarea
+                     id="usage"
+                     placeholder="Enter usage examples separated by commas"
+                     className="enhanced-input form-field-animation min-h-[120px] pr-8"
+                     value={foodProductData.usage.join(', ')}
+                     onChange={(e) => handleArrayInputChange('usage', e.target.value)}
+                   />
+                   <div className="absolute right-3 top-3 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md">
+                     Comma separated
+                   </div>
+                 </div>
+                 {foodProductData.usage.length > 0 && (
+                   <div className="flex flex-wrap gap-1 mt-2">
+                     {foodProductData.usage.map((usage, index) => (
+                       <Badge key={index} variant="outline" className="bg-primary/10 hover:bg-primary/20">
+                         {usage.trim()}
+                       </Badge>
+                     ))}
+                   </div>
+                 )}
+               </div>
+             </div>
+            
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+               <div className="space-y-2">
+                 <Label htmlFor="packagingSize" className="text-base flex items-center">
+                   <span className="bg-primary/10 p-1 rounded-md mr-2">
+                     <Package className="h-4 w-4 text-primary" />
+                   </span>
+                   Packaging Size
+                 </Label>
+                 <div className="relative">
+                   <Input
+                     id="packagingSize"
+                     name="packagingSize"
+                     value={foodProductData.packagingSize}
+                     onChange={handleFoodProductChange}
+                     placeholder="e.g. 250g, 1L, 500mL"
+                     className={cn(
+                       "enhanced-input form-field-animation pl-10",
+                       errors.packagingSize && "error"
+                     )}
+                   />
+                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-primary/60">
+                     <Tag className="h-4 w-4" />
+                   </div>
+                 </div>
+                 {errors.packagingSize && (
+                   <p className="text-sm text-destructive">{errors.packagingSize}</p>
+                 )}
+                 
+                 <div className="flex flex-wrap gap-2 mt-3">
+                   {['100g', '250g', '500g', '1kg', '5L'].map((size) => (
+                     <Button
+                       key={size}
+                       type="button"
+                       variant="outline"
+                       size="sm"
+                       className={cn(
+                         "bg-muted/50 hover:bg-primary/10 hover:text-primary",
+                         foodProductData.packagingSize === size && "bg-primary/10 text-primary border-primary/30"
+                       )}
+                       onClick={() => setFoodProductData({...foodProductData, packagingSize: size})}
+                     >
+                       {size}
+                     </Button>
+                   ))}
+                 </div>
+               </div>
+               
+               <div className="space-y-2">
+                 <Label htmlFor="shelfLife" className="text-base flex items-center">
+                   <span className="bg-primary/10 p-1 rounded-md mr-2">
+                     <Calendar className="h-4 w-4 text-primary" />
+                   </span>
+                   Shelf Life
+                 </Label>
+                 <div className="relative">
+                   <Input
+                     id="shelfLife"
+                     name="shelfLife"
+                     value={foodProductData.shelfLife}
+                     onChange={handleFoodProductChange}
+                     placeholder="e.g. 12 months, 2 years"
+                     className={cn(
+                       "enhanced-input form-field-animation pl-10",
+                       errors.shelfLife && "error"
+                     )}
+                   />
+                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-primary/60">
+                     <Clock className="h-4 w-4" />
+                   </div>
+                 </div>
+                 {errors.shelfLife && (
+                   <p className="text-sm text-destructive">{errors.shelfLife}</p>
+                 )}
+                 
+                 <div className="flex flex-wrap gap-2 mt-3">
+                   {['6 months', '1 year', '18 months', '2 years', '3 years'].map((duration) => (
+                     <Button
+                       key={duration}
+                       type="button"
+                       variant="outline"
+                       size="sm"
+                       className={cn(
+                         "bg-muted/50 hover:bg-primary/10 hover:text-primary",
+                         foodProductData.shelfLife === duration && "bg-primary/10 text-primary border-primary/30"
+                       )}
+                       onClick={() => setFoodProductData({...foodProductData, shelfLife: duration})}
+                     >
+                       {duration}
+                     </Button>
+                   ))}
+                 </div>
+               </div>
+             </div>
+            
+                         <div className="space-y-2">
+               <Label htmlFor="manufacturerRegion" className="text-base">
+                 Manufacturing Region
+               </Label>
+               <Select
+                 name="manufacturerRegion"
+                 value={foodProductData.manufacturerRegion}
+                 onValueChange={(value) =>
+                   setFoodProductData({ ...foodProductData, manufacturerRegion: value })
+                 }
+               >
+                 <SelectTrigger className="enhanced-input form-field-animation">
+                   <SelectValue placeholder="Select manufacturing region" />
+                 </SelectTrigger>
+                 <SelectContent>
+                   <SelectItem value="Asia">Asia</SelectItem>
+                   <SelectItem value="North America">North America</SelectItem>
+                   <SelectItem value="Europe">Europe</SelectItem>
+                   <SelectItem value="South America">South America</SelectItem>
+                   <SelectItem value="Africa">Africa</SelectItem>
+                   <SelectItem value="Australia">Australia</SelectItem>
+                 </SelectContent>
+               </Select>
           </div>
         </div>
       </motion.div>
+      )}
 
       <motion.div
         className="grid grid-cols-1 md:grid-cols-2 gap-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.5 }}
+        transition={{ duration: 0.4, delay: 0.6 }}
       >
         <div className="space-y-2">
           <Label htmlFor="description" className="text-base">
@@ -3786,14 +4590,14 @@ const ProductForm: React.FC<ProductFormProps> = ({
         className="flex justify-end mt-6 space-x-2"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.6 }}
+        transition={{ duration: 0.4, delay: 0.7 }}
       >
         <Button
           type="submit"
-          disabled={isLoading}
+          disabled={isLoading || submitLoading}
           className="submit-button-hover hover-scale-subtle"
         >
-          {isLoading ? (
+          {isLoading || submitLoading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               {product ? "Updating..." : "Creating..."}

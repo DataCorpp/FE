@@ -99,6 +99,9 @@ import {
   ShoppingBag,
   ShieldCheck
 } from "lucide-react";
+import { adminApi } from '@/lib/api';
+import { useAdminAuth } from '@/hooks/useAdminAuth';
+import AdminLoadingSpinner from '@/components/admin/AdminLoadingSpinner';
 
 // User type definition
 interface User {
@@ -114,123 +117,9 @@ interface User {
   position: string;
   notes: string;
   avatar: string;
+  // Add backend fields
+  _id?: string; // MongoDB ID
 }
-
-// Sample users data
-const mockUsers: User[] = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john.doe@example.com",
-    role: "Manufacturer",
-    company: "Green Foods Corp",
-    status: "active",
-    lastActive: "2 hours ago",
-    verified: true,
-    phone: "+1 (555) 123-4567",
-    position: "Product Manager",
-    notes: "Experienced in organic food production",
-    avatar: "https://example.com/john-doe.jpg"
-  },
-  {
-    id: "2",
-    name: "Alice Smith",
-    email: "alice.smith@example.com",
-    role: "Brand",
-    company: "Healthy Harvest",
-    status: "active",
-    lastActive: "1 day ago",
-    verified: true,
-    phone: "+1 (555) 234-5678",
-    position: "Brand Manager",
-    notes: "Strong background in brand development",
-    avatar: "https://example.com/alice-smith.jpg"
-  },
-  {
-    id: "3",
-    name: "Robert Wilson",
-    email: "robert.wilson@example.com",
-    role: "Retailer",
-    company: "Fresh Choice Markets",
-    status: "inactive",
-    lastActive: "1 week ago",
-    verified: true,
-    phone: "+1 (555) 345-6789",
-    position: "Store Manager",
-    notes: "Experienced in retail operations",
-    avatar: "https://example.com/robert-wilson.jpg"
-  },
-  {
-    id: "4",
-    name: "Emily Jackson",
-    email: "emily.jackson@example.com",
-    role: "Brand",
-    company: "Organic Essentials",
-    status: "pending",
-    lastActive: "Never",
-    verified: false,
-    phone: "+1 (555) 456-7890",
-    position: "Brand Associate",
-    notes: "Learning about organic products",
-    avatar: "https://example.com/emily-jackson.jpg"
-  },
-  {
-    id: "5",
-    name: "Michael Chen",
-    email: "michael.chen@example.com",
-    role: "Manufacturer",
-    company: "Pure Foods Inc",
-    status: "active",
-    lastActive: "3 hours ago",
-    verified: true,
-    phone: "+1 (555) 567-8901",
-    position: "Production Supervisor",
-    notes: "Leads production team",
-    avatar: "https://example.com/michael-chen.jpg"
-  },
-  {
-    id: "6",
-    name: "Sarah Lee",
-    email: "sarah.lee@example.com",
-    role: "Retailer",
-    company: "Metro Grocers",
-    status: "active",
-    lastActive: "12 hours ago",
-    verified: true,
-    phone: "+1 (555) 678-9012",
-    position: "Store Associate",
-    notes: "Provides customer service",
-    avatar: "https://example.com/sarah-lee.jpg"
-  },
-  {
-    id: "7",
-    name: "David Miller",
-    email: "david.miller@example.com",
-    role: "Brand",
-    company: "Naturals Co.",
-    status: "suspended",
-    lastActive: "1 month ago",
-    verified: true,
-    phone: "+1 (555) 789-0123",
-    position: "Brand Representative",
-    notes: "Handles brand partnerships",
-    avatar: "https://example.com/david-miller.jpg"
-  },
-  {
-    id: "8",
-    name: "Jennifer Kim",
-    email: "jennifer.kim@example.com",
-    role: "Manufacturer",
-    company: "Eco Foods",
-    status: "pending",
-    lastActive: "Never",
-    verified: false,
-    phone: "+1 (555) 890-1234",
-    position: "Quality Control Specialist",
-    notes: "Ensures product quality",
-    avatar: "https://example.com/jennifer-kim.jpg"
-  }
-];
 
 const roleIcons = {
   Manufacturer: <Building2 className="h-4 w-4 text-blue-500" />,
@@ -249,6 +138,7 @@ const columns = [
 ];
 
 const UserManagement = () => {
+  const { isAdmin, adminUser, isLoading: authLoading } = useAdminAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -257,6 +147,7 @@ const UserManagement = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
   const usersPerPage = 5;
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -296,6 +187,7 @@ const UserManagement = () => {
   const [company, setCompany] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
 
   // Define statusStyles within the component where isDark is available
   const statusStyles = {
@@ -336,6 +228,103 @@ const UserManagement = () => {
     return () => clearTimeout(timer);
   }, []);
 
+  // Fetch users from API
+  useEffect(() => {
+    const fetchUsers = async () => {
+      if (!isAdmin) {
+        if (!authLoading) {
+          setLoadingError("You don't have admin permissions to view this data.");
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      setIsLoading(true);
+      setLoadingError(null);
+      
+      try {
+        const response = await adminApi.getUsers({
+          page: currentPage,
+          limit: usersPerPage,
+          search: searchQuery,
+          role: roleFilter !== 'all' ? roleFilter : undefined
+        });
+        
+        if (response.data?.success && response.data.data) {
+          // Type assertion to help TypeScript understand the structure
+          const apiData = response.data.data as {
+            users: Array<{
+              _id?: string;
+              id?: string;
+              name?: string;
+              email?: string;
+              company?: string;
+              role?: string;
+              status?: string;
+              lastActive?: string;
+              verified?: boolean;
+              phone?: string;
+              position?: string;
+              notes?: string;
+              avatar?: string;
+            }>;
+            totalCount?: number;
+          };
+          
+          // Map API data to match our User interface
+          const userData = Array.isArray(apiData.users) 
+            ? apiData.users.map(user => ({
+                id: String(user._id || user.id || ''),
+                name: String(user.name || ''),
+                email: String(user.email || ''),
+                company: String(user.company || ''),
+                role: String(user.role || 'User'),
+                status: String(user.status || 'inactive'),
+                lastActive: String(user.lastActive || 'Never'),
+                verified: Boolean(user.verified || false),
+                phone: String(user.phone || ''),
+                position: String(user.position || ''),
+                notes: String(user.notes || ''),
+                avatar: String(user.avatar || ''),
+                _id: String(user._id || '')
+              }))
+            : [];
+          
+          setUsers(userData);
+          setFilteredUsers(userData);
+          
+          // Set total count for pagination if available
+          if (apiData.totalCount) {
+            setTotalUsers(apiData.totalCount);
+          }
+        } else {
+          setLoadingError(response.data?.message || 'Failed to fetch users');
+        }
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setLoadingError(error instanceof Error ? error.message : 'Error connecting to the server');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchUsers();
+  }, [currentPage, isAdmin, authLoading, searchQuery, roleFilter]);
+
+  // Add helper function to reset filters
+  const resetFilters = () => {
+    setSearchQuery('');
+    setRoleFilter('all');
+    setStatusFilter('all');
+    setCurrentPage(1);
+  };
+
+  // Add function to refresh the user list
+  const refreshUserList = () => {
+    // This will trigger a refetch due to the useEffect dependency on currentPage
+    setCurrentPage(1);
+  };
+
   // Simulating a loading state when page changes
   useEffect(() => {
     setLoading(true);
@@ -344,17 +333,6 @@ const UserManagement = () => {
     }, 600);
     return () => clearTimeout(timer);
   }, [currentPage]);
-
-  // Simulate fetching users
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setUsers(mockUsers);
-      setFilteredUsers(mockUsers);
-      setIsLoading(false);
-    }, 1000);
-    
-    return () => clearTimeout(timer);
-  }, []);
 
   // Update the useEffect that filters users
   useEffect(() => {
@@ -367,11 +345,13 @@ const UserManagement = () => {
   // Pagination logic
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  // Add a safeguard to ensure we have users to display
+  // Use filtered users for the current page display
   const currentUsers = filteredUsers.length > 0 
     ? filteredUsers.slice(indexOfFirstUser, indexOfLastUser)
     : [];
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
+    
+  // Use totalUsers (from API) for total pages calculation if available
+  const totalPages = Math.ceil((totalUsers > 0 ? totalUsers : filteredUsers.length) / usersPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
@@ -394,7 +374,7 @@ const UserManagement = () => {
   };
 
   // Simulate adding a new user with form validation
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     // Basic validation
     if (!newUser.name.trim()) {
       toast({
@@ -425,42 +405,101 @@ const UserManagement = () => {
 
     setLoading(true);
     
-    setTimeout(() => {
-      const newId = String(Math.max(...mockUsers.map(u => parseInt(u.id))) + 1);
-      const userToAdd: User = {
-        id: newId,
-      name: newUser.name,
-      email: newUser.email,
-      company: newUser.company,
+    try {
+      // Prepare user data for the API
+      const userData = {
+        name: newUser.name,
+        email: newUser.email,
+        company: newUser.company,
         role: newUser.role,
-      status: 'pending',
-        lastActive: 'Just now',
-        verified: false,
+        status: newUser.status,
         phone: newUser.phone,
         position: newUser.position,
-        notes: newUser.notes,
-        avatar: "https://example.com/new-user.jpg"
+        notes: newUser.notes
       };
       
-      const updatedUsers = [userToAdd, ...users];
-      setUsers(updatedUsers);
-      setFilteredUsers(updatedUsers);
-      setNewUser({ name: '', email: '', role: 'Brand', company: '', status: 'pending', phone: '', position: '', notes: '', joinDate: new Date().toISOString().split('T')[0] });
-      setIsAddUserDialogOpen(false);
-      setLoading(false);
+      // Create user via API (assume we're creating a user without a password - admin would set it)
+      const response = await adminApi.updateUser('new', userData);
       
+      if (response.data?.success && response.data.data) {
+        // Type assertion for created user
+        const createdUser = response.data.data as {
+          _id?: string;
+          id?: string;
+          name?: string;
+          email?: string;
+          company?: string;
+          role?: string;
+          status?: string;
+          verified?: boolean;
+          phone?: string;
+          position?: string;
+          notes?: string;
+          avatar?: string;
+        };
+        
+        const formattedUser: User = {
+          id: String(createdUser._id || createdUser.id || ''),
+          name: String(createdUser.name || ''),
+          email: String(createdUser.email || ''),
+          company: String(createdUser.company || ''),
+          role: String(createdUser.role || 'User'),
+          status: String(createdUser.status || 'pending'),
+          lastActive: 'Just now',
+          verified: Boolean(createdUser.verified || false),
+          phone: String(createdUser.phone || ''),
+          position: String(createdUser.position || ''),
+          notes: String(createdUser.notes || ''),
+          avatar: String(createdUser.avatar || ''),
+          _id: String(createdUser._id || '')
+        };
+        
+        const updatedUsers = [formattedUser, ...users];
+        setUsers(updatedUsers);
+        setFilteredUsers(getFilteredUsers(updatedUsers, searchQuery, roleFilter, statusFilter));
+        
+        setIsAddUserDialogOpen(false);
+        
+        toast({
+          title: "User created successfully",
+          description: `${formattedUser.name} has been added to the system`,
+        });
+        
+        // Reset filters and form to ensure new user is visible
+        resetFilters();
+        
+        // Reset form
+        setNewUser({
+          name: '',
+          email: '',
+          role: 'Brand',
+          company: '',
+          status: 'pending',
+          phone: '',
+          position: '',
+          notes: '',
+          joinDate: new Date().toISOString().split('T')[0]
+        });
+      } else {
+        throw new Error(response.data?.message || 'Failed to create user');
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
       toast({
-        title: "User created successfully",
-        description: `${userToAdd.name} has been added to the system`,
+        title: "Failed to create user",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive"
       });
-    }, 600);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Handle edit user
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (!editUser) return;
 
-    // Basic validation
+    // Basic validation - same as before
     if (!editUser.name.trim()) {
       toast({
         title: "Name is required",
@@ -490,65 +529,136 @@ const UserManagement = () => {
 
     setLoading(true);
     
-    setTimeout(() => {
-      const updatedUsers = users.map(user => 
-        user.id === editUser.id ? editUser : user
-      );
+    try {
+      // Prepare user data for the API
+      const userData = {
+        name: editUser.name,
+        email: editUser.email,
+        company: editUser.company,
+        role: editUser.role,
+        status: editUser.status,
+        phone: editUser.phone,
+        position: editUser.position,
+        notes: editUser.notes
+      };
       
-      setUsers(updatedUsers);
-      setFilteredUsers(getFilteredUsers(updatedUsers, searchQuery, roleFilter, statusFilter));
-      setIsEditUserOpen(false);
-      setEditUser(null);
-      setLoading(false);
+      // Use _id for MongoDB ID if available, otherwise fall back to id
+      const userId = editUser._id || editUser.id;
       
+      // Update user via API
+      const response = await adminApi.updateUser(userId, userData);
+      
+      if (response.data?.success) {
+        // Update the user in our list
+        const updatedUsers = users.map(user => 
+          user.id === editUser.id ? editUser : user
+        );
+        
+        setUsers(updatedUsers);
+        setFilteredUsers(getFilteredUsers(updatedUsers, searchQuery, roleFilter, statusFilter));
+        setIsEditUserOpen(false);
+        setEditUser(null);
+        
+        toast({
+          title: "User updated successfully",
+          description: `${editUser.name}'s information has been updated`,
+        });
+      } else {
+        throw new Error(response.data?.message || 'Failed to update user');
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
       toast({
-        title: "User updated successfully",
-        description: `${editUser.name}'s information has been updated`,
+        title: "Failed to update user",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive"
       });
-    }, 600);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Simulate deleting a user
-  const handleDeleteUser = () => {
-    if (userToDelete) {
-      setLoading(true);
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    setLoading(true);
+    
+    try {
+      // Use _id for MongoDB ID if available, otherwise fall back to id
+      const userId = userToDelete._id || userToDelete.id;
       
-      setTimeout(() => {
+      // Delete user via API
+      const response = await adminApi.deleteUser(userId);
+      
+      if (response.data?.success) {
         const updatedUsers = users.filter(user => user.id !== userToDelete.id);
         setUsers(updatedUsers);
         setFilteredUsers(updatedUsers);
-      setSelectedUsers(selectedUsers.filter(id => id !== userToDelete.id));
+        setSelectedUsers(selectedUsers.filter(id => id !== userToDelete.id));
         setDeleteDialogOpen(false);
-      setUserToDelete(null);
-        setLoading(false);
+        setUserToDelete(null);
         
         toast({
           title: "User deleted",
           description: "The user has been removed from the system",
         });
-      }, 600);
+      } else {
+        throw new Error(response.data?.message || 'Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: "Failed to delete user",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
   };
   
-  // Simulate bulk deleting users
-  const handleDeleteMultipleUsers = () => {
+  // Handle bulk deleting users
+  const handleDeleteMultipleUsers = async () => {
     if (selectedUsers.length === 0) return;
     
     setLoading(true);
     
-    setTimeout(() => {
+    try {
+      // Sequential deletion since there might not be a bulk delete API
+      const deletePromises = selectedUsers.map(userId => {
+        // Find the user to get the MongoDB _id if available
+        const user = users.find(u => u.id === userId);
+        const mongoId = user?._id || userId;
+        
+        return adminApi.deleteUser(mongoId);
+      });
+      
+      await Promise.all(deletePromises);
+      
       const updatedUsers = users.filter(user => !selectedUsers.includes(user.id));
       setUsers(updatedUsers);
       setFilteredUsers(updatedUsers);
-    setSelectedUsers([]);
+      setSelectedUsers([]);
       setIsDeleteMultipleOpen(false);
-      setLoading(false);
       
       toast({
         title: `${selectedUsers.length} users deleted`,
         description: "The selected users have been removed from the system",
       });
-    }, 600);
+      
+      // Reset filters to show updated list
+      resetFilters();
+    } catch (error) {
+      console.error('Error deleting multiple users:', error);
+      toast({
+        title: "Failed to delete users",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const focusSearchInput = () => {
@@ -642,34 +752,57 @@ const UserManagement = () => {
     setSortConfig({ key, direction });
   };
 
-  const handleChangeRole = () => {
+  const handleChangeRole = async () => {
     if (!selectedUser || !newRole) return;
     
     setLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      const updatedUsers = users.map(user => {
-        if (user.id === selectedUser.id) {
-          return { ...user, role: newRole };
-        }
-        return user;
+    try {
+      // Use _id for MongoDB ID if available, otherwise fall back to id
+      const userId = selectedUser._id || selectedUser.id;
+      
+      // Update user role via API
+      const response = await adminApi.updateUser(userId, { 
+        role: newRole,
+        notes: selectedUser.notes + (changeRoleNotes ? `\n[Role Change Note: ${changeRoleNotes}]` : '')
       });
       
-      setUsers(updatedUsers);
-      setFilteredUsers(getFilteredUsers(updatedUsers, searchQuery, roleFilter, statusFilter));
-      
+      if (response.data?.success) {
+        const updatedUsers = users.map(user => {
+          if (user.id === selectedUser.id) {
+            return { ...user, role: newRole };
+          }
+          return user;
+        });
+        
+        setUsers(updatedUsers);
+        setFilteredUsers(getFilteredUsers(updatedUsers, searchQuery, roleFilter, statusFilter));
+        
+        toast({
+          title: "Role Updated",
+          description: `${selectedUser.name}'s role has been updated to ${newRole}`,
+        });
+        
+        // Refresh the user list to get the latest data
+        refreshUserList();
+        
+        setIsChangeRoleOpen(false);
+        setSelectedUser(null);
+        setNewRole("");
+        setChangeRoleNotes("");
+      } else {
+        throw new Error(response.data?.message || 'Failed to update user role');
+      }
+    } catch (error) {
+      console.error('Error updating user role:', error);
       toast({
-        title: "Role Updated",
-        description: `${selectedUser.name}'s role has been updated to ${newRole}`,
+        title: "Failed to update role",
+        description: error instanceof Error ? error.message : 'An unknown error occurred',
+        variant: "destructive"
       });
-      
-      setIsChangeRoleOpen(false);
-      setSelectedUser(null);
-      setNewRole("");
-      setChangeRoleNotes("");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   // Enhanced animations for dialogs
@@ -826,26 +959,29 @@ const UserManagement = () => {
     );
   };
 
-  if (isLoading) {
+  // Add error state display for when user is not admin or other API errors
+  if (loadingError) {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
-        <motion.div className="relative flex flex-col items-center">
-        <motion.div
-            variants={loadingVariants}
-            animate="animate"
-            className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full"
-          />
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.3 }}
-            className="mt-4 text-primary font-medium"
-          >
-            Loading user data...
-          </motion.p>
+        <motion.div 
+          className="max-w-md p-6 rounded-lg border text-center"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold mb-2">Access Error</h2>
+          <p className="text-muted-foreground mb-4">{loadingError}</p>
+          <p className="text-sm text-muted-foreground">
+            Please contact the system administrator if you believe this is an error.
+          </p>
         </motion.div>
       </div>
     );
+  }
+
+  if (authLoading || isLoading) {
+    return <AdminLoadingSpinner message="Loading user data..." fullPage={true} />;
   }
 
   return (
@@ -967,14 +1103,7 @@ const UserManagement = () => {
         <div className="border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             {loading ? (
-      <motion.div
-                className="flex justify-center items-center p-12"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              </motion.div>
+              <AdminLoadingSpinner message="Loading..." size="sm" />
             ) : (
               <Table>
               <TableHeader>
@@ -1128,9 +1257,7 @@ const UserManagement = () => {
                               variant="outline" 
                               size="sm" 
                               onClick={() => {
-                                setSearchQuery('');
-                                setRoleFilter('all');
-                                setStatusFilter('all');
+                                resetFilters();
                               }}
                               className={`mt-2 ${isDark ? 'dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600' : 'bg-white text-gray-700 border-gray-300'}`}
                             >
@@ -1308,7 +1435,7 @@ const UserManagement = () => {
             transition={{ delay: 0.3, duration: 0.4 }}
           >
             <div className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * usersPerPage) + 1} - {Math.min(currentPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
+              Showing {((currentPage - 1) * usersPerPage) + 1} - {Math.min(currentPage * usersPerPage, totalUsers || filteredUsers.length)} of {totalUsers || filteredUsers.length} users
             </div>
             
             <div className="flex items-center space-x-2">
@@ -1328,9 +1455,9 @@ const UserManagement = () => {
                 </motion.div>
               </Button>
               
-              {Array.from({ length: Math.min(5, Math.ceil(filteredUsers.length / usersPerPage)) }).map((_, i) => {
+              {Array.from({ length: Math.min(5, totalPages || Math.ceil(filteredUsers.length / usersPerPage)) }).map((_, i) => {
                 const pageNumber = i + 1;
-                    return (
+                return (
                   <Button
                     key={pageNumber}
                     variant={currentPage === pageNumber ? "default" : "outline"}
@@ -1346,8 +1473,8 @@ const UserManagement = () => {
                     <motion.span
                       whileHover={{ scale: 1.2 }}
                       transition={{ duration: 0.2 }}
-                        >
-                          {pageNumber}
+                    >
+                      {pageNumber}
                     </motion.span>
                   </Button>
                 );
@@ -1356,8 +1483,8 @@ const UserManagement = () => {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredUsers.length / usersPerPage), prev + 1))}
-                disabled={currentPage === Math.ceil(filteredUsers.length / usersPerPage)}
+                onClick={() => setCurrentPage(prev => Math.min(totalPages || Math.ceil(filteredUsers.length / usersPerPage), prev + 1))}
+                disabled={currentPage === (totalPages || Math.ceil(filteredUsers.length / usersPerPage))}
                 className="h-8 w-8 p-0"
               >
                 <span className="sr-only">Go to next page</span>
