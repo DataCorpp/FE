@@ -15,7 +15,7 @@ import Profile from "./pages/Profile";
 import Solutions from "./pages/Solutions";
 import NotFound from "./pages/NotFound";
 import VerifyEmail from "./pages/VerifyEmail";
-import ProfileSetupPage from "./pages/ProfileSetupPage"; // BỎ TẠM THỜI: không cần bước này
+import ProfileSetupPage from "./pages/ProfileSetupPage"; 
 
 // Resource pages
 import Blog from "./pages/Blog";
@@ -84,6 +84,7 @@ import Announcements from './pages/admin/Announcements';
 import Settings from './pages/admin/Settings';
 import AdminProfile from './pages/admin/AdminProfile';
 import AdminHelp from './pages/admin/AdminHelp';
+import ProtectedAdminRoute from './components/admin/ProtectedAdminRoute';
 
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -175,7 +176,7 @@ const App = () => (
 
                             {/* Admin */}
                             <Route path="/admin/login" element={<AdminLogin />} />
-                            <Route path="/admin" element={<AdminLayout />}>
+                            <Route path="/admin" element={<ProtectedAdminRoute element={<AdminLayout />} />}>
                               <Route index element={<Navigate to="/admin/dashboard" replace />} />
                               <Route path="dashboard" element={<AdminDashboard />} />
                               <Route path="users" element={<UserManagement />} />

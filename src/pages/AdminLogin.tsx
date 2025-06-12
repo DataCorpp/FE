@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ChevronRight, Shield, Lock, Mail, AlertCircle } from 'lucide-react';
+import { ChevronRight, Shield, Lock, Mail, AlertCircle, Bell } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,25 +9,95 @@ import { Label } from '@/components/ui/label';
 
 const AdminLogin = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Get the redirect path from query params (if any)
+  const searchParams = new URLSearchParams(location.search);
+  const redirectPath = searchParams.get('redirect') || '/admin/dashboard';
+
+  // Check if user is already authenticated and handle any state messages
+  useEffect(() => {
+    // Check for messages in location state (e.g., after logout or redirect)
+    if (location.state) {
+      if (location.state.loggedOut) {
+        setStatusMessage(location.state.message || 'You have been logged out successfully');
+      } else if (location.state.message) {
+        setStatusMessage(location.state.message);
+      }
+    }
+    
+    const checkAuth = () => {
+      const adminAuth = localStorage.getItem('adminAuth');
+      const adminUserData = localStorage.getItem('adminUser');
+      
+      if (adminAuth === 'true' && adminUserData) {
+        try {
+          const user = JSON.parse(adminUserData);
+          if (user && user.role === 'admin') {
+            // Only redirect automatically if not just logged out
+            if (!location.state?.loggedOut) {
+              // If already logged in, redirect to intended destination
+              navigate(redirectPath);
+              return true;
+            }
+          }
+        } catch (error) {
+          console.error('Error parsing admin user data:', error);
+          localStorage.removeItem('adminAuth');
+          localStorage.removeItem('adminUser');
+        }
+      }
+      return false;
+    };
+    
+    checkAuth();
+  }, [navigate, redirectPath, location.state]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    // Simple admin authentication
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      setIsLoading(false);
+      return;
+    }
+
+    // Simple admin authentication with security protections
     setTimeout(() => {
+      // In a real application, this would be a secure API call
+      // For security, avoid hardcoding credentials in the frontend
+      // This is for demonstration only
       if (email === 'admin@admin.com' && password === 'admin') {
-        // Set admin session
+        // Generate a mock admin token
+        const adminToken = btoa(`admin:${email}:${new Date().getTime()}`);
+
+        // Set admin session with proper token
         localStorage.setItem('adminAuth', 'true');
-        localStorage.setItem('adminUser', JSON.stringify({ email, role: 'admin' }));
-        navigate('/admin/dashboard');
+        localStorage.setItem('adminUser', JSON.stringify({ 
+          email, 
+          role: 'admin',
+          name: 'Administrator',
+          loginTime: new Date().toISOString(),
+          token: adminToken,
+          permissions: ['users.manage', 'products.manage', 'settings.manage']
+        }));
+        
+        console.log("Admin login successful - Token generated");
+        
+        // Redirect to dashboard or intended destination
+        navigate(redirectPath);
       } else {
         setError('Invalid email or password');
+        // For security, don't reveal which field was incorrect
       }
       setIsLoading(false);
     }, 1000); // Simulate API call
@@ -91,6 +161,7 @@ const AdminLogin = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         className="pl-10 bg-gray-900/50 border-gray-800 text-white"
+                        autoComplete="email"
                         required
                       />
                     </div>
@@ -106,6 +177,7 @@ const AdminLogin = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         className="pl-10 bg-gray-900/50 border-gray-800 text-white"
+                        autoComplete="current-password"
                         required
                       />
                     </div>
@@ -119,6 +191,17 @@ const AdminLogin = () => {
                     >
                       <AlertCircle className="h-4 w-4 mr-2" />
                       {error}
+                    </motion.div>
+                  )}
+
+                  {statusMessage && !error && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-center p-3 text-sm bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-md"
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      {statusMessage}
                     </motion.div>
                   )}
                 </div>

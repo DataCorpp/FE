@@ -5,8 +5,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5000/api';
 
 // Add console logs to help debug API connection issues
-console.log('API Base URL:', API_BASE_URL);
-console.log('AI API Base URL:', AI_API_BASE_URL);
+// console.log('API Base URL:', API_BASE_URL);
+// console.log('AI API Base URL:', AI_API_BASE_URL);
 
 // Type definitions
 export interface ApiResponse<T = Record<string, unknown>> {
@@ -87,6 +87,43 @@ const createApiInstance = (baseURL: string): AxiosInstance => {
 // Khởi tạo các instance API
 const api = createApiInstance(API_BASE_URL);
 const aiApi = createApiInstance(AI_API_BASE_URL);
+
+// Tạo instance API riêng cho admin với interceptor riêng
+const adminApiInstance = createApiInstance(API_BASE_URL);
+adminApiInstance.interceptors.request.use(
+  (config) => {
+    // Lấy thông tin admin từ localStorage
+    const adminUserData = localStorage.getItem('adminUser');
+    const adminAuth = localStorage.getItem('adminAuth');
+    
+    if (adminUserData && adminAuth === 'true') {
+      try {
+        const adminUser = JSON.parse(adminUserData);
+        
+        // Sử dụng token admin được lưu trong adminUser nếu có
+        const token = adminUser.token || 'admin-token';
+        
+        // Thêm các headers xác thực admin cần thiết
+        config.headers.AdminAuthorization = `Bearer ${token}`;
+        config.headers['X-Admin-Role'] = adminUser.role;
+        config.headers['X-Admin-Email'] = adminUser.email;
+        
+        // console.log('Sending admin API request with headers:', {
+        //   AdminAuthorization: `Bearer ${token.substring(0, 10)}...`, // Chỉ hiển thị một phần token để bảo mật
+        //   'X-Admin-Role': config.headers['X-Admin-Role'],
+        //   'X-Admin-Email': config.headers['X-Admin-Email']
+        // });
+      } catch (error) {
+        console.error('Error parsing admin user data:', error);
+      }
+    } else {
+      console.warn('Admin API request without admin authentication!');
+    }
+    
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
 // API cho tính năng Web Crawler
 export const crawlerApi = {
@@ -251,6 +288,54 @@ export const productApi = {
   },
 };
 
+// API for FoodProduct management
+export const foodProductApi = {
+  // Get all food products
+  getFoodProducts: () => {
+    return api.get<ApiResponse>('/foodproducts');
+  },
+
+  // Get food product by ID
+  getFoodProductById: (id: string) => {
+    return api.get<ApiResponse>(`/foodproducts/${id}`);
+  },
+
+  // Create new food product
+  createFoodProduct: (data: {
+    productName: string;
+    category: string;
+    flavorType: string[];
+    ingredients: string[];
+    usage: string[];
+    packagingSize: string;
+    shelfLife: string;
+    manufacturerName: string;
+    manufacturerRegion: string;
+  }) => {
+    return api.post<ApiResponse>('/foodproducts', data);
+  },
+
+  // Update food product
+  updateFoodProduct: (id: string, data: {
+    productName?: string;
+    category?: string;
+    flavorType?: string[];
+    ingredients?: string[];
+    usage?: string[];
+    packagingSize?: string;
+    shelfLife?: string;
+    manufacturerName?: string;
+    manufacturerRegion?: string;
+  }) => {
+    return api.put<ApiResponse>(`/foodproducts/${id}`, data);
+  },
+
+  // Delete food product
+  deleteFoodProduct: (id: string) => {
+    return api.delete<ApiResponse>(`/foodproducts/${id}`);
+  }
+};
+
 // API cho xác thực người dùng
 export const authApi = {
   login: (email: string, password: string) => {
@@ -301,27 +386,27 @@ export const authApi = {
 // API cho Admin
 export const adminApi = {
   getUsers: (params?: { page?: number; limit?: number; search?: string; role?: string }) => {
-    return api.get<ApiResponse>('/admin/users', { params });
+    return adminApiInstance.get<ApiResponse>('/admin/users', { params });
   },
   
   getUserById: (userId: string) => {
-    return api.get<ApiResponse>(`/admin/users/${userId}`);
+    return adminApiInstance.get<ApiResponse>(`/admin/users/${userId}`);
   },
   
   updateUser: (userId: string, userData: Record<string, unknown>) => {
-    return api.put<ApiResponse>(`/admin/users/${userId}`, userData);
+    return adminApiInstance.put<ApiResponse>(`/admin/users/${userId}`, userData);
   },
   
   deleteUser: (userId: string) => {
-    return api.delete<ApiResponse>(`/admin/users/${userId}`);
+    return adminApiInstance.delete<ApiResponse>(`/admin/users/${userId}`);
   },
   
   getActivity: (params?: { page?: number; limit?: number }) => {
-    return api.get<ApiResponse>('/admin/activity', { params });
+    return adminApiInstance.get<ApiResponse>('/admin/activity', { params });
   },
   
   getAnalytics: () => {
-    return api.get<ApiResponse>('/admin/analytics');
+    return adminApiInstance.get<ApiResponse>('/admin/analytics');
   }
 };
 
