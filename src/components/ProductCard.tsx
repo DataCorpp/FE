@@ -13,12 +13,17 @@ interface Product {
   manufacturer: string;
   image: string;
   price: string;
+  pricePerUnit?: number;
   rating: number;
   productType: string;
-  description?: string;
-  minOrderQuantity?: number;
-  leadTime?: string;
-  sustainable?: boolean;
+  description: string;
+  minOrderQuantity: number;
+  leadTime: string;
+  leadTimeUnit?: string;
+  sustainable: boolean;
+  sku?: string;
+  unitType?: string;
+  currentAvailable?: number;
 }
 
 interface ProductCardProps {
@@ -130,7 +135,7 @@ const ProductCard = ({
         
         {product.minOrderQuantity && (
           <p className="text-xs text-muted-foreground mt-1">
-            Min. Order: {product.minOrderQuantity} units
+            Min. Order: {product.minOrderQuantity} {product.unitType || "units"}
           </p>
         )}
         
