@@ -105,70 +105,90 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const login = async (email: string, password: string, selectedRole?: UserRole): Promise<void> => {
-    // In a real app, this would make an API call to authenticate
-    // For now, we'll simulate a successful login
-    
-    // Use the provided role or default to manufacturer
-    const roleToUse = selectedRole || "manufacturer";
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Create mock role-specific settings based on the role
-    let roleSpecificSettings = {};
-    
-    if (roleToUse === "manufacturer") {
-      roleSpecificSettings = {
-        manufacturerSettings: {
-          productionCapacity: 50000,
-          certifications: ["ISO 9001", "Organic", "Fair Trade"],
-          preferredCategories: ["Food", "Beverage", "Personal Care"],
-          minimumOrderValue: 10000
-        }
+    try {
+      // Make an actual API call to authenticate
+      const response = await authApi.login(email, password);
+      
+      if (!response.data || !response.data._id) {
+        throw new Error(response.data?.message || "Login failed");
+      }
+      
+      // Get the role from the API response
+      const roleFromApi = response.data.role as UserRole;
+      
+      // Create role-specific settings based on the role from API
+      let roleSpecificSettings = {};
+      
+      if (roleFromApi === "manufacturer") {
+        roleSpecificSettings = {
+          manufacturerSettings: {
+            productionCapacity: 50000,
+            certifications: ["ISO 9001", "Organic", "Fair Trade"],
+            preferredCategories: ["Food", "Beverage", "Personal Care"],
+            minimumOrderValue: 10000
+          }
+        };
+      } else if (roleFromApi === "brand") {
+        roleSpecificSettings = {
+          brandSettings: {
+            marketSegments: ["Health-conscious", "Eco-friendly", "Premium"],
+            brandValues: ["Sustainability", "Quality", "Innovation"],
+            targetDemographics: ["Millennials", "Gen Z", "Health enthusiasts"],
+            productCategories: ["Organic Foods", "Wellness", "Eco-friendly products"]
+          }
+        };
+      } else if (roleFromApi === "retailer") {
+        roleSpecificSettings = {
+          retailerSettings: {
+            storeLocations: 12,
+            averageOrderValue: 75,
+            customerBase: ["Urban professionals", "Health-conscious families", "Millennials"],
+            preferredCategories: ["Organic", "Local", "Sustainable", "Health food"]
+          }
+        };
+      }
+      
+      // Convert API status to UserData status if needed
+      let userStatus: "online" | "away" | "busy" = "online";
+      if (response.data.status === "online" || response.data.status === "away" || response.data.status === "busy") {
+        userStatus = response.data.status as "online" | "away" | "busy";
+      }
+      
+      // Access response data safely
+      const responseData = response.data as Record<string, unknown>;
+      
+      // Create user data from API response
+      const userData: UserData = {
+        id: responseData._id as string,
+        name: responseData.name as string,
+        email: responseData.email as string,
+        companyName: (responseData.companyName as string) || "Demo Company",
+        role: roleFromApi,
+        profileComplete: (responseData.profileComplete as boolean) || false,
+        createdAt: (responseData.createdAt as string) || new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        notifications: (responseData.notifications as number) || Math.floor(Math.random() * 10),
+        avatar: (responseData.avatar as string) || "",
+        status: userStatus,
+        ...roleSpecificSettings
       };
-    } else if (roleToUse === "brand") {
-      roleSpecificSettings = {
-        brandSettings: {
-          marketSegments: ["Health-conscious", "Eco-friendly", "Premium"],
-          brandValues: ["Sustainability", "Quality", "Innovation"],
-          targetDemographics: ["Millennials", "Gen Z", "Health enthusiasts"],
-          productCategories: ["Organic Foods", "Wellness", "Eco-friendly products"]
-        }
-      };
-    } else if (roleToUse === "retailer") {
-      roleSpecificSettings = {
-        retailerSettings: {
-          storeLocations: 12,
-          averageOrderValue: 75,
-          customerBase: ["Urban professionals", "Health-conscious families", "Millennials"],
-          preferredCategories: ["Organic", "Local", "Sustainable", "Health food"]
-        }
-      };
+      
+      // Store the token in localStorage
+      if (responseData.token) {
+        localStorage.setItem("auth_token", responseData.token as string);
+      }
+      
+      // Save to localStorage for persistence
+      localStorage.setItem("user", JSON.stringify(userData));
+      
+      // Update state
+      setUser(userData);
+      setRole(roleFromApi);
+      setIsAuthenticated(true);
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
     }
-    
-    // Create mock user data
-    const userData: UserData = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: "Demo User", // In a real app, this would come from the API
-      email,
-      companyName: "Demo Company", // In a real app, this would come from the API
-      role: roleToUse,
-      profileComplete: false,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      notifications: Math.floor(Math.random() * 10),
-      avatar: "", // In a real app, this would come from the API
-      status: "online", // In a real app, this would come from the API
-      ...roleSpecificSettings
-    };
-    
-    // Save to localStorage for persistence
-    localStorage.setItem("user", JSON.stringify(userData));
-    
-    // Update state
-    setUser(userData);
-    setRole(roleToUse);
-    setIsAuthenticated(true);
   };
 
   const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<RegistrationResponse> => {

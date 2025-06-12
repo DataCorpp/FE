@@ -82,21 +82,7 @@ const RegisterForm = () => {
       // Handle the case where the server is in development mode with no email config
       // The API will return verificationCode in the response for development purposes
       if (response && response.verificationCode) {
-        console.log('Development mode detected! Using verification code from response.');
-        
-        toast({
-          title: "Development Mode",
-          description: (
-            <div className="space-y-2">
-              <p>Email service not configured. Using verification code from response:</p>
-              <p className="font-mono bg-secondary p-2 rounded text-center text-lg">
-                {response.verificationCode}
-              </p>
-              <p className="text-sm opacity-80">This code will expire in 1 minute.</p>
-            </div>
-          ),
-        });
-      } else {
+        console.log('Development mode detected! Using verification code from response. Verification code: ' + response.verificationCode);
         toast({
           title: "Verification email sent",
           description: "We've sent a 6-digit verification code to your email. The code will expire in 1 minute.",

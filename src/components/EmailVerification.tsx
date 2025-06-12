@@ -163,18 +163,6 @@ const EmailVerification = () => {
       // Check if the response includes a verification code (in development mode)
       if (response && response.verificationCode) {
         toast({
-          title: t("email-sent", "Development Mode"),
-          description: (
-            <div className="space-y-2">
-              <p>{t("verification-email-resent", "Verification code generated:")}</p>
-              <p className="font-mono bg-secondary p-2 rounded text-center text-lg">
-                {response.verificationCode}
-              </p>
-            </div>
-          ),
-        });
-      } else {
-        toast({
           title: t("email-sent", "Email Sent"),
           description: t("verification-email-resent", "Verification email has been resent to your email address."),
         });
