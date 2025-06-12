@@ -28,7 +28,8 @@ import {
   ShoppingBag,
   ArrowRight,
   HandHelpingIcon,
-  Globe
+  Globe,
+  Boxes
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from '@/hooks/use-toast';
@@ -228,15 +229,20 @@ const BrandLayout: FC<BrandLayoutProps> = ({ children }) => {
       path: '/brand/manufacturers',
       icon: <Building className="h-5 w-5" />,
     },
-    // {
-    //   name: t('brand-layout-partnerships'),
-    //   path: '/brand/parterships',
-    //   icon: <HandHelpingIcon className="h-5 w-5" />,
-    // },
+    {
+      name: t('brand-layout-partnerships'),
+      path: '/brand/partnerships',
+      icon: <HandHelpingIcon className="h-5 w-5" />,
+    },
     {
       name: t('brand-layout-retailers'),
       path: '/brand/retailers',
       icon: <Store className="h-5 w-5" />,
+    },
+    {
+      name: t('brand-layout-project'),
+      path: '/brand/post-project',
+      icon: <Boxes className="h-5 w-5" />,
     },
     {
       name: t('brand-layout-analytics'),

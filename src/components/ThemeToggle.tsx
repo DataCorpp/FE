@@ -63,7 +63,7 @@ const ThemeToggle = () => {
           Array(6).fill(0).map((_, i) => (
             <motion.div
               key={`star-${i}`}
-              className="absolute bg-yellow-100 rounded-full"
+              className="absolute bg-blue-100 rounded-full"
               initial={false}
               animate={{
                 opacity: [0, 0.8, 0],
@@ -93,7 +93,7 @@ const ThemeToggle = () => {
             return (
               <motion.div
                 key={`ray-${i}`}
-                className="absolute bg-yellow-400"
+                className="absolute bg-blue-400"
                 initial={false}
                 animate={{
                   opacity: [0.5, 1, 0.5],
@@ -147,7 +147,7 @@ const ThemeToggle = () => {
                 animate={{
                   background: isDark 
                     ? 'radial-gradient(circle at center, rgba(30, 58, 138, 0.15) 0%, rgba(15, 23, 42, 0) 70%)' 
-                    : 'radial-gradient(circle at center, rgba(251, 191, 36, 0.2) 0%, rgba(251, 191, 36, 0) 70%)'
+                    : 'radial-gradient(circle at center, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 70%)'
                 }}
                 initial={false}
                 transition={{ duration: 0.6 }}
@@ -197,7 +197,7 @@ const ThemeToggle = () => {
                     }}
                     className="absolute inset-0 flex items-center justify-center"
                   >
-                    <Sun className="h-[18px] w-[18px] text-amber-500" strokeWidth={1.75} />
+                    <Sun className="h-[18px] w-[18px] text-blue-500" strokeWidth={1.75} />
                   </motion.div>
                 </motion.div>
               </Button>

@@ -55,6 +55,7 @@ import BrandBrands from "./pages/brand/Brands";
 import BrandParterships from "./pages/brand/Partnerships";
 import BrandRetailers from "./pages/brand/Retailers";
 import BrandSettings from "./pages/brand/Settings";
+import PostProject from './pages/brand/PostProject';
 
 // Retailer pages
 import RetailerInventory from "./pages/retailer/Inventory";
@@ -162,7 +163,8 @@ const App = () => (
                             <Route path="/brand/retailers" element={<ProtectedRoute element={<BrandRetailers />} allowedRoles={["brand"]} />} />
                             <Route path="/brand/settings" element={<ProtectedRoute element={<BrandSettings />} allowedRoles={["brand"]} />} />
                             <Route path="/brand/partnerships" element={<ProtectedRoute element={<BrandParterships />} allowedRoles={["brand"]} />} />
-
+                            <Route path="/brand/post-project" element={<ProtectedRoute element={<PostProject />} allowedRoles={["brand"]} />} />
+                            
                             {/* Retailer */}
                             <Route path="/retailer/inventory" element={<ProtectedRoute element={<RetailerInventory />} allowedRoles={["retailer"]} />} />
                             <Route path="/retailer/brands" element={<ProtectedRoute element={<RetailerBrands />} allowedRoles={["retailer"]} />} />

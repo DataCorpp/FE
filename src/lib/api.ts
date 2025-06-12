@@ -2,7 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 // Use hardcoded URLs if environment variables are not available
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5001/api';
+const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5000/api';
 
 // Add console logs to help debug API connection issues
 console.log('API Base URL:', API_BASE_URL);
