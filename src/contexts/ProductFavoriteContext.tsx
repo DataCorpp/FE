@@ -1,72 +1,74 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { toast } from "sonner";
 
-// Define Product interface based on the error information
+// Product interface supporting both API and UI formats
 interface Product {
-  id: number;
+  _id?: string; // From API
+  id?: number | string; // From UI components
   name: string;
-  category: string;
   manufacturer: string;
   image: string;
   price: string;
-  rating: number;
-  productType: string;
-  description: string;
-  minOrderQuantity: number;
-  leadTime: string;
-  sustainable: boolean;
+  category: string;
+  [key: string]: any; // Allow additional properties
 }
 
-interface ProductFavoriteContextType {
+interface ProductFavoriteContextProps {
   favorites: Product[];
+  isFavorite: (id: string | number | undefined) => boolean;
   toggleFavorite: (product: Product) => void;
-  clearFavorites: () => void;
-  isFavorite: (id: number) => boolean;
 }
 
-const ProductFavoriteContext = createContext<ProductFavoriteContextType | undefined>(undefined);
+const ProductFavoriteContext = createContext<ProductFavoriteContextProps>({
+  favorites: [],
+  isFavorite: () => false,
+  toggleFavorite: () => {},
+});
 
-export function ProductFavoriteProvider({ children }: { children: ReactNode }) {
+export const useProductFavorites = () => useContext(ProductFavoriteContext);
+
+export const ProductFavoriteProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Load favorites from localStorage
   const [favorites, setFavorites] = useState<Product[]>(() => {
-    const saved = localStorage.getItem("favoriteProducts");
-    return saved ? JSON.parse(saved) : [];
+    const savedFavorites = localStorage.getItem('productFavorites');
+    return savedFavorites ? JSON.parse(savedFavorites) : [];
   });
 
+  // Update localStorage when favorites change
   useEffect(() => {
-    localStorage.setItem("favoriteProducts", JSON.stringify(favorites));
+    localStorage.setItem('productFavorites', JSON.stringify(favorites));
   }, [favorites]);
 
-  const toggleFavorite = (product: Product) => {
-    setFavorites(prev => {
-      const exists = prev.some(f => f.id === product.id);
-      if (exists) {
-        toast.success(`${product.name} removed from favorites`);
-        return prev.filter(f => f.id !== product.id);
-      } else {
-        toast.success(`${product.name} added to favorites`);
-        return [...prev, product];
-      }
+  // Check if a product is in favorites
+  const isFavorite = (id: string | number | undefined): boolean => {
+    if (!id) return false;
+    return favorites.some(fav => {
+      const favId = fav._id || fav.id;
+      return favId === id || favId?.toString() === id?.toString();
     });
   };
 
-  const clearFavorites = () => {
-    setFavorites([]);
-    toast.success("All product favorites cleared");
+  // Toggle a product in favorites
+  const toggleFavorite = (product: Product) => {
+    const productId = product._id || product.id;
+    
+    if (isFavorite(productId)) {
+      setFavorites(favorites.filter(item => {
+        const itemId = item._id || item.id;
+        return itemId?.toString() !== productId?.toString();
+      }));
+      toast.success(`${product.name} removed from favorites`);
+    } else {
+      setFavorites([...favorites, product]);
+      toast.success(`${product.name} added to favorites`);
+    }
   };
 
-  const isFavorite = (id: number) => favorites.some(f => f.id === id);
-
   return (
-    <ProductFavoriteContext.Provider value={{ favorites, toggleFavorite, clearFavorites, isFavorite }}>
+    <ProductFavoriteContext.Provider value={{ favorites, isFavorite, toggleFavorite }}>
       {children}
     </ProductFavoriteContext.Provider>
   );
-}
+};
 
-export function useProductFavorites() {
-  const context = useContext(ProductFavoriteContext);
-  if (context === undefined) {
-    throw new Error("useProductFavorites must be used within a ProductFavoriteProvider");
-  }
-  return context;
-} 
+export default ProductFavoriteProvider; 

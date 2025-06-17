@@ -1,16 +1,21 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { toast } from "sonner";
 
+// Updated interface to match actual database fields only
 interface Manufacturer {
   id: number;
   name: string;
   location: string;
   logo: string;
-  categories: string[];
-  certifications: string[];
-  minOrderSize: string;
+  industry: string;
+  certification: string;
   establishedYear: number;
-  rating: number;
+  contact: {
+    email: string;
+    phone?: string;
+    website?: string;
+  };
+  description?: string;
 }
 
 interface ManufacturerFavoriteContextType {

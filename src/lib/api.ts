@@ -21,6 +21,13 @@ export interface ApiResponse<T = Record<string, unknown>> {
   status?: string;
   token?: string;
   verificationCode?: string;
+  // Add properties for food product responses
+  products?: T[];
+  page?: number;
+  pages?: number;
+  total?: number;
+  // Add properties for manufacturer responses
+  manufacturers?: T[];
 }
 
 export interface ProductData {
@@ -32,6 +39,22 @@ export interface ProductData {
   category?: string;
   ingredients?: string[];
   nutritionFacts?: Record<string, unknown>;
+  image?: string;
+  [key: string]: unknown; // For additional fields
+}
+
+export interface ManufacturerData {
+  id?: string;
+  name: string;
+  location: string;
+  establish?: number;
+  industry?: string;
+  certification?: string;
+  contact: {
+    email: string;
+    phone?: string;
+    website?: string;
+  };
   image?: string;
   [key: string]: unknown; // For additional fields
 }
@@ -288,11 +311,72 @@ export const productApi = {
   },
 };
 
+// API for Manufacturer management
+export const manufacturerApi = {
+  // Get all manufacturers with filters
+  getManufacturers: (params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    industry?: string;
+    location?: string;
+    establish_gte?: number;
+    establish_lte?: number;
+  }) => {
+    return api.get<ApiResponse>('/manufacturers', { params });
+  },
+
+  // Get manufacturer by ID
+  getManufacturerById: (id: string) => {
+    return api.get<ApiResponse>(`/manufacturers/${id}`);
+  },
+
+  // Create new manufacturer
+  createManufacturer: (data: ManufacturerData) => {
+    return api.post<ApiResponse>('/manufacturers', data);
+  },
+
+  // Update manufacturer
+  updateManufacturer: (id: string, data: Partial<ManufacturerData>) => {
+    return api.put<ApiResponse>(`/manufacturers/${id}`, data);
+  },
+
+  // Delete manufacturer
+  deleteManufacturer: (id: string) => {
+    return api.delete<ApiResponse>(`/manufacturers/${id}`);
+  },
+
+  // Get distinct industries
+  getIndustries: () => {
+    return api.get<ApiResponse>('/manufacturers/industries');
+  },
+  
+  // Get distinct locations
+  getLocations: () => {
+    return api.get<ApiResponse>('/manufacturers/locations');
+  }
+};
+
 // API for FoodProduct management
 export const foodProductApi = {
-  // Get all food products
-  getFoodProducts: () => {
-    return api.get<ApiResponse>('/foodproducts');
+  // Get all food products with filters and search
+  getFoodProducts: (params?: {
+    page?: number;
+    limit?: number; 
+    search?: string;
+    category?: string;
+    productType?: string[];
+    sustainable?: boolean;
+    sortBy?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    minRating?: number;
+    leadTime?: string[];
+    inStockOnly?: boolean;
+    newArrivalsOnly?: boolean;
+    manufacturer?: string[];
+  }) => {
+    return api.get<ApiResponse>('/foodproducts', { params });
   },
 
   // Get food product by ID
@@ -301,38 +385,79 @@ export const foodProductApi = {
   },
 
   // Create new food product
-  createFoodProduct: (data: {
-    productName: string;
+  createFoodProduct: (data: Partial<{
+    name: string;
     category: string;
-    flavorType: string[];
+    manufacturer: string;
+    image: string;
+    price: string;
+    pricePerUnit: number;
+    rating: number;
+    productType: string;
+    description: string;
+    minOrderQuantity: number;
+    leadTime: string;
+    leadTimeUnit: string;
+    sustainable: boolean;
+    sku: string;
+    unitType: string;
+    currentAvailable: number;
     ingredients: string[];
+    flavorType: string[];
     usage: string[];
     packagingSize: string;
     shelfLife: string;
-    manufacturerName: string;
     manufacturerRegion: string;
-  }) => {
+  }>) => {
     return api.post<ApiResponse>('/foodproducts', data);
   },
 
   // Update food product
-  updateFoodProduct: (id: string, data: {
-    productName?: string;
-    category?: string;
-    flavorType?: string[];
-    ingredients?: string[];
-    usage?: string[];
-    packagingSize?: string;
-    shelfLife?: string;
-    manufacturerName?: string;
-    manufacturerRegion?: string;
-  }) => {
+  updateFoodProduct: (id: string, data: Partial<{
+    name: string;
+    category: string;
+    manufacturer: string;
+    image: string;
+    price: string;
+    pricePerUnit: number;
+    rating: number;
+    productType: string;
+    description: string;
+    minOrderQuantity: number;
+    leadTime: string;
+    leadTimeUnit: string;
+    sustainable: boolean;
+    sku: string;
+    unitType: string;
+    currentAvailable: number;
+    ingredients: string[];
+    flavorType: string[];
+    usage: string[];
+    packagingSize: string;
+    shelfLife: string;
+    manufacturerRegion: string;
+  }>) => {
     return api.put<ApiResponse>(`/foodproducts/${id}`, data);
   },
 
   // Delete food product
   deleteFoodProduct: (id: string) => {
     return api.delete<ApiResponse>(`/foodproducts/${id}`);
+  },
+  
+  // Get product categories
+  getCategories: () => {
+    return api.get<ApiResponse>('/foodproducts/categories');
+  },
+  
+  // Get product types
+  getProductTypes: () => {
+    return api.get<ApiResponse>('/foodproducts/types');
+  },
+  
+  // Get manufacturers
+  getManufacturers: () => {
+    return api.get<ApiResponse>('/foodproducts/manufacturers');
   }
 };
 
@@ -416,5 +541,6 @@ export default {
   authApi,
   productApi,
   crawlerApi,
-  adminApi
+  adminApi,
+  manufacturerApi
 };

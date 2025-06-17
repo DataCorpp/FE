@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
-import ProductCard from "@/components/ProductCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +24,11 @@ import {
   Award,
   Trash2,
   Building2,
-  Star
+  Star,
+  Globe,
+  RefreshCw,
+  Grid3X3,
+  List
 } from "lucide-react";
 import { 
   Dialog, 
@@ -36,13 +39,12 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Tooltip,
   TooltipContent,
@@ -53,18 +55,18 @@ import { toast } from "@/components/ui/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProductFavorites } from "@/contexts/ProductFavoriteContext";
 import { cn } from "@/lib/utils";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { useTranslation } from "react-i18next";
+import { foodProductApi } from "@/lib/api";
+import ProductCard from "@/components/ProductCard";
 
-// Define the Product interface to match the data structure
+// Define the Product interface to match both API data structure and UI needs
 interface Product {
-  id: number;
+  _id: string;        // MongoDB ID from API
   name: string;
+  productName?: string;
   category: string;
   manufacturer: string;
+  manufacturerName?: string;
   image: string;
   price: string;
   pricePerUnit?: number;
@@ -78,582 +80,305 @@ interface Product {
   sku?: string;
   unitType?: string;
   currentAvailable?: number;
+  ingredients?: string[];
+  flavorType?: string[];
+  usage?: string[];
+  packagingSize?: string;
+  shelfLife?: string;
+  manufacturerRegion?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-// Mock product data - in a real app, this would come from an API
-const mockProducts: Product[] = [
-  {
-    id: 1,
-    name: "Kikkoman Naturally Brewed Soy Sauce",
-    category: "Soy Sauce (Shoyu)",
-    manufacturer: "Kikkoman",
-    image: "/Storage/Food/Kikkoman Naturally Brewed Soy Sauce.png",
-    price: "$5.99",
-    pricePerUnit: 5.99,
-    rating: 4.8,
-    productType: "Finished Good",
-    description: "Naturally brewed soy sauce (500 mL / 16.9 oz). Salty, umami, slightly sweet flavor. Made with water, soybeans, wheat, and salt. Perfect for dipping, cooking, marinades, and dressings.",
-    minOrderQuantity: 100,
-    leadTime: "2-3",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "KIK-SOY-001",
-    unitType: "bottles",
-    currentAvailable: 1500
-  },
-  {
-    id: 2,
-    name: "Kikkoman American-made Soy Sauce",
-    category: "Soy Sauce",
-    manufacturer: "Kikkoman",
-    image: "/Storage/Food/Kikkoman American-made Soy Sauce.jpg",
-    price: "$24.99",
-    pricePerUnit: 24.99,
-    rating: 4.7,
-    productType: "Bulk Product",
-    description: "American-made soy sauce for foodservice with rich umami and aged flavor. Available in gallon, 5 gal pail, and cube packs. Made with the same 4 traditional ingredients plus sodium benzoate as preservative.",
-    minOrderQuantity: 50,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "KIK-SOY-BLK-002",
-    unitType: "gallons",
-    currentAvailable: 350
-  },
-  {
-    id: 3,
-    name: "Marukome Shelf-Stable Miso Paste",
-    category: "Miso Paste",
-    manufacturer: "Marukome",
-    image: "/Storage/Food/Marukome Shelf-Stable 375 g.jpg",
-    price: "$8.49",
-    pricePerUnit: 8.49,
-    rating: 4.6,
-    productType: "Finished Good",
-    description: "Shelf-stable 375g miso paste with savory, umami, slightly sweet flavor. Contains miso (filtered water, rice, soybeans, salt, alcohol), veggie broth, garlic, and ginger. Perfect for quick miso soup, sauces, and marinades. Non-GMO and gluten-free.",
-    minOrderQuantity: 75,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "MRK-MSO-003",
-    unitType: "pouches",
-    currentAvailable: 420
-  },
-  {
-    id: 4,
-    name: "Marukome Miso & Easy Original",
-    category: "Liquid Miso Broth",
-    manufacturer: "Marukome",
-    image: "/Storage/Food/Marukome Miso & Easy Original.jpg",
-    price: "$7.99",
-    pricePerUnit: 7.99,
-    rating: 4.3,
-    productType: "Finished Good",
-    description: "15.1 oz liquid miso broth with umami, mild sweet, slightly salty flavor. Contains miso, water, sweet rice wine, sea salt, and bonito powder. Perfect for instant miso soup and cooking. Refrigerate after opening.",
-    minOrderQuantity: 100,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "MRK-MSO-LQD-004",
-    unitType: "bottles",
-    currentAvailable: 650
-  },
-  {
-    id: 5,
-    name: "Ebara Yakiniku No Tare Sauce Mild",
-    category: "Yakiniku BBQ Sauce",
-    manufacturer: "Ebara",
-    image: "/Storage/Food/Ebara Yakiniku No Tare Sauce Mild (300 g).jpg",
-    price: "$6.99",
-    pricePerUnit: 6.99,
-    rating: 4.5,
-    productType: "Finished Good",
-    description: "300g Yakiniku BBQ sauce with savory-sweet flavor and garlic-onion notes. Soy sauce base with fruit extracts, sesame, and garlic. Perfect for grilling and dipping.",
-    minOrderQuantity: 120,
-    leadTime: "2-3",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "EBR-YKN-005",
-    unitType: "bottles",
-    currentAvailable: 800
-  },
-  {
-    id: 6,
-    name: "Kikkoman Ponzu Citrus Sauce",
-    category: "Ponzu Dressing",
-    manufacturer: "Kikkoman",
-    image: "/Storage/Food/Kikkoman Ponzu Citrus Sauce.jpg",
-    price: "$5.49",
-    pricePerUnit: 5.49,
-    rating: 4.4,
-    productType: "Finished Good",
-    description: "236 mL Ponzu citrus sauce with tangy citrus-umami flavor. Made with soy sauce and citrus juice. Perfect for dipping, salads, sashimi, and noodles.",
-    minOrderQuantity: 100,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "KIK-PNZ-006",
-    unitType: "bottles",
-    currentAvailable: 920
-  },
-  {
-    id: 7,
-    name: "Kewpie Deep Roasted Sesame Dressing & Marinade",
-    category: "Sesame Dressing",
-    manufacturer: "Kewpie",
-    image: "/Storage/Food/Kewpie Deep Roasted Sesame Dressing & Marinade.jpg",
-    price: "$12.99",
-    pricePerUnit: 12.99,
-    rating: 4.7,
-    productType: "Finished Good",
-    description: "887 mL deep roasted sesame dressing with intensely nutty and savory flavor. Contains ground sesame, vinegar, oil, and seasonings. Perfect for salads and meat marinades.",
-    minOrderQuantity: 60,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "KWP-SES-007",
-    unitType: "bottles",
-    currentAvailable: 280
-  },
-  {
-    id: 8,
-    name: "Kikkoman Takumi Teriyaki Sauce",
-    category: "Teriyaki Sauce",
-    manufacturer: "Kikkoman",
-    image: "/Storage/Food/Kikkoman Takumi Teriyaki Sauce.jpg",
-    price: "$6.99",
-    pricePerUnit: 6.99,
-    rating: 4.9,
-    productType: "Finished Good",
-    description: "320g Takumi Teriyaki sauce with savory-sweet, sticky glaze. Contains soy sauce, sugar, mirin, and sesame seeds. Perfect for marinade and glazing. Top pick by Spruce Eats.",
-    minOrderQuantity: 100,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "KIK-TRY-008",
-    unitType: "bottles",
-    currentAvailable: 750
-  },
-  {
-    id: 9,
-    name: "Takesan Kishibori Artisan Soy Sauce",
-    category: "Artisan Soy Sauce",
-    manufacturer: "Takesan",
-    image: "/Storage/Food/Takesan Kishibori Artisan Soy Sauce.jpg",
-    price: "$15.99",
-    pricePerUnit: 15.99,
-    rating: 4.9,
-    productType: "Finished Good",
-    description: "Small-batch artisan soy sauce with deep umami flavor, matured in cedar barrels. Perfect for premium dipping and finishing. Recommended by chefs, available online only.",
-    minOrderQuantity: 40,
-    leadTime: "3-4",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "TKS-SOY-ART-009",
-    unitType: "bottles",
-    currentAvailable: 180
-  },
-  {
-    id: 10,
-    name: "Kikkoman Less Sodium Soy Sauce",
-    category: "Soy Sauce (Light Salt)",
-    manufacturer: "Kikkoman",
-    image: "/Storage/Food/Kikkoman Less Sodium Soy Sauce.jpg",
-    price: "$5.99",
-    pricePerUnit: 5.99,
-    rating: 4.2,
-    productType: "Finished Good",
-    description: "Traditional shoyu with 40% less sodium. Aged normally with salt reduced post-fermentation. Perfect for health-conscious cooking and dining.",
-    minOrderQuantity: 100,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "KIK-SOY-LS-010",
-    unitType: "bottles",
-    currentAvailable: 1200
-  },
-  {
-    id: 11,
-    name: "キッコーマン 生しょうゆ",
-    category: "醤油（本醸造）",
-    manufacturer: "Kikkoman",
-    image: "/placeholder.svg",
-    price: "$6.99",
-    pricePerUnit: 6.99,
-    rating: 4.7,
-    productType: "Finished Good",
-    description: "味: 旨味、塩味がある本格派、成分: 大豆、小麦、食塩、水、用途: 鍋、刺身、料理全般、備考: 無添加・伝統製法",
-    minOrderQuantity: 80,
-    leadTime: "2-3",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "KIK-NAM-011",
-    unitType: "bottles",
-    currentAvailable: 950
-  },
-  {
-    id: 12,
-    name: "丸米 Kosher Certified White Miso",
-    category: "白味噌（Rice miso）",
-    manufacturer: "Marukome",
-    image: "/placeholder.svg",
-    price: "$8.99",
-    pricePerUnit: 8.99,
-    rating: 4.5,
-    productType: "Finished Good",
-    description: "味: 甘めでまろやか、成分: 大豆、米、塩、無添加、賞味期限: 12ヶ月",
-    minOrderQuantity: 70,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "MRK-WHT-012",
-    unitType: "pouches",
-    currentAvailable: 380
-  },
-  {
-    id: 13,
-    name: "丸米 伝統的味噌",
-    category: "大豆味噌",
-    manufacturer: "Marukome",
-    image: "/placeholder.svg",
-    price: "$7.99",
-    pricePerUnit: 7.99,
-    rating: 4.6,
-    productType: "Finished Good",
-    description: "用途: 味噌汁・煮物、備考: 冷蔵保存必須",
-    minOrderQuantity: 75,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "MRK-TRD-013",
-    unitType: "pouches",
-    currentAvailable: 420
-  },
-  {
-    id: 14,
-    name: "キッコーマン ポン酢",
-    category: "ポン酢",
-    manufacturer: "Kikkoman",
-    image: "/placeholder.svg",
-    price: "$6.49",
-    pricePerUnit: 6.49,
-    rating: 4.3,
-    productType: "Finished Good",
-    description: "味: 柑橘の酸味と醤油の深み、用途: 鍋、刺身、サラダ",
-    minOrderQuantity: 100,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "KIK-PNZ-014",
-    unitType: "bottles",
-    currentAvailable: 680
-  },
-  {
-    id: 15,
-    name: "エバラ 焼肉のたれ 中辛",
-    category: "焼肉のたれ",
-    manufacturer: "Ebara",
-    image: "/placeholder.svg",
-    price: "$6.99",
-    pricePerUnit: 6.99,
-    rating: 4.7,
-    productType: "Finished Good",
-    description: "味: 甘辛、にんにく風味、用途: 焼肉、炒め物",
-    minOrderQuantity: 120,
-    leadTime: "2-3",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "EBR-YKN-015",
-    unitType: "bottles",
-    currentAvailable: 720
-  },
-  {
-    id: 16,
-    name: "キューピー 胡麻ドレッシング 深煎り",
-    category: "胡麻ドレッシング",
-    manufacturer: "Kewpie",
-    image: "/placeholder.svg",
-    price: "$7.49",
-    pricePerUnit: 7.49,
-    rating: 4.8,
-    productType: "Finished Good",
-    description: "味: 香ばしい胡麻風味、用途: サラダ、和え物",
-    minOrderQuantity: 90,
-    leadTime: "1-2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "KWP-SES-016",
-    unitType: "bottles",
-    currentAvailable: 540
-  },
-  {
-    id: 17,
-    name: "ブルドッグ 中濃ソース",
-    category: "とんかつソース",
-    manufacturer: "Bulldog",
-    image: "/placeholder.svg",
-    price: "$5.99",
-    pricePerUnit: 5.99,
-    rating: 4.5,
-    productType: "Finished Good",
-    description: "味: 濃厚でフルーティ、用途: とんかつ、揚げ物",
-    minOrderQuantity: 100,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "BLD-SAU-017",
-    unitType: "bottles",
-    currentAvailable: 850
-  },
-  {
-    id: 18,
-    name: "キッコーマン 低塩しょうゆ",
-    category: "減塩醤油",
-    manufacturer: "Kikkoman",
-    image: "/placeholder.svg",
-    price: "$5.99",
-    pricePerUnit: 5.99,
-    rating: 4.2,
-    productType: "Finished Good",
-    description: "味: 通常の旨味を保持しつつ塩分40%カット",
-    minOrderQuantity: 100,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: false,
-    sku: "KIK-LOS-018",
-    unitType: "bottles",
-    currentAvailable: 790
-  },
-  {
-    id: 19,
-    name: "信州味噌",
-    category: "赤味噌",
-    manufacturer: "Shinshu",
-    image: "/placeholder.svg",
-    price: "$8.99",
-    pricePerUnit: 8.99,
-    rating: 4.8,
-    productType: "Finished Good",
-    description: "味: 濃厚なコク、塩辛め、用途: 味噌汁、煮物",
-    minOrderQuantity: 70,
-    leadTime: "2-3",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "SHS-MSO-019",
-    unitType: "pouches",
-    currentAvailable: 320
-  },
-  {
-    id: 20,
-    name: "青森リンゴドレッシング",
-    category: "ご当地ドレッシング",
-    manufacturer: "Aomori",
-    image: "/placeholder.svg",
-    price: "$7.99",
-    pricePerUnit: 7.99,
-    rating: 4.6,
-    productType: "Finished Good",
-    description: "味: フルーツと醤油の調和、用途: サラダ、冷製料理",
-    minOrderQuantity: 80,
-    leadTime: "2",
-    leadTimeUnit: "weeks",
-    sustainable: true,
-    sku: "AOM-APL-020",
-    unitType: "bottles",
-    currentAvailable: 360
-  }
-];
+// For product favorites context
+interface ProductFavorites {
+  isFavorite: (id: string | number) => boolean;
+  toggleFavorite: (product: any) => void;
+  favorites: any[];
+}
 
-// Category options
-const categories = [
-  "All Categories",
-  "Breakfast Foods",
-  "Beverages",
-  "Snacks",
-  "Spreads",
-  "Condiments",
-  "Dairy & Alternatives",
-  "Baking"
-];
-
-// Product Type options
-const productTypes = [
-  "Finished Good",
-  "Raw Material",
-  "Component",
-  "Packaging Material",
-  "Semi-finished Good",
-  "Bulk Product"
-];
-
-// Sort options
+// Sort options based on actual data
 const sortOptions = [
-  { value: "relevance", label: "Relevance" },
+  { value: "name-asc", label: "Name A-Z" },
+  { value: "name-desc", label: "Name Z-A" },
   { value: "price-asc", label: "Price: Low to High" },
   { value: "price-desc", label: "Price: High to Low" },
-  { value: "rating", label: "Rating" }
+  { value: "rating-desc", label: "Rating: High to Low" },
+  { value: "newest", label: "Newest First" }
 ];
 
-// Enhanced animation variants with better physics and timing
-const fadeIn = {
-  hidden: { opacity: 0 },
-  visible: { 
-    opacity: 1, 
-    transition: { 
-      duration: 0.2, 
-      ease: "easeOut" 
-    } 
-  }
-};
-
-const staggerContainer = {
+// Enhanced animation variants
+const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
       staggerChildren: 0.03,
-      delayChildren: 0.05,
-      ease: "easeOut"
+      delayChildren: 0.1,
+      ease: [0.25, 0.46, 0.45, 0.94],
+      duration: 0.8
     }
   }
 };
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 10 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
+const itemVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: 40, 
+    scale: 0.92,
+    filter: "blur(8px)",
+    rotateX: 15,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    rotateX: 0,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 15,
+      mass: 0.8,
+      duration: 1.2,
+      ease: [0.25, 0.46, 0.45, 0.94]
+    }
+  },
+  hover: {
+    y: -8,
+    scale: 1.02,
     transition: { 
       type: "spring", 
       stiffness: 400, 
       damping: 25,
-      duration: 0.2 
+      duration: 0.3 
+    }
+  },
+  tap: {
+    scale: 0.98,
+    transition: { duration: 0.1 }
+  }
+};
+
+const headerVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: -40,
+    scale: 0.95,
+    filter: "blur(10px)"
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: {
+      type: "spring",
+      stiffness: 120,
+      damping: 20,
+      mass: 0.9,
+      duration: 1.0,
+      ease: [0.25, 0.46, 0.45, 0.94]
     } 
   }
 };
 
-// Filter animations - optimized for faster transitions
 const filterVariants = {
-  hidden: { opacity: 0, height: 0 },
+  hidden: { 
+    opacity: 0, 
+    x: -40, 
+    scale: 0.9,
+    filter: "blur(8px)",
+    rotateY: -15
+  },
   visible: { 
     opacity: 1, 
-    height: "auto", 
+    x: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    rotateY: 0,
     transition: { 
-      height: { type: "spring", stiffness: 400, damping: 25 },
-      opacity: { duration: 0.15 }
+      type: "spring", 
+      stiffness: 120,
+      damping: 20,
+      mass: 0.7,
+      duration: 0.9,
+      ease: [0.25, 0.46, 0.45, 0.94]
     } 
   },
   exit: { 
     opacity: 0, 
-    height: 0, 
+    x: -40,
+    scale: 0.9,
+    filter: "blur(8px)",
+    rotateY: -15,
     transition: { 
-      height: { duration: 0.15 },
-      opacity: { duration: 0.1 }
+      duration: 0.4,
+      ease: [0.25, 0.46, 0.45, 0.94]
     } 
   }
 };
 
-// Button hover animations
-const buttonHoverVariants = {
-  rest: { scale: 1 },
-  hover: { 
-    scale: 1.05, 
-    transition: { 
-      type: "spring", 
-      stiffness: 400, 
-      damping: 10 
-    } 
+// New animation variants for enhanced interactions
+const searchBarVariants = {
+  unfocused: {
+    scale: 1,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+    transition: { type: "spring", stiffness: 300, damping: 30 }
   },
-  tap: { scale: 0.95 }
+  focused: {
+    scale: 1.02,
+    boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+    transition: { type: "spring", stiffness: 300, damping: 30 }
+  }
 };
 
-// Badge animations
-const badgeVariants = {
-  rest: { scale: 1, opacity: 0.9 },
+const buttonVariants = {
+  rest: { scale: 1, y: 0 },
   hover: { 
     scale: 1.05, 
-    opacity: 1, 
-    transition: { 
-      type: "spring", 
-      stiffness: 400, 
-      damping: 10 
-    } 
+    y: -2,
+    transition: { type: "spring", stiffness: 400, damping: 25 }
   },
-  tap: { scale: 0.95 }
+  tap: { 
+    scale: 0.95, 
+    y: 0,
+    transition: { duration: 0.1 }
+  }
 };
 
-// Page transitions
-const pageTransition = {
-  hidden: { opacity: 0, y: 20 },
-  visible: { 
-    opacity: 1, 
-    y: 0, 
+const cardVariants = {
+  rest: { 
+    scale: 1, 
+    y: 0,
+    rotateX: 0,
+    rotateY: 0,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)"
+  },
+  hover: { 
+    scale: 1.03, 
+    y: -12,
+    rotateX: 5,
+    rotateY: 2,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
     transition: { 
       type: "spring", 
       stiffness: 300, 
-      damping: 30,
-      duration: 0.4 
-    } 
+      damping: 20,
+      duration: 0.4
+    }
   },
-  exit: { 
+  tap: { 
+    scale: 0.98,
+    transition: { duration: 0.1 }
+  }
+};
+
+const fadeInUpVariants = {
+  hidden: { 
     opacity: 0, 
-    y: 20, 
+    y: 30,
+    scale: 0.95,
+    filter: "blur(4px)"
+  },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    scale: 1,
+    filter: "blur(0px)",
+    transition: {
+      type: "spring",
+      stiffness: 200,
+      damping: 25,
+      duration: 0.6
+    }
+  }
+};
+
+const pulseVariants = {
+  rest: { scale: 1 },
+  pulse: {
+    scale: [1, 1.1, 1],
+    transition: {
+      duration: 0.6,
+      repeat: Infinity,
+      repeatType: "reverse" as const
+    }
+  }
+};
+
+const slideInVariants = {
+  hidden: { opacity: 0, x: -20, filter: "blur(4px)" },
+  visible: { 
+    opacity: 1, 
+    x: 0, 
+    filter: "blur(0px)",
     transition: { 
-      duration: 0.2 
+      type: "spring", 
+      stiffness: 200, 
+      damping: 25 
     } 
   }
 };
 
-// Dialog animations - optimized for faster transitions
-const dialogContentVariants = {
-  hidden: { opacity: 0, scale: 0.98, y: 8 },
-  visible: { 
-    opacity: 1, 
-    scale: 1, 
-    y: 0, 
-    transition: { 
-      type: "spring", 
-      stiffness: 400, 
-      damping: 25,
-      duration: 0.2 
-    } 
-  },
-  exit: { 
-    opacity: 0, 
-    scale: 0.98, 
-    y: 8, 
-    transition: { 
-      duration: 0.15 
-    } 
-  }
+// Helper function to safely convert ID values for consistent comparison
+const safeId = (id: string | number | undefined): string => {
+  return id?.toString() || "";
 };
+
+// Add a mock findMatchingProducts function to the foodProductApi object
+const mockFindMatchingProducts = async (productId: string) => {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  return {
+    data: [
+      { _id: "match1", name: "Matching Product 1" },
+      { _id: "match2", name: "Matching Product 2" },
+      { _id: "match3", name: "Matching Product 3" },
+    ]
+  };
+};
+
+if (foodProductApi) {
+  // @ts-ignore - Adding mock method for demonstration
+  foodProductApi.findMatchingProducts = mockFindMatchingProducts;
+}
 
 const Products = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
-  const [products, setProducts] = useState(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Categories");
-  const [selectedProductTypes, setSelectedProductTypes] = useState<string[]>([]);
-  const [activeView, setActiveView] = useState("grid");
+  const [selectedUnitTypes, setSelectedUnitTypes] = useState<string[]>([]);
+  const [selectedFlavorTypes, setSelectedFlavorTypes] = useState<string[]>([]);
+  const [selectedUsages, setSelectedUsages] = useState<string[]>([]);
+  const [selectedManufacturerRegions, setSelectedManufacturerRegions] = useState<string[]>([]);
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [selectedShelfLives, setSelectedShelfLives] = useState<string[]>([]);
+  const [selectedPackagingSizes, setSelectedPackagingSizes] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isLoading, setIsLoading] = useState(true);
-  const [sortBy, setSortBy] = useState("relevance");
+  const [sortBy, setSortBy] = useState("name-asc");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [showProductDetails, setShowProductDetails] = useState(false);
   const [sustainableOnly, setSustainableOnly] = useState(false);
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 100]);
-  const [minOrder, setMinOrder] = useState<number>(50);
-  const [selectedLeadTime, setSelectedLeadTime] = useState<string[]>([]);
-  const [inStockOnly, setInStockOnly] = useState(false);
-  const [newArrivalsOnly, setNewArrivalsOnly] = useState(false);
-  const [minRating, setMinRating] = useState<number>(0);
-  const [selectedManufacturers, setSelectedManufacturers] = useState<string[]>([]);
-  const [selectedOrigins, setSelectedOrigins] = useState<string[]>([]);
-  const [hasCustomization, setHasCustomization] = useState(false);
-  const [hasSamples, setHasSamples] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [categoryList, setCategoryList] = useState<string[]>(["All Categories"]);
+  const [unitTypeList, setUnitTypeList] = useState<string[]>([]);
+  const [flavorTypeList, setFlavorTypeList] = useState<string[]>([]);
+  const [usageList, setUsageList] = useState<string[]>([]);
+  const [manufacturerRegionList, setManufacturerRegionList] = useState<string[]>([]);
+  const [ingredientsList, setIngredientsList] = useState<string[]>([]);
+  const [shelfLifeList, setShelfLifeList] = useState<string[]>([]);
+  const [packagingSizeList, setPackagingSizeList] = useState<string[]>([]);
+  const [totalProductsCount, setTotalProductsCount] = useState(0);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pages: 1,
+    total: 0,
+  });
 
   const {
     favorites: favoritedProducts,
@@ -666,19 +391,66 @@ const Products = () => {
     document.title = "Browse Products - CPG Matchmaker";
   }, []);
 
-  // Further optimize loading state to possibly skip showing skeletons
+  // Fetch categories
   useEffect(() => {
-    // If we have cached products already, skip the loading state entirely
-    if (mockProducts.length > 0 && products.length > 0) {
-      setIsLoading(false);
-      return;
-    }
-    
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 200); // Further reduce to 200ms for faster display
-    
-    return () => clearTimeout(timer);
+    const fetchCategories = async () => {
+      try {
+        const response = await foodProductApi.getCategories();
+        if (response.data) {
+          const categories = response.data as unknown as string[];
+          // Only add "All Categories" if it's not already in the list
+          const categoryList = categories.includes("All Categories") 
+            ? categories 
+            : ["All Categories", ...categories];
+          setCategoryList(categoryList);
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive",
+        });
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
+  // Fetch all filter options and total count
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        // Fetch all products to get unique filter values and total count
+        const response = await foodProductApi.getFoodProducts({ limit: 1000 }); // Get more products to extract unique values
+        
+        if (response.data?.products) {
+          const allProducts = response.data.products as unknown as Product[];
+          setTotalProductsCount(response.data.total || allProducts.length);
+          
+          // Extract unique values for each filter
+          const uniqueUnitTypes = [...new Set(allProducts.map(p => p.unitType).filter(Boolean))];
+          const uniqueFlavorTypes = [...new Set(allProducts.flatMap(p => p.flavorType || []).filter(Boolean))];
+          const uniqueUsages = [...new Set(allProducts.flatMap(p => p.usage || []).filter(Boolean))];
+          const uniqueManufacturerRegions = [...new Set(allProducts.map(p => p.manufacturerRegion).filter(Boolean))];
+          const uniqueIngredients = [...new Set(allProducts.flatMap(p => p.ingredients || []).filter(Boolean))];
+          const uniqueShelfLives = [...new Set(allProducts.map(p => p.shelfLife).filter(Boolean))];
+          const uniquePackagingSizes = [...new Set(allProducts.map(p => p.packagingSize).filter(Boolean))];
+          
+          setUnitTypeList(uniqueUnitTypes);
+          setFlavorTypeList(uniqueFlavorTypes);
+          setUsageList(uniqueUsages);
+          setManufacturerRegionList(uniqueManufacturerRegions);
+          setIngredientsList(uniqueIngredients);
+          setShelfLifeList(uniqueShelfLives);
+          setPackagingSizeList(uniquePackagingSizes);
+        }
+      } catch (error) {
+        console.error('Error fetching filter options:', error);
+      }
+    };
+
+    fetchFilterOptions();
   }, []);
 
   // Update search params when search term changes
@@ -694,137 +466,195 @@ const Products = () => {
   // Check for product ID in URL params
   useEffect(() => {
     if (searchParams.get("productId") && !isLoading) {
-      const productId = parseInt(searchParams.get("productId") || "0");
-      const product = mockProducts.find(p => p.id === productId);
-      if (product) {
-        handleProductDetailsClick(product);
-      }
+      const productId = searchParams.get("productId") || "";
+      fetchProductById(productId);
     }
 
-    // View favorites if that view is requested  
     if (searchParams.get("view") === "favorites") {
-      // Set page title for favorites view
+      setShowFavoritesOnly(true);
       document.title = "My Favorites - CPG Matchmaker";
     }
   }, [searchParams, isLoading]);
 
-  // Filter and sort products
-  useEffect(() => {
-    let filteredProducts = [...mockProducts];
-
-    if (searchParams.get("view") === "favorites") {
-      filteredProducts = filteredProducts.filter(product => 
-        isFavorite(product.id)
-      );
-    } else {
-    if (searchTerm) {
-      filteredProducts = filteredProducts.filter(
-        product => 
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.manufacturer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.category.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-      // Filter by rating
-      if (minRating > 0) {
-        filteredProducts = filteredProducts.filter(product => 
-          product.rating >= minRating
-        );
+  // Fetch product by ID
+  const fetchProductById = async (productId: string) => {
+    try {
+      const response = await foodProductApi.getFoodProductById(productId);
+      if (response.data) {
+        setSelectedProduct(response.data as unknown as Product);
+        setShowProductDetails(true);
       }
-
-      // Filter by price range
-      filteredProducts = filteredProducts.filter(product => {
-        const price = parseFloat(product.price.replace('$', ''));
-        return price >= priceRange[0] && (priceRange[1] === 100 ? true : price <= priceRange[1]);
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load product details",
+        variant: "destructive",
       });
+    }
+  };
 
-      // Filter by lead time
-      if (selectedLeadTime.length > 0) {
-        filteredProducts = filteredProducts.filter(product =>
-          selectedLeadTime.some(time => product.leadTime.includes(time.split(' ')[0]))
-        );
+  // Fetch products with filters
+  const fetchProducts = async () => {
+    setIsLoading(true);
+    
+    try {
+      const params: any = {
+        page: pagination.page,
+        limit: 9,
+      };
+      
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+      
+      if (activeCategory !== "All Categories") {
+        params.category = activeCategory;
       }
 
-    // Filter by category
-    if (activeCategory !== "All Categories") {
-      filteredProducts = filteredProducts.filter(
-        product => product.category === activeCategory
-      );
-    }
+      if (selectedUnitTypes.length > 0) {
+        params.unitType = selectedUnitTypes;
+      }
 
-    // Filter by productType
-    if (selectedProductTypes.length > 0) {
-      filteredProducts = filteredProducts.filter(product => 
-        selectedProductTypes.includes(product.productType)
-      );
-    }
+      if (selectedFlavorTypes.length > 0) {
+        params.flavorType = selectedFlavorTypes;
+      }
 
-    // Filter by sustainability
-    if (sustainableOnly) {
-      filteredProducts = filteredProducts.filter(product => product.sustainable);
-    }
+      if (selectedUsages.length > 0) {
+        params.usage = selectedUsages;
+      }
 
-    // Filter by stock status (mock data - you would need to add this to your product data)
-    if (inStockOnly) {
-      filteredProducts = filteredProducts.filter(product => product.minOrderQuantity <= 100);
-    }
+      if (selectedManufacturerRegions.length > 0) {
+        params.manufacturerRegion = selectedManufacturerRegions;
+      }
 
-    // Filter by new arrivals (mock data - you would need to add this to your product data)
-    if (newArrivalsOnly) {
-      filteredProducts = filteredProducts.filter(product => product.id > 4);
-    }
-    }
+      if (selectedIngredients.length > 0) {
+        params.ingredients = selectedIngredients;
+      }
 
-    // Sort products
-    switch (sortBy) {
-      case "price-asc":
-        filteredProducts.sort((a, b) => 
-          parseFloat(a.price.replace('$', '')) - parseFloat(b.price.replace('$', ''))
-        );
-        break;
-      case "price-desc":
-        filteredProducts.sort((a, b) => 
-          parseFloat(b.price.replace('$', '')) - parseFloat(a.price.replace('$', ''))
-        );
-        break;
-      case "rating":
-        filteredProducts.sort((a, b) => b.rating - a.rating);
-        break;
-      default:
-        // Default is relevance
-        break;
+      if (selectedShelfLives.length > 0) {
+        params.shelfLife = selectedShelfLives;
+      }
+
+      if (selectedPackagingSizes.length > 0) {
+        params.packagingSize = selectedPackagingSizes;
+      }
+
+      if (sustainableOnly) {
+        params.sustainable = true;
+      }
+      
+      if (sortBy !== "name-asc") {
+        params.sortBy = sortBy;
+      }
+      
+      if (showFavoritesOnly) {
+        const favorites = favoritedProducts.map(fav => fav._id || fav.id);
+        const response = await foodProductApi.getFoodProducts(params);
+        
+        if (response.data?.products) {
+          const apiProducts = response.data.products as unknown as Product[];
+          const filteredProducts = apiProducts.filter(
+            product => favorites.some(fav => safeId(fav) === safeId(product._id))
+          );
+
+          setProducts(filteredProducts);
+          setPagination({
+            page: response.data.page || 1,
+            pages: response.data.pages || 1,
+            total: filteredProducts.length,
+          });
+        }
+      } else {
+        const response = await foodProductApi.getFoodProducts(params);
+        
+        if (response.data?.products) {
+          const apiProducts = response.data.products as unknown as Product[];
+          setProducts(apiProducts);
+          setPagination({
+            page: response.data.page || 1,
+            pages: response.data.pages || 1,
+            total: response.data.total || 0,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load products",
+        variant: "destructive",
+      });
+      setProducts([]);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    setProducts(filteredProducts);
-  }, [searchTerm, activeCategory, selectedProductTypes, sortBy, sustainableOnly, 
-      searchParams, isFavorite, priceRange, minOrder, selectedLeadTime, inStockOnly, newArrivalsOnly, minRating]);
+  // Fetch products when filters change
+  useEffect(() => {
+    fetchProducts();
+  }, [
+    searchTerm, 
+    activeCategory, 
+    selectedUnitTypes,
+    selectedFlavorTypes,
+    selectedUsages,
+    selectedManufacturerRegions,
+    selectedIngredients,
+    selectedShelfLives,
+    selectedPackagingSizes,
+    sortBy, 
+    sustainableOnly,
+    pagination.page,
+    showFavoritesOnly,
+  ]);
 
-  // Toggle productType selection
-  const toggleProductType = (type: string) => {
-    setSelectedProductTypes(prev => 
-      prev.includes(type) 
-        ? prev.filter(t => t !== type) 
-        : [...prev, type]
+  // Toggle filter selections
+  const toggleSelection = (value: string, currentSelection: string[], setSelection: React.Dispatch<React.SetStateAction<string[]>>) => {
+    setSelection(prev => 
+      prev.includes(value) 
+        ? prev.filter(item => item !== value) 
+        : [...prev, value]
     );
   };
 
-  // Clear all filters including advanced filters
+  // Clear all filters
   const clearFilters = () => {
     setActiveCategory("All Categories");
-    setSelectedProductTypes([]);
+    setSelectedUnitTypes([]);
+    setSelectedFlavorTypes([]);
+    setSelectedUsages([]);
+    setSelectedManufacturerRegions([]);
+    setSelectedIngredients([]);
+    setSelectedShelfLives([]);
+    setSelectedPackagingSizes([]);
     setSearchTerm("");
     setSustainableOnly(false);
-    setPriceRange([0, 100]);
-    setMinOrder(50);
-    setSelectedLeadTime([]);
-    setInStockOnly(false);
-    setNewArrivalsOnly(false);
-    setMinRating(0);
-    setSelectedManufacturers([]);
-    setSelectedOrigins([]);
-    setHasCustomization(false);
-    setHasSamples(false);
+    setShowFavoritesOnly(false);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  // Handle refresh
+  const handleRefresh = () => {
+    fetchProducts();
+  };
+
+  // Handle search
+  const handleSearch = (value: string) => {
+    setSearchTerm(value);
+    setPagination(prev => ({ ...prev, page: 1 }));
+  };
+
+  // Toggle favorites view
+  const toggleFavoritesView = () => {
+    setShowFavoritesOnly(!showFavoritesOnly);
+    if (!showFavoritesOnly) {
+      searchParams.set("view", "favorites");
+    } else {
+      searchParams.delete("view");
+    }
+    setSearchParams(searchParams);
   };
 
   // Handle product details click
@@ -833,48 +663,205 @@ const Products = () => {
     setShowProductDetails(true);
   };
 
-  // Apply advanced filters
-  const applyAdvancedFilters = () => {
-    setShowAdvancedSearch(false);
+  // Function to handle finding matching products
+  const handleFindMatching = async (productId: string): Promise<void> => {
+    try {
+      setIsLoading(true);
+      // @ts-ignore - Using mock method for demonstration
+      const response = await foodProductApi.findMatchingProducts(productId);
+      
+      toast({
+        title: "Matching Products Found",
+        description: `Found ${response?.data?.length || 0} matching products for your selection.`,
+      });
+    } catch (error) {
+      console.error("Error finding matches:", error);
+      toast({
+        title: "Error",
+        description: "Failed to find matching products",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check if there are active filters
+  const hasActiveFilters = activeCategory !== "All Categories" || 
+                          selectedUnitTypes.length > 0 ||
+                          selectedFlavorTypes.length > 0 ||
+                          selectedUsages.length > 0 ||
+                          selectedManufacturerRegions.length > 0 ||
+                          selectedIngredients.length > 0 ||
+                          selectedShelfLives.length > 0 ||
+                          selectedPackagingSizes.length > 0 ||
+                          sustainableOnly || 
+                          showFavoritesOnly;
+
+  // Add effect for scroll position detection
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 300);
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  // Page navigation
+  const goToPage = (page: number) => {
+    setPagination(prev => {
+      let newPage = Math.max(1, Math.min(page, prev.pages));
+      return { ...prev, page: newPage };
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // Render product list based on view type
   const renderProducts = () => {
     if (isLoading) {
-      // If we already have products, show them immediately instead of skeletons
-      if (products.length > 0) {
-        setIsLoading(false);
-        return renderLoadedProducts();
-      }
-      
       return (
         <motion.div 
-          className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6`}
-          variants={staggerContainer}
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          variants={containerVariants}
           initial="hidden"
           animate="visible"
         >
           {[...Array(6)].map((_, idx) => (
             <motion.div 
               key={idx} 
-              variants={cardVariants}
-              className="relative overflow-hidden"
+              variants={itemVariants}
+              className="relative overflow-hidden group"
+              whileHover={{ y: -4, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
             >
-              <div className="rounded-lg overflow-hidden border group hover:border-primary/20 transition-all duration-300">
-                <Skeleton className="h-48 w-full animate-pulse" />
-                <div className="p-4">
-                  <Skeleton className="h-6 w-3/4 mb-2 animate-pulse" />
-                  <Skeleton className="h-4 w-1/2 mb-4 animate-pulse" />
-                  <div className="flex gap-2 mb-3">
-                    <Skeleton className="h-5 w-16 animate-pulse" />
-                    <Skeleton className="h-5 w-16 animate-pulse" />
+              <div className="rounded-xl overflow-hidden border border-muted/50 group bg-card/40 backdrop-blur-sm">
+                <motion.div 
+                  className="h-48 w-full bg-gradient-to-br from-muted/30 via-muted/50 to-muted/30 relative"
+                  animate={{
+                    backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "linear"
+                  }}
+                  style={{
+                    backgroundSize: "200% 200%"
+                  }}
+                />
+                <div className="p-6 space-y-4">
+                  <motion.div 
+                    className="h-6 w-3/4 rounded-lg bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                    animate={{
+                      backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                    }}
+                    transition={{
+                      duration: 1.8,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: 0.1
+                    }}
+                    style={{
+                      backgroundSize: "200% 200%"
+                    }}
+                  />
+                  <motion.div 
+                    className="h-4 w-1/2 rounded-lg bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                    animate={{
+                      backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                    }}
+                    transition={{
+                      duration: 1.6,
+                      repeat: Infinity,
+                      ease: "linear",
+                      delay: 0.2
+                    }}
+                    style={{
+                      backgroundSize: "200% 200%"
+                    }}
+                  />
+                  <div className="flex gap-2 mb-4">
+                    <motion.div 
+                      className="h-6 w-20 rounded-full bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                      animate={{
+                        backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                      }}
+                      transition={{
+                        duration: 1.4,
+                        repeat: Infinity,
+                        ease: "linear",
+                        delay: 0.3
+                      }}
+                      style={{
+                        backgroundSize: "200% 200%"
+                      }}
+                    />
+                    <motion.div 
+                      className="h-6 w-20 rounded-full bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                      animate={{
+                        backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                      }}
+                      transition={{
+                        duration: 1.2,
+                        repeat: Infinity,
+                        ease: "linear",
+                        delay: 0.4
+                      }}
+                      style={{
+                        backgroundSize: "200% 200%"
+                      }}
+                    />
                   </div>
-                  <Skeleton className="h-4 w-28 mb-2 animate-pulse" />
-                  <div className="flex justify-between mt-3">
-                    <Skeleton className="h-6 w-12 animate-pulse" />
-                    <Skeleton className="h-6 w-24 animate-pulse" />
+                  <div className="flex justify-between items-center mt-4">
+                    <motion.div 
+                      className="h-8 w-16 rounded-lg bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                      animate={{
+                        backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                      }}
+                      transition={{
+                        duration: 1.0,
+                        repeat: Infinity,
+                        ease: "linear",
+                        delay: 0.5
+                      }}
+                      style={{
+                        backgroundSize: "200% 200%"
+                      }}
+                    />
+                    <motion.div 
+                      className="h-10 w-28 rounded-lg bg-gradient-to-r from-muted/40 via-muted/60 to-muted/40"
+                      animate={{
+                        backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"],
+                      }}
+                      transition={{
+                        duration: 0.8,
+                        repeat: Infinity,
+                        ease: "linear",
+                        delay: 0.6
+                      }}
+                      style={{
+                        backgroundSize: "200% 200%"
+                      }}
+                    />
                   </div>
                 </div>
+                
+                {/* Shimmer overlay effect */}
+                <motion.div
+                  className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent"
+                  animate={{
+                    x: ["-100%", "100%"]
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "linear",
+                    delay: idx * 0.1
+                  }}
+                />
               </div>
             </motion.div>
           ))}
@@ -890,1221 +877,1812 @@ const Products = () => {
     if (products.length === 0) {
       return (
         <motion.div 
-          className="text-center py-20 bg-muted/30 rounded-lg"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          className="text-center py-24 bg-gradient-to-br from-muted/20 via-card/40 to-muted/20 rounded-2xl border border-muted/30 shadow-xl backdrop-blur-sm"
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ 
-            type: "spring",
-            stiffness: 400,
-            damping: 25,
-            duration: 0.3 
+            type: "spring", 
+            stiffness: 200, 
+            damping: 25, 
+            duration: 0.6 
           }}
         >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ 
-              scale: 1,
-              transition: { 
-                type: "spring", 
-                stiffness: 400, 
-                damping: 10 
-              }
-            }}
-          >
-            <ShoppingBag className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
-          </motion.div>
-          <motion.p 
-            className="text-xl font-medium text-foreground/70 mb-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            {t('no-products-found')}
-          </motion.p>
-          <motion.p 
-            className="text-sm text-muted-foreground mb-6"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            {t('adjust-filters')}
-          </motion.p>
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 400, damping: 10 }}
-          >
-            <Button 
-              variant="outline" 
-              onClick={clearFilters}
-              className="hover:bg-primary hover:text-primary-foreground transition-colors duration-300"
+          <div className="flex flex-col items-center space-y-6">
+            <motion.div
+              animate={{ 
+                y: [0, -10, 0],
+                rotate: [0, 5, -5, 0]
+              }}
+              transition={{ 
+                duration: 4, 
+                repeat: Infinity, 
+                ease: "easeInOut" 
+              }}
             >
-              {t('clear-all-filters')}
-            </Button>
-          </motion.div>
+              <ShoppingBag className="w-20 h-20 text-muted-foreground/40" />
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+            >
+              <p className="text-2xl font-semibold text-foreground/70 mb-3">
+                {t('no-products-found')}
+              </p>
+              <p className="text-base text-muted-foreground max-w-md">
+                {t('adjust-filters')}
+              </p>
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ 
+                delay: 0.4, 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 25 
+              }}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <Button 
+                variant="outline" 
+                onClick={clearFilters}
+                className="hover:bg-primary hover:text-primary-foreground rounded-xl px-6 py-3 shadow-lg border-2 border-primary/20 hover:border-primary transition-all duration-300"
+              >
+                <RefreshCw className="h-5 w-5 mr-2" />
+                {t('clear-all-filters')}
+              </Button>
+            </motion.div>
+          </div>
         </motion.div>
       );
     }
 
-    if (activeView === "grid") {
+    if (viewMode === "grid") {
       return (
-        <motion.div 
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-        >
-          <AnimatePresence mode="popLayout">
-            {products.map(product => (
-              <motion.div 
-                key={product.id} 
-                variants={cardVariants}
-                layout
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ 
-                  type: "spring", 
-                  stiffness: 400, 
-                  damping: 25,
-                  duration: 0.2 
-                }}
-                whileHover={{ 
-                  y: -5, 
-                  boxShadow: "0px 10px 25px rgba(0, 0, 0, 0.1)", 
-                  transition: { 
-                    type: "spring", 
-                    stiffness: 400, 
-                    damping: 25 
-                  } 
-                }}
-              >
-                <ProductCard 
-                  product={product} 
-                  isFavorite={isFavorite(product.id)}
-                  onFavoriteToggle={() => toggleFavorite(product)}
-                  onDetailsClick={() => handleProductDetailsClick(product)}
-                  className="h-full transition-all duration-300"
-                />
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      );
-    } else {
-      return (
-        <motion.div 
-          className="space-y-4"
-          variants={staggerContainer}
-          initial="hidden"
-          animate="visible"
-        >
-          <AnimatePresence mode="popLayout">
-            {products.map(product => (
-              <motion.div 
-                key={product.id} 
-                variants={cardVariants}
-                layout
-                initial={{ opacity: 0, scale: 0.98, y: 10 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 10 }}
-                transition={{ 
-                  type: "spring", 
-                  stiffness: 400, 
-                  damping: 25,
-                  duration: 0.2 
-                }}
-                whileHover={{ 
-                  y: -2, 
-                  boxShadow: "0px 8px 15px rgba(0, 0, 0, 0.08)",
-                  transition: { 
-                    type: "spring", 
-                    stiffness: 400, 
-                    damping: 25 
-                  } 
-                }}
-                className="flex flex-col sm:flex-row gap-4 p-4 border rounded-lg hover:border-primary/20 transition-all bg-card"
-              >
+        <>
+          <motion.div 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <AnimatePresence mode="popLayout">
+              {products.map((product, index) => (
                 <motion.div 
-                  className="w-full sm:w-32 h-32 bg-muted rounded-md flex items-center justify-center relative group overflow-hidden"
-                  whileHover={{ scale: 1.02 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  key={product._id}
+                  layout
+                  variants={cardVariants}
+                  initial="rest"
+                  animate="rest"
+                  whileHover="hover"
+                  whileTap="tap"
+                  custom={index}
+                  transition={{ 
+                    layout: { type: "spring", stiffness: 300, damping: 30 }
+                  }}
+                  style={{ 
+                    perspective: "1000px",
+                    transformStyle: "preserve-3d" 
+                  }}
                 >
-                  <motion.img 
-                    src={product.image} 
-                    alt={product.name} 
-                    className="w-16 h-16 object-contain"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                  <ProductCard
+                    key={product._id}
+                    product={product}
+                    onFindMatching={handleFindMatching}
                   />
-                  {product.sustainable && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <motion.div 
-                            className="absolute top-2 left-2 bg-green-100 text-green-800 rounded-full p-1"
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
-                          >
-                            <CheckCircle2 className="h-4 w-4" />
-                          </motion.div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Sustainable Product</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+          
+          {/* Enhanced Pagination controls */}
+          {pagination.pages > 1 && (
+            <motion.div 
+              className="flex justify-center mt-12"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 25, 
+                delay: 0.3 
+              }}
+            >
+              <div className="flex gap-3 items-center bg-card/60 backdrop-blur-sm rounded-2xl p-2 shadow-xl border border-muted/30">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(pagination.page - 1)}
+                    disabled={pagination.page === 1}
+                    className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp className="h-5 w-5 mr-2 -rotate-90" />
+                    {t('previous')}
+                  </Button>
                 </motion.div>
                 
-                <div className="flex-1">
-                  <div className="flex justify-between">
-                    <div>
-                      <h3 className="font-semibold text-lg">{product.name}</h3>
-                      <p className="text-sm text-foreground/70">{product.manufacturer}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <motion.button 
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                        onClick={() => toggleFavorite(product)}
-                        className={`p-2 rounded-full ${isFavorite(product.id) ? "text-red-500" : "text-muted-foreground"}`}
-                      >
-                        <Heart className="h-4 w-4" fill={isFavorite(product.id) ? "currentColor" : "none"} />
-                      </motion.button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-wrap items-center gap-2 mb-2 mt-1">
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                    >
-                      <Badge>{product.category}</Badge>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                    >
-                      <Badge variant="outline">{product.productType}</Badge>
-                    </motion.div>
-                    <span className="text-sm text-foreground/70">
-                      {t('min-order-units', { quantity: product.minOrderQuantity })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-foreground/70">
-                      {t('lead-time-weeks', { time: product.leadTime, unit: product.leadTimeUnit })}
-                    </span>
-                    <span className="text-sm text-foreground/70">
-                      {t('rating', { value: product.rating })}
-                    </span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center mt-3">
-                    <p className="font-medium text-lg">{product.price}</p>
-                    <div className="flex gap-2">
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                      >
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleProductDetailsClick(product)}
-                          className="transition-all duration-200 hover:bg-muted/80"
+                <div className="flex gap-2">
+                  {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                    let pageNum = 1;
+                    if (pagination.pages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.pages - 2) {
+                      pageNum = pagination.pages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum >= 1 && pageNum <= pagination.pages) {
+                      return (
+                        <motion.div
+                          key={pageNum}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
                         >
-                          {t('details-button')}
-                        </Button>
-                      </motion.div>
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                      >
-                        <Button 
-                          size="sm"
-                          className="transition-all duration-200"
-                        >
-                          {t('match-button')}
-                        </Button>
-                      </motion.div>
-                    </div>
-                  </div>
+                          <Button
+                            variant={pagination.page === pageNum ? "default" : "outline"}
+                            size="icon"
+                            onClick={() => goToPage(pageNum)}
+                            className={cn(
+                              "w-12 h-12 rounded-xl shadow-lg transition-all duration-300",
+                              pagination.page === pageNum && "shadow-xl scale-110"
+                            )}
+                          >
+                            {pageNum}
+                          </Button>
+                        </motion.div>
+                      );
+                    }
+                    return null;
+                  })}
                 </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
+                
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(pagination.page + 1)}
+                    disabled={pagination.page === pagination.pages}
+                    className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('next')}
+                    <ChevronUp className="h-5 w-5 ml-2 rotate-90" />
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </>
+      );
+    } else {
+      // Enhanced List view
+      return (
+        <>
+          <motion.div 
+            className="space-y-6"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <AnimatePresence mode="popLayout">
+              {products.map((product, index) => (
+                <motion.div 
+                  key={product._id} 
+                  layout
+                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 200, 
+                    damping: 25, 
+                    delay: index * 0.05 
+                  }}
+                  whileHover={{ 
+                    scale: 1.02, 
+                    y: -4,
+                    boxShadow: "0 20px 40px rgba(0,0,0,0.15)"
+                  }}
+                  className="flex flex-col sm:flex-row gap-6 p-6 border border-muted/30 rounded-2xl hover:border-primary/30 bg-card/60 backdrop-blur-sm shadow-lg transition-all duration-300"
+                >
+                  <motion.div 
+                    className="w-full sm:w-40 h-40 bg-muted/30 rounded-xl flex items-center justify-center relative group overflow-hidden"
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  >
+                    <img 
+                      src={product.image} 
+                      alt={product.name} 
+                      className="w-20 h-20 object-contain transition-transform duration-300 group-hover:scale-110"
+                    />
+                    {product.sustainable && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <motion.div 
+                              className="absolute top-3 left-3 bg-green-100 text-green-800 rounded-full p-2 shadow-lg"
+                              whileHover={{ scale: 1.2, rotate: 10 }}
+                              animate={{ 
+                                scale: [1, 1.1, 1],
+                                rotate: [0, 5, -5, 0]
+                              }}
+                              transition={{ 
+                                duration: 2, 
+                                repeat: Infinity, 
+                                repeatType: "reverse" 
+                              }}
+                            >
+                              <CheckCircle2 className="h-5 w-5" />
+                            </motion.div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Sustainable Product</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </motion.div>
+                  
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <motion.div
+                        whileHover={{ x: 5 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      >
+                        <h3 className="font-semibold text-xl mb-1">{product.name}</h3>
+                        <p className="text-base text-muted-foreground">{product.manufacturer}</p>
+                      </motion.div>
+                      <motion.div 
+                        className="flex gap-3"
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                      >
+                        <motion.button 
+                          onClick={() => toggleFavorite(product)}
+                          className={cn(
+                            "p-3 rounded-full transition-all duration-300 shadow-lg",
+                            isFavorite(product._id) 
+                              ? "text-red-500 bg-red-50 hover:bg-red-100" 
+                              : "text-muted-foreground bg-muted/30 hover:bg-muted/50"
+                          )}
+                          whileHover={{ scale: 1.1, rotate: 10 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          <Heart className="h-5 w-5" fill={isFavorite(product._id) ? "currentColor" : "none"} />
+                        </motion.button>
+                      </motion.div>
+                    </div>
+                    
+                    <motion.div 
+                      className="flex flex-wrap items-center gap-3 mb-4 mt-3"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1 }}
+                    >
+                      <Badge className="shadow-sm">{product.category}</Badge>
+                      <Badge variant="outline" className="shadow-sm">{product.productType}</Badge>
+                      <span className="text-sm text-muted-foreground bg-muted/30 rounded-full px-3 py-1">
+                        {t('min-order-units', { quantity: product.minOrderQuantity })}
+                      </span>
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="flex items-center gap-4 mb-4"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.2 }}
+                    >
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {t('lead-time-weeks', { time: product.leadTime, unit: product.leadTimeUnit })}
+                      </span>
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Star className="h-4 w-4 text-amber-500" />
+                        {t('rating', { value: product.rating })}
+                      </span>
+                    </motion.div>
+                    
+                    <motion.div 
+                      className="flex justify-between items-center"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      <p className="font-semibold text-xl text-primary">{product.price}</p>
+                      <div className="flex gap-3">
+                        <motion.div
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => handleProductDetailsClick(product)}
+                            className="rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                          >
+                            <Info className="h-4 w-4 mr-2" />
+                            {t('details-button')}
+                          </Button>
+                        </motion.div>
+                        <motion.div
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          <Button 
+                            size="sm"
+                            onClick={() => handleFindMatching(product._id)}
+                            className="rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                          >
+                            <ArrowRight className="h-4 w-4 mr-2" />
+                            {t('match-button')}
+                          </Button>
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+          
+          {/* Enhanced Pagination controls */}
+          {pagination.pages > 1 && (
+            <motion.div 
+              className="flex justify-center mt-12"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 25, 
+                delay: 0.3 
+              }}
+            >
+              <div className="flex gap-3 items-center bg-card/60 backdrop-blur-sm rounded-2xl p-2 shadow-xl border border-muted/30">
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(pagination.page - 1)}
+                    disabled={pagination.page === 1}
+                    className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <ChevronUp className="h-5 w-5 mr-2 -rotate-90" />
+                    {t('previous')}
+                  </Button>
+                </motion.div>
+                
+                <div className="flex gap-2">
+                  {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                    let pageNum = 1;
+                    if (pagination.pages <= 5) {
+                      pageNum = i + 1;
+                    } else if (pagination.page <= 3) {
+                      pageNum = i + 1;
+                    } else if (pagination.page >= pagination.pages - 2) {
+                      pageNum = pagination.pages - 4 + i;
+                    } else {
+                      pageNum = pagination.page - 2 + i;
+                    }
+                    
+                    if (pageNum >= 1 && pageNum <= pagination.pages) {
+                      return (
+                        <motion.div
+                          key={pageNum}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          <Button
+                            variant={pagination.page === pageNum ? "default" : "outline"}
+                            size="icon"
+                            onClick={() => goToPage(pageNum)}
+                            className={cn(
+                              "w-12 h-12 rounded-xl shadow-lg transition-all duration-300",
+                              pagination.page === pageNum && "shadow-xl scale-110"
+                            )}
+                          >
+                            {pageNum}
+                          </Button>
+                        </motion.div>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+                
+                <motion.div
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => goToPage(pagination.page + 1)}
+                    disabled={pagination.page === pagination.pages}
+                    className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('next')}
+                    <ChevronUp className="h-5 w-5 ml-2 rotate-90" />
+                  </Button>
+                </motion.div>
+              </div>
+            </motion.div>
+          )}
+        </>
       );
     }
   };
 
-  // Add effect for scroll position detection
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowBackToTop(window.scrollY > 300);
-    };
-    
-    window.addEventListener('scroll', handleScroll);
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
-
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <div className="min-h-screen bg-background">
       <Navbar />
       
       <motion.div 
-        className="container mx-auto px-4 pt-24 pb-12"
+        className="container mx-auto px-4 pt-24 pb-12 max-w-[1600px]"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ 
-          type: "spring", 
-          stiffness: 400, 
-          damping: 30,
-          duration: 0.3 
-        }}
+        transition={{ duration: 0.3 }}
       >
-        <div className="max-w-7xl mx-auto">
-          <motion.div 
-            className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4"
-            variants={staggerContainer}
-            initial="hidden"
-            animate="visible"
-          >
-            <motion.div variants={cardVariants}>
-              <h1 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary animate-gradient bg-300%">
-                {t('browse-products')}
-              </h1>
-              <p className="text-foreground/70">
-                {t('browse-products-description')}
-              </p>
-            </motion.div>
-            
-            <motion.div 
-              className="flex flex-wrap items-center gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
+        {/* Enhanced Header Section */}
+        <motion.div 
+          className="text-center mb-12 space-y-8"
+          variants={headerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div className="space-y-6">
+            <motion.h1 
+              className="text-4xl md:text-5xl lg:text-5xl font-bold bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 bg-clip-text text-transparent leading-tight"
+              initial={{ opacity: 0, scale: 0.8, y: -30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 200, 
+                damping: 20, 
+                duration: 1.2,
+                delay: 0.2
+              }}
+              whileHover={{
+                scale: 1.05,
+                transition: { type: "spring", stiffness: 400, damping: 25 }
+              }}
             >
-              <motion.div variants={cardVariants}>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      className="flex items-center gap-2 transition-all duration-200"
-                    >
-                      <ArrowUpDown className="h-4 w-4" />
-                      {t('sort')}: {t(`sort-${sortBy}`)}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="animate-in slide-in-from-top-5 duration-200">
-                    <DropdownMenuLabel>{t('sort-by')}</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    {sortOptions.map(option => (
-                      <DropdownMenuItem 
-                        key={option.value}
-                        onClick={() => setSortBy(option.value)}
-                        className={sortBy === option.value ? "bg-muted" : ""}
-                      >
-                        {t(`sort-${option.value}`)}
-                        {sortBy === option.value && (
-                          <CheckCircle2 className="h-4 w-4 ml-2" />
-                        )}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+              {t('browse-products')}
+            </motion.h1>
+            
+            <motion.p 
+              className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto leading-relaxed"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 150, 
+                damping: 20, 
+                delay: 0.4,
+                duration: 0.8
+              }}
+            >
+              {t('browse-products-description')}
+            </motion.p>
+            
+            {totalProductsCount > 0 && (
+              <motion.div 
+                className="flex items-center justify-center gap-3 text-sm text-muted-foreground bg-card/40 backdrop-blur-sm rounded-full px-6 py-3 border border-muted/30 mx-auto w-fit"
+                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 200, 
+                  damping: 20, 
+                  delay: 0.6,
+                  duration: 0.8
+                }}
+                whileHover={{
+                  scale: 1.05,
+                  boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
+                  transition: { type: "spring", stiffness: 400, damping: 25 }
+                }}
+              >
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                >
+                  <Package className="h-5 w-5 text-primary" />
+                </motion.div>
+                <span className="font-medium">{totalProductsCount.toLocaleString()} products founds</span>
+              </motion.div>
+            )}
+            
+            {/* Floating decoration elements */}
+            <motion.div
+              className="absolute top-20 left-1/4 w-20 h-20 bg-gradient-to-br from-purple-400/20 to-blue-400/20 rounded-full blur-xl"
+              animate={{
+                y: [0, -20, 0],
+                x: [0, 10, 0],
+                scale: [1, 1.1, 1],
+                opacity: [0.3, 0.6, 0.3]
+              }}
+              transition={{
+                duration: 6,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+            />
+            <motion.div
+              className="absolute top-32 right-1/4 w-16 h-16 bg-gradient-to-br from-indigo-400/20 to-purple-400/20 rounded-full blur-xl"
+              animate={{
+                y: [0, 15, 0],
+                x: [0, -15, 0],
+                scale: [1, 0.9, 1],
+                opacity: [0.4, 0.7, 0.4]
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 2
+              }}
+            />
+          </motion.div>
+        </motion.div>
+          
+        {/* Enhanced Control Bar */}
+        <motion.div 
+          className="mb-8 space-y-8"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          {/* Search Bar */}
+          <motion.div 
+            variants={itemVariants} 
+            className="relative max-w-5xl mx-auto"
+          >
+            <motion.div
+              className="relative"
+              variants={searchBarVariants}
+              initial="unfocused"
+              whileFocus="focused"
+              whileHover="focused"
+            >
+              <motion.div
+                className="absolute left-4 top-1/4 transform -translate-y-1/2 text-muted-foreground"
+                animate={{
+                  scale: searchTerm ? 0.9 : 1,
+                  color: searchTerm ? "#6366f1" : "#64748b"
+                }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              >
+                <Search className="h-5 w-5" />
               </motion.div>
               
+              <Input
+                type="search"
+                placeholder={t('search-placeholder')}
+                className="pl-14 pr-14 h-18 text-lg rounded-2xl border-2 border-transparent focus:border-primary/40 bg-card/60 backdrop-blur-sm shadow-xl focus:shadow-2xl transition-all duration-300"
+                value={searchTerm}
+                onChange={(e) => handleSearch(e.target.value)}
+              />
+              
+              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                <AnimatePresence>
+                  {searchTerm && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                      animate={{ opacity: 1, scale: 1, x: 0 }}
+                      exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                    >
+                      <motion.div
+                        variants={buttonVariants}
+                        initial="rest"
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-muted rounded-full h-12 w-12 shadow-lg hover:shadow-xl"
+                          onClick={() => handleSearch("")}
+                        >
+                          <X className="h-5 w-5" />
+                        </Button>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+              
+              {/* Search input glow effect */}
               <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-              >
+                className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-indigo-500/20 -z-10"
+                animate={{
+                  opacity: searchTerm ? 0.3 : 0,
+                  scale: searchTerm ? 1.02 : 1
+                }}
+                transition={{ duration: 0.3 }}
+              />
+            </motion.div>
+          </motion.div>
+
+          {/* Control Row */}
+          <motion.div 
+            variants={itemVariants}
+            className="flex flex-wrap items-center justify-between gap-6"
+          >
+            <div className="flex items-center gap-4 flex-wrap">
+              <motion.div variants={buttonVariants} initial="rest" whileHover="hover" whileTap="tap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={isLoading}
+                  className="flex items-center gap-3 rounded-xl h-12 px-6 shadow-lg hover:shadow-xl bg-card/60 backdrop-blur-sm border-muted/30"
+                >
+                  <motion.div
+                    animate={isLoading ? { rotate: 360 } : { rotate: 0 }}
+                    transition={isLoading ? { duration: 1, repeat: Infinity, ease: "linear" } : { duration: 0.3 }}
+                  >
+                    <RefreshCw className="h-5 w-5" />
+                  </motion.div>
+                  Refresh
+                </Button>
+              </motion.div>
+
+              <motion.div variants={buttonVariants} initial="rest" whileHover="hover" whileTap="tap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={toggleFavoritesView}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl h-12 px-6 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/60 backdrop-blur-sm border-muted/30",
+                    showFavoritesOnly && "bg-primary/10 border-primary/30 text-primary"
+                  )}
+                >
+                  <motion.div
+                    animate={showFavoritesOnly ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                    transition={showFavoritesOnly ? { duration: 0.6, repeat: Infinity, repeatType: "reverse" } : { duration: 0.3 }}
+                  >
+                    <Heart className={cn(
+                      "h-5 w-5 transition-all duration-300",
+                      (favoritedProducts.length > 0 || showFavoritesOnly) ? "fill-current text-red-500" : ""
+                    )} />
+                  </motion.div>
+                  {t('favorites')}
+                  <AnimatePresence>
+                    {favoritedProducts.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      >
+                        <Badge variant="secondary" className="bg-background/20 ml-1 shadow-sm">
+                          {favoritedProducts.length}
+                        </Badge>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </Button>
+              </motion.div>
+
+              <motion.div variants={buttonVariants} initial="rest" whileHover="hover" whileTap="tap">
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => setShowFilters(!showFilters)}
-                  className="flex items-center gap-2 transition-all duration-200"
-                >
-                  <Filter className="h-4 w-4" />
-                  {t('filters')}
-                  {(selectedProductTypes.length > 0 || activeCategory !== "All Categories" || sustainableOnly) && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ 
-                        scale: 1,
-                        transition: {
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15
-                        }  
-                      }}
-                    >
-                      <Badge variant="secondary" className="ml-1">
-                        {selectedProductTypes.length + (activeCategory !== "All Categories" ? 1 : 0) + (sustainableOnly ? 1 : 0)}
-                      </Badge>
-                    </motion.div>
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl h-12 px-6 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/60 backdrop-blur-sm border-muted/30",
+                    showFilters && "bg-primary/10 border-primary/30 text-primary"
                   )}
+                >
+                  <motion.div
+                    animate={showFilters ? { rotate: 180 } : { rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  >
+                    <Filter className="h-5 w-5" />
+                  </motion.div>
+                  {t('filters')}
+                  <AnimatePresence>
+                    {hasActiveFilters && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      >
+                        <Badge variant="secondary" className="ml-1 bg-primary/20 text-primary shadow-sm">
+                          Active
+                        </Badge>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </Button>
               </motion.div>
-              
-              <motion.div variants={cardVariants}>
-                <Tabs defaultValue={activeView} onValueChange={setActiveView} className="w-auto">
-                  <TabsList className="grid w-[120px] grid-cols-2">
-                    <TabsTrigger 
-                      value="grid"
-                      className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                    >
-                      {t('grid-view')}
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="list"
-                      className="transition-all duration-200 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-                    >
-                      {t('list-view')}
-                    </TabsTrigger>
-                  </TabsList>
-                </Tabs>
-              </motion.div>
-            </motion.div>
-          </motion.div>
-          
-          <motion.div 
-            className="mb-8 relative"
-            variants={fadeIn}
-            initial="hidden"
-            animate="visible"
-          >
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                type="search"
-                placeholder={t('search-placeholder')}
-                className="pl-10 pr-24 w-full transition-all duration-300 focus:border-primary"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {searchTerm && (
+            </div>
+
+            <div className="flex items-center gap-4">
+              {/* View Mode Toggle */}
+              <motion.div 
+                className="flex items-center bg-muted/30 backdrop-blur-sm rounded-xl p-1 shadow-lg border border-muted/30"
+                variants={fadeInUpVariants}
+                initial="hidden"
+                animate="visible"
+              >
                 <motion.div
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover="hover"
+                  whileTap="tap"
                 >
-                  <Button
-                    variant="ghost"
+                  <Button 
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => setSearchTerm("")}
-                    className="absolute right-20 top-1/2 transform -translate-y-1/2"
+                    onClick={() => setViewMode('grid')}
+                    className="rounded-lg h-10 w-10 shadow-sm"
                   >
-                    <X className="h-4 w-4" />
+                    <Grid3X3 className="h-5 w-5" />
                   </Button>
                 </motion.div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
-                className={cn(
-                  "absolute right-2 top-1/2 transform -translate-y-1/2 transition-colors duration-200",
-                  showAdvancedSearch ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                )}
+                <motion.div
+                  variants={buttonVariants}
+                  initial="rest"
+                  whileHover="hover"
+                  whileTap="tap"
+                >
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                    className="rounded-lg h-10 w-10 shadow-sm"
+                  >
+                    <List className="h-5 w-5" />
+                  </Button>
+                </motion.div>
+              </motion.div>
+
+              {/* Sort Dropdown */}
+              <motion.div
+                variants={fadeInUpVariants}
+                initial="hidden"
+                animate="visible"
+                whileHover={{ scale: 1.02 }}
+                transition={{ type: "spring", stiffness: 300, damping: 30 }}
               >
-                <SlidersHorizontal className="h-4 w-4 mr-1" />
-                {t('advanced-search')}
-              </Button>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-56 bg-card/60 backdrop-blur-sm rounded-xl h-12 shadow-lg border-muted/30 hover:shadow-xl transition-all duration-300">
+                    <ArrowUpDown className="h-5 w-5 mr-2" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl shadow-2xl border-muted/30">
+                    {sortOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="rounded-lg">
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </motion.div>
             </div>
           </motion.div>
-          
-          <AnimatePresence>
-            {showAdvancedSearch && (
-              <motion.div
-                initial={{ opacity: 0, height: 0, overflow: "hidden" }}
-                animate={{ 
-                  opacity: 1, 
-                  height: "auto", 
-                  transition: { 
-                    duration: 0.3,
-                    height: { duration: 0.3 }
-                  } 
-                }}
-                exit={{ 
-                  opacity: 0, 
-                  height: 0,
-                  transition: { 
-                    duration: 0.2,
-                    height: { duration: 0.2 }
-                  }
-                }}
-                className="mb-6 bg-card border rounded-lg p-6 space-y-6"
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {/* Price Range */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <ShoppingBag className="h-4 w-4 text-green-500" />
-                      {t('price-range')}
-                    </label>
-                    <div className="pt-2">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-green-600">${priceRange[0]}</span>
-                        <Slider
-                          defaultValue={[0, 100]}
-                          min={0}
-                          max={100}
-                          step={1}
-                          value={priceRange}
-                          onValueChange={(value) => setPriceRange(value as [number, number])}
-                          className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-green-500 [&_[role=slider]]:shadow-md [&_[role=slider]]:transition-colors [&_[role=slider]]:hover:border-green-400"
-                        />
-                        <span className="text-sm font-medium text-green-600">${priceRange[1]}+</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Min Order */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Package className="h-4 w-4 text-blue-500" />
-                      {t('min-order')}
-                    </label>
-                    <div className="pt-2">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-blue-600">{minOrder}</span>
-                        <Slider
-                          defaultValue={[50]}
-                          min={0}
-                          max={500}
-                          step={10}
-                          value={[minOrder]}
-                          onValueChange={(value) => setMinOrder(value[0])}
-                          className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:shadow-md"
-                        />
-                        <span className="text-sm font-medium text-blue-600">500+</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rating */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Star className="h-4 w-4 text-yellow-500" />
-                      {t('min-rating')}
-                    </label>
-                    <div className="pt-2">
-                      <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-yellow-600">{minRating}</span>
-                        <Slider
-                          defaultValue={[0]}
-                          min={0}
-                          max={5}
-                          step={0.5}
-                          value={[minRating]}
-                          onValueChange={(value) => setMinRating(value[0])}
-                          className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-yellow-500"
-                        />
-                        <span className="text-sm font-medium text-yellow-600">5</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Lead Time */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-purple-500" />
-                      {t('lead-time')}
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        {key: "lead-time-1-2-weeks", value: "1-2 weeks"}, 
-                        {key: "lead-time-2-4-weeks", value: "2-4 weeks"}, 
-                        {key: "lead-time-4-8-weeks", value: "4-8 weeks"}, 
-                        {key: "lead-time-8plus-weeks", value: "8+ weeks"}
-                      ].map((time) => (
-                        <Badge
-                          key={time.key}
-                          variant={selectedLeadTime.includes(time.value) ? "default" : "outline"}
-                          className={cn(
-                            "cursor-pointer transition-colors",
-                            selectedLeadTime.includes(time.value)
-                              ? "bg-purple-500 hover:bg-purple-600"
-                              : "hover:bg-purple-100"
-                          )}
-                          onClick={() => {
-                            setSelectedLeadTime(prev =>
-                              prev.includes(time.value)
-                                ? prev.filter(t => t !== time.value)
-                                : [...prev, time.value]
-                            );
-                          }}
-                        >
-                          {t(time.key)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Additional options */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium">{t('product-options')}</label>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="inStock" 
-                          checked={inStockOnly}
-                          onCheckedChange={setInStockOnly}
-                        />
-                        <label htmlFor="inStock" className="text-sm cursor-pointer">{t('in-stock-only')}</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="newArrivals" 
-                          checked={newArrivalsOnly}
-                          onCheckedChange={setNewArrivalsOnly}
-                        />
-                        <label htmlFor="newArrivals" className="text-sm cursor-pointer">{t('new-arrivals-only')}</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="samples" 
-                          checked={hasSamples}
-                          onCheckedChange={setHasSamples}
-                        />
-                        <label htmlFor="samples" className="text-sm cursor-pointer">{t('has-samples')}</label>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Customization */}
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium">{t('additional-features')}</label>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="customization" 
-                          checked={hasCustomization}
-                          onCheckedChange={setHasCustomization}
-                        />
-                        <label htmlFor="customization" className="text-sm cursor-pointer">{t('offers-customization')}</label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Switch 
-                          id="sustainable" 
-                          checked={sustainableOnly}
-                          onCheckedChange={setSustainableOnly}
-                        />
-                        <label htmlFor="sustainable" className="text-sm cursor-pointer">{t('sustainable-only')}</label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={clearFilters}
-                  >
-                    {t('reset-filters')}
-                  </Button>
-                  <Button
-                    onClick={applyAdvancedFilters}
-                  >
-                    {t('apply-filters')}
-                  </Button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {/* Active filters with enhanced animations */}
-          <AnimatePresence>
-            {(selectedProductTypes.length > 0 || activeCategory !== "All Categories" || sustainableOnly) && (
+        </motion.div>
+        
+        {/* Active Filters */}
+        <AnimatePresence>
+          {hasActiveFilters && (
+            <motion.div 
+              className="mb-8 bg-card/50 backdrop-blur-sm p-8 rounded-2xl border border-muted/30 shadow-xl"
+              variants={filterVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
               <motion.div 
-                className="mb-6 flex flex-wrap items-center gap-2"
-                initial={{ opacity: 0, y: -5, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: "auto" }}
-                exit={{ opacity: 0, y: -5, height: 0 }}
-                transition={{ 
-                  duration: 0.2, 
-                  height: { duration: 0.15 },
-                  opacity: { duration: 0.2 }
-                }}
+                className="flex flex-wrap items-center gap-4"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
               >
-                <span className="text-sm text-foreground/70">{t('active-filters')}</span>
-                
-                {activeCategory !== "All Categories" && (
+                <motion.span 
+                  className="text-sm font-medium text-foreground/70 flex items-center gap-3 bg-muted/30 rounded-full px-4 py-2"
+                  variants={slideInVariants}
+                >
                   <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
+                    animate={{ rotate: [0, 10, -10, 0] }}
+                    transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
+                  >
+                    <SlidersHorizontal className="h-5 w-5 text-primary" />
+                  </motion.div>
+                  {t('active-filters')}
+                </motion.span>
+                
+                {showFavoritesOnly && (
+                  <motion.div
+                    variants={slideInVariants}
+                    whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <Badge variant="secondary" className="flex items-center gap-1 animate-fadeIn">
-                      {activeCategory}
-                      <motion.button 
-                        onClick={() => setActiveCategory("All Categories")}
-                        whileTap={{ scale: 0.9 }}
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-red-50 text-red-700 border-red-200 hover:bg-red-100 transition-all duration-300">
+                      <motion.div
+                        animate={{ scale: [1, 1.2, 1] }}
+                        transition={{ duration: 1, repeat: Infinity, repeatType: "reverse" }}
                       >
-                        <X className="h-3 w-3" />
-                      </motion.button>
+                        <Heart className="h-4 w-4 fill-current" />
+                      </motion.div>
+                      {t('favorites-only')}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-red-200/50 rounded-full" onClick={() => setShowFavoritesOnly(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
                     </Badge>
                   </motion.div>
                 )}
-                
-                {selectedProductTypes.map(type => (
+            
+                {activeCategory && activeCategory !== "All Categories" && (
                   <motion.div
-                    key={type}
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
+                    variants={slideInVariants}
+                    whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <Badge variant="secondary" className="flex items-center gap-1 animate-fadeIn">
-                      {type}
-                      <motion.button 
-                        onClick={() => toggleProductType(type)}
-                        whileTap={{ scale: 0.9 }}
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-all duration-300">
+                      <Package className="h-4 w-4" />
+                      {activeCategory}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
                       >
-                        <X className="h-3 w-3" />
-                      </motion.button>
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-blue-200/50 rounded-full" onClick={() => setActiveCategory("All Categories")}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                )}
+
+                {selectedUnitTypes.map((type, index) => (
+                  <motion.div
+                    key={`unit-${type}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 transition-all duration-300">
+                      <Award className="h-4 w-4" />
+                      {type}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-purple-200/50 rounded-full" onClick={() => toggleSelection(type, selectedUnitTypes, setSelectedUnitTypes)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedFlavorTypes.map((type, index) => (
+                  <motion.div
+                    key={`flavor-${type}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100 transition-all duration-300">
+                      <Star className="h-4 w-4" />
+                      {type}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-yellow-200/50 rounded-full" onClick={() => toggleSelection(type, selectedFlavorTypes, setSelectedFlavorTypes)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedUsages.map((usage, index) => (
+                  <motion.div
+                    key={`usage-${usage}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 transition-all duration-300">
+                      <Building2 className="h-4 w-4" />
+                      {usage}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-indigo-200/50 rounded-full" onClick={() => toggleSelection(usage, selectedUsages, setSelectedUsages)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedManufacturerRegions.map((region, index) => (
+                  <motion.div
+                    key={`region-${region}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-green-50 text-green-700 border-green-200 hover:bg-green-100 transition-all duration-300">
+                      <Globe className="h-4 w-4" />
+                      {region}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-green-200/50 rounded-full" onClick={() => toggleSelection(region, selectedManufacturerRegions, setSelectedManufacturerRegions)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedIngredients.map((ingredient, index) => (
+                  <motion.div
+                    key={`ingredient-${ingredient}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 transition-all duration-300">
+                      <Package className="h-4 w-4" />
+                      {ingredient}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-orange-200/50 rounded-full" onClick={() => toggleSelection(ingredient, selectedIngredients, setSelectedIngredients)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedShelfLives.map((shelfLife, index) => (
+                  <motion.div
+                    key={`shelf-${shelfLife}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 transition-all duration-300">
+                      <Clock className="h-4 w-4" />
+                      {shelfLife}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-teal-200/50 rounded-full" onClick={() => toggleSelection(shelfLife, selectedShelfLives, setSelectedShelfLives)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    </Badge>
+                  </motion.div>
+                ))}
+
+                {selectedPackagingSizes.map((size, index) => (
+                  <motion.div
+                    key={`packaging-${size}`}
+                    variants={slideInVariants}
+                    custom={index}
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100 transition-all duration-300">
+                      <Package className="h-4 w-4" />
+                      {size}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-pink-200/50 rounded-full" onClick={() => toggleSelection(size, selectedPackagingSizes, setSelectedPackagingSizes)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
                     </Badge>
                   </motion.div>
                 ))}
                 
                 {sustainableOnly && (
                   <motion.div
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.9, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
+                    variants={slideInVariants}
+                    whileHover={{ scale: 1.05, y: -2 }}
                     whileTap={{ scale: 0.95 }}
                   >
-                    <Badge variant="secondary" className="flex items-center gap-1 animate-fadeIn bg-green-100 text-green-800 hover:bg-green-200">
-                      {t('sustainable-only')}
-                      <motion.button 
-                        onClick={() => setSustainableOnly(false)}
-                        whileTap={{ scale: 0.9 }}
+                    <Badge variant="secondary" className="flex items-center gap-2 rounded-xl h-10 px-4 shadow-lg bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 transition-all duration-300">
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatType: "reverse" }}
                       >
-                        <X className="h-3 w-3" />
-                      </motion.button>
+                        <CheckCircle2 className="h-4 w-4" />
+                      </motion.div>
+                      {t('sustainable-only')}
+                      <motion.div
+                        whileHover={{ rotate: 90 }}
+                        whileTap={{ scale: 0.8 }}
+                      >
+                        <Button size="sm" variant="ghost" className="h-auto p-0 ml-1 hover:bg-emerald-200/50 rounded-full" onClick={() => setSustainableOnly(false)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
                     </Badge>
                   </motion.div>
                 )}
                 
-                <motion.div 
-                  whileTap={{ scale: 0.95 }}
+                <motion.div
+                  variants={slideInVariants}
                   whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                 >
-                  <Button variant="ghost" size="sm" onClick={clearFilters} className="text-xs">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={clearFilters} 
+                    className="text-sm rounded-xl px-4 py-2 hover:bg-destructive/10 hover:text-destructive border border-destructive/20 shadow-lg transition-all duration-300"
+                  >
+                    <motion.div
+                      whileHover={{ rotate: 180 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                    </motion.div>
                     {t('clear-all')}
                   </Button>
                 </motion.div>
               </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
+        {/* Filter sidebar and product grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
+          {/* Filter sidebar */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                className="xl:col-span-1 space-y-6 bg-card/40 backdrop-blur-sm p-6 rounded-2xl shadow-sm border h-fit sticky top-24"
+                variants={filterVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <SlidersHorizontal className="h-5 w-5 text-primary" />
+                    {t('filters')}
+                  </h3>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="xl:hidden rounded-full"
+                    onClick={() => setShowFilters(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                
+                {/* Filter Summary */}
+                <div className="bg-muted/30 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Package className="h-4 w-4 text-primary" />
+                    Filter Summary
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>Total Database: {totalProductsCount} products</div>
+                    <div>Current Results: {products.length} products</div>
+                    <div>Active Filters: {hasActiveFilters ? 'Yes' : 'None'}</div>
+                  </div>
+                </div>
+
+                {/* Sustainability Filter */}
+                <div className="space-y-1 border-t pt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <h4 className="text-sm font-medium">{t('filters-sustainability')}</h4>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant={sustainableOnly ? "default" : "outline"}
+                      size="sm"
+                      className={`py-1 px-3 h-auto text-xs rounded-xl transition-all duration-200 ${sustainableOnly ? "bg-green-600 text-white hover:bg-green-700" : "hover:border-primary/40"}`}
+                      onClick={() => setSustainableOnly(!sustainableOnly)}
+                    >
+                      {t('sustainable-only')}
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Categories Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    Categories
+                  </h4>
+                  <Select value={activeCategory} onValueChange={setActiveCategory}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoryList.map((category) => {
+                        const count = products.filter(p => p.category === category || category === "All Categories").length;
+                        return (
+                          <SelectItem key={category} value={category}>
+                            <div className="flex justify-between items-center w-full">
+                              <span>{category}</span>
+                              {category !== "All Categories" && (
+                                <Badge variant="secondary" className="ml-2 text-xs">
+                                  {count}
+                                </Badge>
+                              )}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Unit Type Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Award className="h-4 w-4 text-primary" />
+                    Unit Type ({unitTypeList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {unitTypeList.map((type) => {
+                      const count = products.filter(p => p.unitType === type).length;
+                      const isSelected = selectedUnitTypes.includes(type);
+                      return (
+                        <div key={type} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(type, selectedUnitTypes, setSelectedUnitTypes)}
+                          >
+                            {type}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Flavor Type Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Star className="h-4 w-4 text-primary" />
+                    Flavor Type ({flavorTypeList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {flavorTypeList.map((type) => {
+                      const count = products.filter(p => p.flavorType?.includes(type)).length;
+                      const isSelected = selectedFlavorTypes.includes(type);
+                      return (
+                        <div key={type} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(type, selectedFlavorTypes, setSelectedFlavorTypes)}
+                          >
+                            {type}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Usage Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4 text-primary" />
+                    Usage ({usageList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {usageList.map((usage) => {
+                      const count = products.filter(p => p.usage?.includes(usage)).length;
+                      const isSelected = selectedUsages.includes(usage);
+                      return (
+                        <div key={usage} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(usage, selectedUsages, setSelectedUsages)}
+                          >
+                            {usage}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Manufacturer Region Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Globe className="h-4 w-4 text-primary" />
+                    Manufacturer Region ({manufacturerRegionList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {manufacturerRegionList.map((region) => {
+                      const count = products.filter(p => p.manufacturerRegion === region).length;
+                      const isSelected = selectedManufacturerRegions.includes(region);
+                      return (
+                        <div key={region} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(region, selectedManufacturerRegions, setSelectedManufacturerRegions)}
+                          >
+                            {region}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Ingredients Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    Ingredients ({ingredientsList.slice(0, 20).length}+)
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {ingredientsList.slice(0, 20).map((ingredient) => {
+                      const count = products.filter(p => p.ingredients?.includes(ingredient)).length;
+                      const isSelected = selectedIngredients.includes(ingredient);
+                      return (
+                        <div key={ingredient} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(ingredient, selectedIngredients, setSelectedIngredients)}
+                          >
+                            {ingredient}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Shelf Life Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-primary" />
+                    Shelf Life ({shelfLifeList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {shelfLifeList.map((shelfLife) => {
+                      const count = products.filter(p => p.shelfLife === shelfLife).length;
+                      const isSelected = selectedShelfLives.includes(shelfLife);
+                      return (
+                        <div key={shelfLife} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(shelfLife, selectedShelfLives, setSelectedShelfLives)}
+                          >
+                            {shelfLife}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Packaging Size Filter */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Package className="h-4 w-4 text-primary" />
+                    Packaging Size ({packagingSizeList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {packagingSizeList.map((size) => {
+                      const count = products.filter(p => p.packagingSize === size).length;
+                      const isSelected = selectedPackagingSizes.includes(size);
+                      return (
+                        <div key={size} className="flex items-center justify-between">
+                          <Button
+                            variant={isSelected ? "secondary" : "ghost"}
+                            size="sm"
+                            className="flex-1 justify-start text-xs h-8"
+                            onClick={() => toggleSelection(size, selectedPackagingSizes, setSelectedPackagingSizes)}
+                          >
+                            {size}
+                          </Button>
+                          <Badge variant="outline" className="ml-2 text-xs">
+                            {count}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full mt-4 hover:bg-destructive hover:text-destructive-foreground rounded-xl"
+                  onClick={clearFilters}
+                >
+                  {t('clear-all-filters')}
+                </Button>
+              </motion.div>
             )}
           </AnimatePresence>
           
-          {/* Filter sidebar and product grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {/* Filter sidebar - always shown on desktop, conditionally on mobile */}
-            <AnimatePresence>
-            {showFilters && (
-                <motion.div
-                  className="md:col-span-1 space-y-6 bg-card p-4 rounded-lg shadow-sm border"
-                  initial={{ opacity: 0, x: -15, boxShadow: "0 0 0 rgba(0,0,0,0)" }}
-                  animate={{ 
-                    opacity: 1, 
-                    x: 0, 
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-                    transition: { 
-                      type: "spring", 
-                      stiffness: 400, 
-                      damping: 25,
-                      duration: 0.15
-                    }
-                  }}
-                  exit={{ 
-                    opacity: 0, 
-                    x: -15, 
-                    transition: { 
-                      duration: 0.1 
-                    }
-                  }}
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold flex items-center gap-2">
-                      <SlidersHorizontal className="h-4 w-4" />
-                      {t('filters')}
-                    </h3>
-                    <motion.div
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="md:hidden"
-                        onClick={() => setShowFilters(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </motion.div>
-                  </div>
-                  
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      transition: {
-                        delay: 0.1,
-                        duration: 0.2
-                      }
-                    }}
-                    className="space-y-1 border-t pt-4"
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      <h4 className="text-sm font-medium">{t('filters-sustainability')}</h4>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <motion.div
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <Button
-                          variant={sustainableOnly ? "default" : "outline"}
-                          size="sm"
-                          className={`py-1 px-3 h-auto text-xs transition-all duration-200 ${sustainableOnly ? "bg-green-600 text-white hover:bg-green-700" : ""}`}
-                          onClick={() => setSustainableOnly(!sustainableOnly)}
-                        >
-                          {t('sustainable-only')}
-                        </Button>
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                  
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      transition: {
-                        delay: 0.2,
-                        duration: 0.2
-                      }
-                    }}
-                    className="border-t pt-4"
-                  >
-                    <h4 className="text-sm font-medium mb-2 flex justify-between items-center">
-                      <span>{t('filters-category')}</span>
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    </h4>
-                    <div className="space-y-1 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-                      {categories.map((category, index) => (
-                        <motion.div 
-                          key={category} 
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ 
-                            opacity: 1, 
-                            x: 0,
-                            transition: {
-                              delay: 0.05 * index,
-                              duration: 0.2
-                            }
-                          }}
-                        >
-                          <Button
-                            variant={activeCategory === category ? "secondary" : "ghost"}
-                            size="sm"
-                            className={cn(
-                              "w-full justify-start text-sm h-8 transition-all duration-200",
-                              activeCategory === category && "bg-primary/10 text-primary font-medium"
-                            )}
-                            onClick={() => setActiveCategory(category)}
-                          >
-                            {category}
-                          </Button>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </motion.div>
-                  
-                  <motion.div
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ 
-                      opacity: 1, 
-                      y: 0,
-                      transition: {
-                        delay: 0.3,
-                        duration: 0.2
-                      }
-                    }}
-                    className="border-t pt-4"
-                  >
-                    <h4 className="text-sm font-medium mb-2 flex justify-between items-center">
-                      <span>{t('filters-product-types')}</span>
-                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {productTypes.map((type, index) => (
-                        <motion.div 
-                          key={type}
-                          initial={{ opacity: 0, scale: 0.8 }}
-                          animate={{ 
-                            opacity: 1, 
-                            scale: 1,
-                            transition: {
-                              delay: 0.05 * index,
-                              duration: 0.2
-                            }
-                          }}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <Badge
-                            variant={selectedProductTypes.includes(type) ? "default" : "outline"}
-                            className={cn(
-                              "cursor-pointer transition-colors duration-200",
-                              selectedProductTypes.includes(type) 
-                                ? "bg-primary/10 text-primary hover:bg-primary/20" 
-                                : "hover:bg-muted"
-                            )}
-                            onClick={() => toggleProductType(type)}
-                          >
-                            {type}
-                          </Badge>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </motion.div>
-                
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-4 hover:bg-destructive hover:text-destructive-foreground transition-all duration-300"
-                      onClick={clearFilters}
-                    >
-                      {t('clear-all-filters')}
-                    </Button>
-                  </motion.div>
-                </motion.div>
-            )}
-            </AnimatePresence>
-            
-            {/* Products grid */}
-            <div className={`${showFilters ? 'md:col-span-3' : 'md:col-span-4'}`}>
-              <Tabs value={activeView} className="w-full">
-                <TabsContent value="grid" className="m-0">
-                  {renderProducts()}
-                </TabsContent>
-                
-                <TabsContent value="list" className="m-0">
-                  {renderProducts()}
-                </TabsContent>
-              </Tabs>
-            </div>
+          {/* Products grid */}
+          <div className={`${showFilters ? 'xl:col-span-4' : 'xl:col-span-5'}`}>
+            <Tabs value={viewMode} className="w-full">
+              <TabsContent value="grid" className="m-0">
+                {renderProducts()}
+              </TabsContent>
+              
+              <TabsContent value="list" className="m-0">
+                {renderProducts()}
+              </TabsContent>
+            </Tabs>
           </div>
         </div>
       </motion.div>
       
       {/* Product Details Dialog */}
       <Dialog open={showProductDetails} onOpenChange={setShowProductDetails}>
-        <DialogContent className="sm:max-w-2xl overflow-hidden">
-          <motion.div
-            variants={dialogContentVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          >
+        <DialogContent className="sm:max-w-3xl overflow-hidden bg-background/95 backdrop-blur-sm border border-primary/20 shadow-2xl">
+          <AnimatePresence>
             {selectedProduct && (
-              <>
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <DialogHeader>
-                    <DialogTitle className="text-xl">{selectedProduct.name}</DialogTitle>
-                    <DialogDescription>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 300, 
+                  damping: 30,
+                  duration: 0.5
+                }}
+              >
+                <DialogHeader>
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1, duration: 0.4 }}
+                  >
+                    <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
+                      {selectedProduct.name}
+                    </DialogTitle>
+                    <DialogDescription className="text-lg">
                       {t('by-manufacturer', { manufacturer: selectedProduct.manufacturer })}
                     </DialogDescription>
-                  </DialogHeader>
-                </motion.div>
+                  </motion.div>
+                </DialogHeader>
                 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mt-6">
+                  {/* Product Image */}
                   <motion.div 
-                    className="md:col-span-1 bg-muted rounded-lg p-4 flex items-center justify-center overflow-hidden"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ 
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 25,
-                      duration: 0.4 
-                    }}
+                    className="bg-muted/30 rounded-2xl relative overflow-hidden flex items-center justify-center h-[280px] shadow-lg"
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 30 }}
+                    whileHover={{ scale: 1.02 }}
                   >
                     <motion.img 
                       src={selectedProduct.image} 
                       alt={selectedProduct.name} 
-                      className="w-32 h-32 object-contain"
+                      className="object-contain max-h-[240px] max-w-[90%]"
                       initial={{ scale: 0.8, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      transition={{ 
-                        delay: 0.2,
-                        type: "spring",
-                        stiffness: 200,
-                        damping: 20
-                      }}
-                      whileHover={{ 
-                        scale: 1.1,
-                        transition: { 
-                          type: "spring", 
-                          stiffness: 300, 
-                          damping: 25 
-                        }
-                      }}
+                      transition={{ delay: 0.3, duration: 0.4 }}
                     />
+                    {selectedProduct.sustainable && (
+                      <motion.div 
+                        className="absolute top-4 left-4 bg-green-100 text-green-800 rounded-full p-2 shadow-lg"
+                        initial={{ scale: 0, rotate: -180 }}
+                        animate={{ scale: 1, rotate: 0 }}
+                        transition={{ delay: 0.4, type: "spring", stiffness: 300, damping: 25 }}
+                        whileHover={{ scale: 1.1, rotate: 10 }}
+                      >
+                        <CheckCircle2 className="h-6 w-6" />
+                      </motion.div>
+                    )}
                   </motion.div>
                   
+                  {/* Product details */}
                   <motion.div 
-                    className="md:col-span-2 space-y-4"
+                    className="space-y-6"
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.1 }}
+                    transition={{ delay: 0.2, type: "spring", stiffness: 200, damping: 30 }}
                   >
                     <motion.p 
-                      className="text-foreground/80"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ duration: 0.3, delay: 0.2 }}
+                      className="text-foreground/80 leading-relaxed"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.3, duration: 0.4 }}
                     >
                       {selectedProduct.description}
                     </motion.p>
                     
                     <motion.div 
-                      className="grid grid-cols-2 gap-4"
+                      className="flex items-center gap-6"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.3 }}
+                      transition={{ delay: 0.35, duration: 0.4 }}
                     >
-                      <motion.div 
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      >
-                        <p className="text-sm text-foreground/70">{t('price')}</p>
-                        <p className="font-semibold text-lg">{selectedProduct.price}</p>
-                      </motion.div>
-                      <motion.div 
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      >
-                        <p className="text-sm text-foreground/70">{t('category')}</p>
-                        <p className="font-medium">{selectedProduct.category}</p>
-                      </motion.div>
-                      <motion.div 
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      >
-                        <p className="text-sm text-foreground/70">{t('minimum-order')}</p>
-                        <p className="font-medium">{selectedProduct.minOrderQuantity} {selectedProduct.unitType || t('units')}</p>
-                      </motion.div>
-                      <motion.div 
-                        whileHover={{ scale: 1.02 }}
-                        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                      >
-                        <p className="text-sm text-foreground/70">{t('lead-time')}</p>
-                        <p className="font-medium">{selectedProduct.leadTime} {selectedProduct.leadTimeUnit}</p>
-                      </motion.div>
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: 0.4 }}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div>
-                        <p className="text-sm text-foreground/70 mb-1">{t('product-type')}</p>
-                        <motion.div
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                        >
-                          <Badge variant="secondary">
-                            {selectedProduct.productType}
-                          </Badge>
-                        </motion.div>
+                      <div className="flex items-center gap-2 text-amber-500 bg-amber-50 rounded-lg px-3 py-2">
+                        <Star className="h-5 w-5 fill-current" />
+                        <span className="font-semibold text-sm">{selectedProduct.rating}</span>
                       </div>
                       
-                      {selectedProduct.sku && (
-                        <div>
-                          <p className="text-sm text-foreground/70 mb-1">{t('sku')}</p>
-                          <p className="font-medium text-sm">{selectedProduct.sku}</p>
+                      <Badge className="shadow-sm">{selectedProduct.category}</Badge>
+                      <Badge variant="outline" className="shadow-sm">{selectedProduct.productType}</Badge>
+                    </motion.div>
+                  
+                    <motion.div 
+                      className="grid grid-cols-2 gap-6"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.4, duration: 0.4 }}
+                    >
+                      <div className="bg-primary/5 rounded-lg p-4">
+                        <p className="text-sm text-muted-foreground mb-1">Price</p>
+                        <p className="font-bold text-xl text-primary">{selectedProduct.price}</p>
+                      </div>
+                      
+                      {selectedProduct.minOrderQuantity && (
+                        <div className="bg-blue-50 rounded-lg p-4">
+                          <p className="text-sm text-muted-foreground mb-1">{t('minimum-order')}</p>
+                          <p className="font-semibold text-blue-700">{selectedProduct.minOrderQuantity} {selectedProduct.unitType || t('units')}</p>
                         </div>
                       )}
                     </motion.div>
-                    
-                    {selectedProduct.currentAvailable !== undefined && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.5 }}
+                  </motion.div>
+                </div>
+                
+                {/* Specifications */}
+                <motion.div 
+                  className="mt-8 border-t border-muted/30 pt-6"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5, duration: 0.4 }}
+                >
+                  <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                    <Package className="h-5 w-5 text-primary" />
+                    Specifications
+                  </h3>
+                  <div className="bg-muted/20 rounded-xl p-6 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+                    {selectedProduct.sku && (
+                      <motion.div 
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
                       >
-                        <p className="text-sm text-foreground/70 mb-1">{t('availability')}</p>
-                        <Progress 
-                          value={(selectedProduct.currentAvailable / (selectedProduct.minOrderQuantity * 3)) * 100}
-                          className="h-2 mb-1"
-                        />
-                        <p className="text-sm">
-                          {t('units-available', { quantity: selectedProduct.currentAvailable, unit: selectedProduct.unitType || t('units') })}
-                        </p>
+                        <span className="text-sm text-muted-foreground">SKU:</span>
+                        <span className="text-sm font-medium">{selectedProduct.sku}</span>
+                      </motion.div>
+                    )}
+                    
+                    {selectedProduct.leadTime && (
+                      <motion.div 
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
+                      >
+                        <span className="text-sm text-muted-foreground">{t('lead-time')}:</span>
+                        <span className="text-sm font-medium">{selectedProduct.leadTime} {selectedProduct.leadTimeUnit}</span>
+                      </motion.div>
+                    )}
+                  
+                    {selectedProduct.currentAvailable !== undefined && (
+                      <motion.div 
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
+                      >
+                        <span className="text-sm text-muted-foreground">{t('availability')}:</span>
+                        <span className="text-sm font-medium">
+                          {selectedProduct.currentAvailable} {selectedProduct.unitType || t('units')}
+                        </span>
                       </motion.div>
                     )}
                     
                     {selectedProduct.sustainable && (
                       <motion.div 
-                        className="flex items-center gap-2 text-green-600 font-medium"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: 0.6 }}
-                        whileHover={{ scale: 1.02, x: 2 }}
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
                       >
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span>{t('sustainable-product')}</span>
+                        <span className="text-sm text-muted-foreground">Sustainability:</span>
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                          {t('sustainable-product')}
+                        </Badge>
                       </motion.div>
                     )}
-                  </motion.div>
-                </div>
+                    
+                    {selectedProduct.manufacturerRegion && (
+                      <motion.div 
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
+                      >
+                        <span className="text-sm text-muted-foreground">Region:</span>
+                        <span className="text-sm font-medium">{selectedProduct.manufacturerRegion}</span>
+                      </motion.div>
+                    )}
+                    
+                    {selectedProduct.shelfLife && (
+                      <motion.div 
+                        className="flex justify-between items-center p-2 rounded-lg hover:bg-muted/30 transition-colors"
+                        whileHover={{ x: 5 }}
+                      >
+                        <span className="text-sm text-muted-foreground">Shelf life:</span>
+                        <span className="text-sm font-medium">{selectedProduct.shelfLife}</span>
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
                 
+                {/* Ingredients section if available - FIXED LINTER ERROR */}
+                {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && (
+                  <motion.div 
+                    className="mt-6"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.6, duration: 0.4 }}
+                  >
+                    <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                      <Star className="h-5 w-5 text-primary" />
+                      {t('ingredients')}
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProduct.ingredients.map((ingredient, idx) => (
+                        <motion.div
+                          key={`ingredient-${idx}`}
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: 0.7 + idx * 0.05, duration: 0.3 }}
+                          whileHover={{ scale: 1.05, y: -2 }}
+                        >
+                          <Badge variant="outline" className="text-xs px-3 py-1 shadow-sm hover:shadow-md transition-all duration-200">
+                            {ingredient}
+                          </Badge>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+                
+                {/* Action buttons */}
                 <motion.div 
-                  className="flex justify-between items-center mt-4 pt-4 border-t"
-                  initial={{ opacity: 0, y: 10 }}
+                  className="flex justify-between items-center mt-8 pt-6 border-t border-muted/30"
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.7 }}
+                  transition={{ delay: 0.7, duration: 0.4 }}
                 >
                   <motion.div
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
                   >
                     <Button
                       variant="outline"
                       onClick={() => toggleFavorite(selectedProduct)}
-                      className="transition-all duration-200"
+                      className="rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                     >
-                      <Heart 
-                        className="h-4 w-4 mr-2" 
-                        fill={isFavorite(selectedProduct.id) ? "currentColor" : "none"} 
-                      />
-                      {isFavorite(selectedProduct.id) ? t('saved') : t('save')}
+                      <motion.div
+                        animate={isFavorite(selectedProduct._id) ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+                        transition={isFavorite(selectedProduct._id) ? { duration: 0.6, repeat: Infinity, repeatType: "reverse" } : { duration: 0.3 }}
+                      >
+                        <Heart 
+                          className="h-5 w-5 mr-2" 
+                          fill={isFavorite(selectedProduct._id) ? "currentColor" : "none"} 
+                        />
+                      </motion.div>
+                      {isFavorite(selectedProduct._id) ? t('saved') : t('save')}
                     </Button>
                   </motion.div>
                   
-                  <div className="flex gap-2">
+                  <div className="flex gap-3">
                     <motion.div
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     >
                       <Button 
                         variant="outline" 
                         onClick={() => setShowProductDetails(false)}
-                        className="transition-all duration-200"
+                        className="rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
                       >
+                        <X className="h-5 w-5 mr-2" />
                         {t('close')}
                       </Button>
                     </motion.div>
                     <motion.div
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 400, damping: 25 }}
                     >
-                      <Button className="gap-1 transition-all duration-200">
+                      <Button 
+                        className="gap-2 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                        onClick={() => handleFindMatching(selectedProduct._id)}
+                      >
                         {t('find-match')}
-                        <ArrowRight className="h-4 w-4" />
+                        <motion.div
+                          animate={{ x: [0, 5, 0] }}
+                          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                        >
+                          <ArrowRight className="h-5 w-5" />
+                        </motion.div>
                       </Button>
                     </motion.div>
                   </div>
                 </motion.div>
-              </>
+              </motion.div>
             )}
-          </motion.div>
+          </AnimatePresence>
         </DialogContent>
       </Dialog>
 
-      {/* Add custom keyframes for animations */}
-      <style>
-        {`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-        
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out forwards;
-        }
-        
-        .animate-slideUp {
-          animation: slideUp 0.4s ease-out forwards;
-        }
-        
-        .animate-pulse {
-          animation: pulse 1.5s infinite;
-        }
-        `}
-      </style>
-
-      {/* Add back-to-top button */}
+      {/* Enhanced Back to top button */}
       <AnimatePresence>
         {showBackToTop && (
           <motion.div
-            className="fixed bottom-6 right-6 z-50"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.15 }}
+            className="fixed bottom-8 right-8 z-50"
+            initial={{ opacity: 0, scale: 0.5, y: 100 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, y: 100 }}
+            transition={{ 
+              type: "spring", 
+              stiffness: 300, 
+              damping: 30,
+              duration: 0.4
+            }}
           >
             <motion.button
-              className="bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:shadow-xl transition-all"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
+              className="bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 text-primary-foreground rounded-full p-4 shadow-2xl hover:shadow-3xl transition-all duration-300 backdrop-blur-sm border border-white/20"
               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              aria-label="Back to top"
+              whileHover={{ 
+                scale: 1.1, 
+                rotate: 10,
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)"
+              }}
+              whileTap={{ scale: 0.9 }}
+              animate={{ 
+                y: [0, -5, 0],
+                boxShadow: [
+                  "0 20px 40px -12px rgba(0, 0, 0, 0.25)",
+                  "0 25px 50px -12px rgba(0, 0, 0, 0.35)",
+                  "0 20px 40px -12px rgba(0, 0, 0, 0.25)"
+                ]
+              }}
+              transition={{ 
+                y: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              }}
             >
-              <ChevronUp className="h-5 w-5" />
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+              >
+                <ChevronUp className="h-6 w-6" />
+              </motion.div>
+              
+              {/* Ripple effect */}
+              <motion.div
+                className="absolute inset-0 rounded-full bg-white/20"
+                initial={{ scale: 1, opacity: 0 }}
+                animate={{ scale: [1, 1.5, 2], opacity: [0, 0.3, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
+              />
             </motion.button>
           </motion.div>
         )}
       </AnimatePresence>
+      
+      {/* Subtle background animation effects */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        <motion.div
+          className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-br from-purple-400/5 to-blue-400/5 rounded-full blur-3xl"
+          animate={{
+            x: [0, 50, 0],
+            y: [0, -30, 0],
+            scale: [1, 1.1, 1],
+            opacity: [0.3, 0.5, 0.3]
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+        />
+        <motion.div
+          className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-gradient-to-br from-indigo-400/5 to-purple-400/5 rounded-full blur-3xl"
+          animate={{
+            x: [0, -40, 0],
+            y: [0, 25, 0],
+            scale: [1, 0.9, 1],
+            opacity: [0.2, 0.4, 0.2]
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 5
+          }}
+        />
+        <motion.div
+          className="absolute top-3/4 left-1/2 w-64 h-64 bg-gradient-to-br from-blue-400/5 to-cyan-400/5 rounded-full blur-3xl"
+          animate={{
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+            scale: [1, 1.2, 1],
+            opacity: [0.25, 0.45, 0.25]
+          }}
+          transition={{
+            duration: 18,
+            repeat: Infinity,
+            ease: "easeInOut",
+            delay: 10
+          }}
+        />
+      </div>
     </div>
   );
 };

@@ -264,19 +264,19 @@ const RetailerLayout: FC<RetailerLayoutProps> = ({ children }) => {
           icon: item.icon
         }));
       
-      // Mock some product results for retailer
+      // Mock some product results
       const mockProducts = [
-        { name: "Organic Snacks", category: "Food", id: "p1" },
-        { name: "Cleaning Supplies", category: "Household", id: "p2" },
-        { name: "Health Vitamins", category: "Wellness", id: "p3" },
-        { name: "Breakfast Cereal", category: "Food", id: "p4" }
+        { name: "Organic Produce", category: "Fresh", id: "p1" },
+        { name: "Dairy Products", category: "Refrigerated", id: "p2" },
+        { name: "Bakery Items", category: "Fresh", id: "p3" },
+        { name: "Frozen Foods", category: "Frozen", id: "p4" }
       ];
       
       // Mock some supplier results
       const mockSuppliers = [
-        { name: "Global Foods Inc", type: "Manufacturer", id: "s1" },
-        { name: "Natural Products Co", type: "Brand", id: "s2" },
-        { name: "Health Essentials", type: "Distributor", id: "s3" }
+        { name: "Local Farm Co-op", type: "Supplier", id: "s1" },
+        { name: "Fresh Distributors", type: "Distributor", id: "s2" },
+        { name: "Quality Brands Inc", type: "Brand", id: "s3" }
       ];
       
       // Filter mock data
@@ -286,8 +286,7 @@ const RetailerLayout: FC<RetailerLayoutProps> = ({ children }) => {
       );
       
       const matchingSuppliers = mockSuppliers.filter(s => 
-        s.name.toLowerCase().includes(query.toLowerCase()) ||
-        s.type.toLowerCase().includes(query.toLowerCase())
+        s.name.toLowerCase().includes(query.toLowerCase())
       );
       
       setSearchResults({
@@ -296,7 +295,7 @@ const RetailerLayout: FC<RetailerLayoutProps> = ({ children }) => {
         suppliers: matchingSuppliers
       });
     }, 300); // Simulate network delay
-  }, [navigationItems, t]);
+  }, [navigationItems]);
 
   // Update search handler when query changes
   useEffect(() => {
@@ -581,7 +580,7 @@ const RetailerLayout: FC<RetailerLayoutProps> = ({ children }) => {
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                      className="absolute left-3 top-1/4 transform -translate-y-1/2 text-muted-foreground"
                     >
                       <Search className="h-4 w-4" />
                     </motion.div>

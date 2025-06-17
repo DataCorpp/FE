@@ -127,9 +127,13 @@ const RegisterForm = () => {
           description: (
             <div className="flex flex-col space-y-2">
               <p>This email is already registered. Please use a different email or sign in instead.</p>
-              <Button variant="link" className="p-0 self-start" onClick={() => navigate("/login")}>
+              {/* <Button
+                variant="link"
+                className="p-0 self-start"
+                onClick={() => navigate("/auth?type=signin")}
+              >
                 Go to login page
-              </Button>
+              </Button> */}
             </div>
           ),
           variant: "destructive",

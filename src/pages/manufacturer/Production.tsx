@@ -70,6 +70,7 @@ import {
   Box,
   Info,
   Star,
+  Leaf,
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import {
@@ -384,324 +385,26 @@ interface Product {
 // Empty products array to be filled from the database
 const initialProducts: Product[] = [];
 
-// ProductionLine interface
-interface ProductionLine {
-  id: number;
-  name: string;
-  status: "Active" | "Maintenance" | "Idle" | "Setup" | "Offline";
-  product: string;
-  efficiency: number;
-  daily_capacity: string;
-  next_maintenance: string;
-  operational_since: string;
-  operator_assigned: string;
-  last_maintenance: string;
-  maintenance_history: MaintenanceRecord[];
-  downtime_incidents: DowntimeIncident[];
-  quality_metrics: QualityMetric;
-  line_type: string;
-  current_batch?: BatchInfo; // Added field for current batch tracking
-  total_runtime_hours?: number; // Total runtime in hours
-  energy_consumption?: number; // Energy consumption in kWh
-  alerts?: LineAlert[]; // Line-specific alerts
-}
-
-interface MaintenanceRecord {
-  id: number;
-  date: string;
-  type: "Routine" | "Emergency" | "Upgrade";
-  technician: string;
-  duration: string;
-  notes: string;
-}
-
-interface DowntimeIncident {
-  id: number;
-  date: string;
-  duration: string;
-  reason: string;
-  resolved: boolean;
-}
-
-interface QualityMetric {
-  defect_rate: number;
-  quality_score: number;
-  last_inspection: string;
-}
-
-// New interfaces for enhanced functionality
-interface BatchInfo {
-  id: string;
-  product_id: number;
-  start_time: string;
-  expected_end_time: string;
-  target_quantity: number;
-  produced_quantity: number;
-  status: "in_progress" | "completed" | "paused" | "cancelled";
-  quality_check_status?: "pending" | "passed" | "failed";
-}
-
-interface LineAlert {
-  id: string;
-  type: "warning" | "critical" | "info";
-  message: string;
-  timestamp: string;
-  acknowledged: boolean;
-}
-
-// Enhanced mock production data
-const initialProductionLines: ProductionLine[] = [
-  {
-    id: 1,
-    name: "Line A",
-    status: "Active",
-    product: "Organic Cereal",
-    efficiency: 92,
-    daily_capacity: "10,000 units",
-    next_maintenance: "2023-10-15",
-    operational_since: "2020-03-15",
-    operator_assigned: "John Smith",
-    last_maintenance: "2023-09-01",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "4 hours",
-        notes: "All systems checked, bearings replaced.",
-      },
-      {
-        id: 2,
-        date: "2023-07-15",
-        type: "Upgrade",
-        technician: "Sarah Williams",
-        duration: "8 hours",
-        notes: "Software upgrade and calibration.",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-08-20",
-        duration: "2 hours",
-        reason: "Power outage",
-        resolved: true,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.5,
-      quality_score: 98,
-      last_inspection: "2023-09-05",
-    },
-    line_type: "Processing & Packaging",
-    current_batch: {
-      id: "BATCH-A1001",
-      product_id: 1,
-      start_time: "2023-09-20T08:00:00",
-      expected_end_time: "2023-09-20T16:00:00",
-      target_quantity: 8000,
-      produced_quantity: 5400,
-      status: "in_progress",
-    },
-    total_runtime_hours: 15420,
-    energy_consumption: 450,
-    alerts: [
-      {
-        id: "ALT-A001",
-        type: "info",
-        message: "Batch is 67% complete, running slightly ahead of schedule",
-        timestamp: "2023-09-20T12:30:00",
-        acknowledged: true,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Line B",
-    status: "Maintenance",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "8,000 units",
-    next_maintenance: "2023-10-02",
-    operational_since: "2021-01-10",
-    operator_assigned: "N/A",
-    last_maintenance: "2023-09-02",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-02",
-        type: "Emergency",
-        technician: "Robert Chen",
-        duration: "6 hours",
-        notes: "Motor replacement",
-      },
-      {
-        id: 2,
-        date: "2023-06-20",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "4 hours",
-        notes: "Regular maintenance",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        duration: "ongoing",
-        reason: "Motor failure",
-        resolved: false,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 1.2,
-      quality_score: 94,
-      last_inspection: "2023-08-25",
-    },
-    line_type: "Processing",
-  },
-  {
-    id: 3,
-    name: "Line C",
-    status: "Active",
-    product: "Protein Bars",
-    efficiency: 87,
-    daily_capacity: "15,000 units",
-    next_maintenance: "2023-11-05",
-    operational_since: "2019-11-22",
-    operator_assigned: "Lisa Cooper",
-    last_maintenance: "2023-08-15",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-08-15",
-        type: "Routine",
-        technician: "Sarah Williams",
-        duration: "4 hours",
-        notes: "All systems operational",
-      },
-      {
-        id: 2,
-        date: "2023-05-10",
-        type: "Emergency",
-        technician: "Robert Chen",
-        duration: "3 hours",
-        notes: "Conveyor belt repair",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-07-25",
-        duration: "3 hours",
-        reason: "Calibration issue",
-        resolved: true,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.8,
-      quality_score: 96,
-      last_inspection: "2023-09-01",
-    },
-    line_type: "Molding & Packaging",
-  },
-  {
-    id: 4,
-    name: "Line D",
-    status: "Active",
-    product: "Granola Packaging",
-    efficiency: 95,
-    daily_capacity: "12,000 units",
-    next_maintenance: "2023-10-22",
-    operational_since: "2022-04-05",
-    operator_assigned: "Michael Torres",
-    last_maintenance: "2023-08-30",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-08-30",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "3 hours",
-        notes: "Full inspection complete",
-      },
-      {
-        id: 2,
-        date: "2023-05-15",
-        type: "Upgrade",
-        technician: "Sarah Williams",
-        duration: "6 hours",
-        notes: "Control system upgrade",
-      },
-    ],
-    downtime_incidents: [],
-    quality_metrics: {
-      defect_rate: 0.3,
-      quality_score: 99,
-      last_inspection: "2023-09-04",
-    },
-    line_type: "Packaging",
-  },
-  {
-    id: 5,
-    name: "Line E",
-    status: "Idle",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "9,000 units",
-    next_maintenance: "2023-10-18",
-    operational_since: "2021-08-12",
-    operator_assigned: "N/A",
-    last_maintenance: "2023-09-01",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        type: "Routine",
-        technician: "Robert Chen",
-        duration: "4 hours",
-        notes: "Preventive maintenance",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-09-02",
-        duration: "ongoing",
-        reason: "Production schedule gap",
-        resolved: false,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.6,
-      quality_score: 97,
-      last_inspection: "2023-08-28",
-    },
-    line_type: "Processing & Packaging",
-  },
-];
-
 export const Production = () => {
   const { isAuthenticated, user, role } = useUser();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { t } = useTranslation();
+  const { toast } = useToast();
 
-  // States for product management
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Products state
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("production");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedProductDetails, setSelectedProductDetails] =
-    useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProductDetails, setSelectedProductDetails] = useState<Product | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
-    
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isProductDetailsOpen, setIsProductDetailsOpen] = useState(false);
+
   // Fetch products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -719,21 +422,21 @@ export const Production = () => {
             id: index + 1,
             name: product.name,
             category: product.category,
-            sku: product.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
-            minOrderQuantity: product.minimumOrderQuantity || product.minOrderQuantity,
+            sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+            minOrderQuantity: product.minimumOrderQuantity,
             dailyCapacity: product.dailyCapacity,
             unitType: product.unitType,
-            currentAvailable: product.currentAvailableStock || product.currentAvailable,
-            pricePerUnit: product.price || product.pricePerUnit,
+            currentAvailable: product.currentAvailableStock,
+            pricePerUnit: product.price,
             productType: product.productType,
             image: product.image,
-            createdAt: product.createdAt || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             description: product.description,
-            updatedAt: product.updatedAt || new Date().toISOString(),
-            lastProduced: product.lastProduced || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastProduced: new Date().toISOString(),
             leadTime: product.leadTime,
             leadTimeUnit: product.leadTimeUnit,
-            reorderPoint: product.reorderPoint || Math.floor((product.minimumOrderQuantity || product.minOrderQuantity) * 0.5),
+            reorderPoint: Math.floor(product.minimumOrderQuantity * 0.5),
             sustainable: product.sustainable,
             // If it's a food product, include the food product data
             ...(product.flavorType && {
@@ -838,35 +541,6 @@ export const Production = () => {
     }
   }, [isAuthenticated, role, toast]);
 
-  // Production Line States
-  const [productionLines, setProductionLines] = useState<ProductionLine[]>(
-    initialProductionLines
-  );
-  const [selectedProductionLine, setSelectedProductionLine] =
-    useState<ProductionLine | null>(null);
-  const [isLineDetailsOpen, setIsLineDetailsOpen] = useState(false);
-  const [isAddLineOpen, setIsAddLineOpen] = useState(false);
-  const [isScheduleMaintenanceOpen, setIsScheduleMaintenanceOpen] =
-    useState(false);
-  const [isAssignProductOpen, setIsAssignProductOpen] = useState(false);
-  const [lineStatusFilter, setLineStatusFilter] = useState("all");
-  const [lineTypeFilter, setLineTypeFilter] = useState("all");
-  const [isRefreshingLines, setIsRefreshingLines] = useState(false);
-
-  // New state variables for enhanced functionality
-  const [activeBatches, setActiveBatches] = useState<Record<number, BatchInfo>>(
-    {}
-  );
-  const [efficiencyHistory, setEfficiencyHistory] = useState<
-    Record<number, { timestamp: string; value: number }[]>
-  >({});
-  const [lineUtilization, setLineUtilization] = useState<
-    Record<number, number>
-  >({});
-  const [isRealTimeMonitoring, setIsRealTimeMonitoring] = useState(false);
-  const [monitoringInterval, setMonitoringInterval] =
-    useState<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     document.title = "Product Management - CPG Matchmaker";
 
@@ -875,13 +549,6 @@ export const Production = () => {
       navigate("/auth?type=signin");
     } else if (role !== "manufacturer") {
       navigate("/dashboard");
-    }
-
-    // Check URL parameters for tab selection
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    if (tabParam === "products") {
-      setActiveTab("products");
     }
   }, [isAuthenticated, navigate, role]);
 
@@ -898,7 +565,14 @@ export const Production = () => {
   }, []);
 
   if (!isAuthenticated || role !== "manufacturer") {
-    return null;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   // Filter products based on search query and filters
@@ -1150,7 +824,7 @@ export const Production = () => {
   // Open edit dialog for creating or updating a product
   const openEditDialog = (product?: Product) => {
     setSelectedProduct(product || null);
-    setIsEditDialogOpen(true);
+    setIsAddDialogOpen(true);
   };
 
   // Open delete confirmation dialog
@@ -1204,334 +878,9 @@ export const Production = () => {
 
   // Function to open product details dialog
   const viewProductDetails = (product: Product) => {
-    setSelectedProductDetails(product);
-    setIsViewDetailsOpen(true);
+    setSelectedProduct(product);
+    setIsProductDetailsOpen(true);
   };
-
-  // Production Line Functions
-  const handleViewLineDetails = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsLineDetailsOpen(true);
-  };
-
-  const handleAddProductionLine = () => {
-    setIsAddLineOpen(true);
-  };
-
-  const handleScheduleMaintenance = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsScheduleMaintenanceOpen(true);
-  };
-
-  const handleAssignProduct = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsAssignProductOpen(true);
-  };
-
-  const handleToggleLineStatus = (line: ProductionLine) => {
-    // Toggle between active and idle
-    const newStatus = line.status === "Active" ? "Idle" : "Active";
-
-    setIsLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      const updatedLines = productionLines.map((l) => {
-        if (l.id === line.id) {
-          return {
-            ...l,
-            status: newStatus as "Active" | "Idle",
-            efficiency: newStatus === "Active" ? l.efficiency || 80 : 0,
-            operator_assigned:
-              newStatus === "Active"
-                ? l.operator_assigned || "Assigned Operator"
-                : "N/A",
-          };
-        }
-        return l;
-      });
-
-      setProductionLines(updatedLines);
-      setIsLoading(false);
-
-      toast({
-        title: t('production-line-status-changed', "Line status changed"),
-        description: t('production-line-status-changed-description', "{{line}} has been {{status}}.", { line: line.name, status: newStatus }),
-        variant: "default",
-      });
-    }, 600);
-  };
-
-  const refreshProductionLines = () => {
-    setIsRefreshingLines(true);
-
-    // Simulate API call to refresh data
-    setTimeout(() => {
-      // Here you would typically fetch fresh data from an API
-      // For now, we'll just update the efficiency values randomly to simulate changes
-      const updatedLines = productionLines.map((line) => {
-        if (line.status === "Active") {
-          const randomChange = Math.random() * 6 - 3; // Random value between -3 and +3
-          let newEfficiency = line.efficiency + randomChange;
-          // Keep efficiency between 70 and 99
-          newEfficiency = Math.min(99, Math.max(70, newEfficiency));
-          return { ...line, efficiency: Math.round(newEfficiency * 10) / 10 };
-        }
-        return line;
-      });
-
-      setProductionLines(updatedLines);
-      setIsRefreshingLines(false);
-
-      toast({
-        title: t('production-data-refreshed', "Data refreshed"),
-        description: t('production-line-info-updated', "Production line information has been updated."),
-        variant: "default",
-      });
-    }, 800);
-  };
-
-  // Filter production lines based on status and type
-  const filteredLines = productionLines.filter((line) => {
-    const matchesStatus =
-      lineStatusFilter === "all" || line.status === lineStatusFilter;
-    const matchesType =
-      lineTypeFilter === "all" || line.line_type.includes(lineTypeFilter);
-    return matchesStatus && matchesType;
-  });
-
-  // Get unique line types for filter dropdown
-  const lineTypes = [
-    "all",
-    ...Array.from(
-      new Set(
-        productionLines
-          .map((line) =>
-            line.line_type.includes(" & ")
-              ? [line.line_type, ...line.line_type.split(" & ")]
-              : line.line_type
-          )
-          .flat()
-      )
-    ),
-  ];
-
-  // New functions for batch management
-  const handleStartNewBatch = (
-    line: ProductionLine,
-    productId: number,
-    targetQuantity: number
-  ) => {
-    if (line.status !== "Active") {
-      toast({
-        title: t('production-cannot-start-batch', "Cannot start batch"),
-        description: t('production-line-must-be-active', "Production line must be active to start a new batch"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const now = new Date();
-    const endTime = new Date(now);
-    // Estimate end time based on target quantity and daily capacity
-    const dailyCapacityNum = parseInt(
-      line.daily_capacity.replace(/[^0-9]/g, "")
-    );
-    const hoursNeeded = (targetQuantity / dailyCapacityNum) * 24;
-    endTime.setHours(endTime.getHours() + hoursNeeded);
-
-    const newBatch: BatchInfo = {
-      id: `BATCH-${line.id}${Math.floor(Math.random() * 10000)}`,
-      product_id: productId,
-      start_time: now.toISOString(),
-      expected_end_time: endTime.toISOString(),
-      target_quantity: targetQuantity,
-      produced_quantity: 0,
-      status: "in_progress",
-    };
-
-    setProductionLines((lines) =>
-      lines.map((l) => {
-        if (l.id === line.id) {
-          return { ...l, current_batch: newBatch };
-        }
-        return l;
-      })
-    );
-
-    setActiveBatches((prev) => ({
-      ...prev,
-      [line.id]: newBatch,
-    }));
-
-    toast({
-      title: t('production-batch-started', "Batch started"),
-      description: t('production-new-batch-started', "New batch {{id}} started on {{line}}", { id: newBatch.id, line: line.name }),
-      variant: "default",
-    });
-  };
-
-  const handleCompleteBatch = (lineId: number) => {
-    const line = productionLines.find((l) => l.id === lineId);
-    if (!line || !line.current_batch) {
-      return;
-    }
-
-    const batch = line.current_batch;
-    batch.status = "completed";
-
-    setProductionLines((lines) =>
-      lines.map((l) => {
-        if (l.id === lineId) {
-          return {
-            ...l,
-            current_batch: undefined,
-            // Update quality metrics based on this batch
-            quality_metrics: {
-              ...l.quality_metrics,
-              defect_rate: l.quality_metrics.defect_rate * 0.9, // Simulate improvement
-              quality_score: Math.min(
-                100,
-                l.quality_metrics.quality_score + 0.5
-              ),
-              last_inspection: new Date().toISOString().split("T")[0],
-            },
-          };
-        }
-        return l;
-      })
-    );
-
-    setActiveBatches((prev) => {
-      const updated = { ...prev };
-      delete updated[lineId];
-      return updated;
-    });
-
-    toast({
-      title: t('production-batch-completed', "Batch completed"),
-      description: t('production-batch-completed-successfully', "Batch {{id}} completed successfully on Line {{line}}", 
-        { id: batch.id, line: line.name }),
-      variant: "default",
-    });
-  };
-
-  // Real-time monitoring functionality
-  const startRealTimeMonitoring = () => {
-    if (monitoringInterval) {
-      clearInterval(monitoringInterval);
-    }
-
-    const interval = setInterval(() => {
-      // Update active lines with simulated real-time data
-      setProductionLines((lines) =>
-        lines.map((line) => {
-          if (line.status === "Active") {
-            // Update efficiency with small variations
-            const variation = Math.random() * 4 - 2; // Random between -2 and 2
-            const newEfficiency = Math.min(
-              99.9,
-              Math.max(75, line.efficiency + variation)
-            );
-
-            // Update batch progress if there's an active batch
-            let updatedBatch = line.current_batch;
-            if (updatedBatch && updatedBatch.status === "in_progress") {
-              const targetPerHour =
-                parseInt(line.daily_capacity.replace(/[^0-9]/g, "")) / 24;
-              const incrementAmount = Math.round(
-                targetPerHour * (newEfficiency / 100) * (5 / 60)
-              ); // 5 minutes worth of production
-              updatedBatch = {
-                ...updatedBatch,
-                produced_quantity: Math.min(
-                  updatedBatch.target_quantity,
-                  updatedBatch.produced_quantity + incrementAmount
-                ),
-              };
-
-              // If batch is complete, mark it for completion
-              if (
-                updatedBatch.produced_quantity >= updatedBatch.target_quantity
-              ) {
-                setTimeout(() => handleCompleteBatch(line.id), 2000);
-              }
-            }
-
-            // Track efficiency history
-            const timestamp = new Date().toISOString();
-            setEfficiencyHistory((prev) => ({
-              ...prev,
-              [line.id]: [
-                ...(prev[line.id] || []),
-                { timestamp, value: newEfficiency },
-              ].slice(-60), // Keep last 60 records
-            }));
-
-            return {
-              ...line,
-              efficiency: parseFloat(newEfficiency.toFixed(1)),
-              current_batch: updatedBatch,
-              energy_consumption:
-                (line.energy_consumption || 0) + Math.random() * 0.5,
-            };
-          }
-          return line;
-        })
-      );
-
-      // Update line utilization metrics
-      setLineUtilization((prev) => {
-        const updated = { ...prev };
-        productionLines.forEach((line) => {
-          if (line.status === "Active") {
-            updated[line.id] = Math.min(
-              100,
-              (updated[line.id] || 0) + Math.random() * 0.1
-            );
-          } else if (line.status === "Idle") {
-            updated[line.id] = Math.max(
-              0,
-              (updated[line.id] || 0) - Math.random() * 0.2
-            );
-          }
-        });
-        return updated;
-      });
-    }, 5000); // Update every 5 seconds
-
-    setMonitoringInterval(interval);
-    setIsRealTimeMonitoring(true);
-
-    toast({
-      title: t('production-real-time-monitoring-started', "Real-time monitoring started"),
-      description: t('production-live-updates', "Production lines will be monitored with live updates every 5 seconds"),
-      variant: "default",
-    });
-  };
-
-  const stopRealTimeMonitoring = () => {
-    if (monitoringInterval) {
-      clearInterval(monitoringInterval);
-      setMonitoringInterval(null);
-      setIsRealTimeMonitoring(false);
-
-      toast({
-        title: t('production-real-time-monitoring-stopped', "Real-time monitoring stopped"),
-        description: t('production-monitoring-paused', "Production line monitoring has been paused"),
-        variant: "default",
-      });
-    }
-  };
-
-  // Cleanup interval on unmount
-  useEffect(() => {
-    return () => {
-      if (monitoringInterval) {
-        clearInterval(monitoringInterval);
-      }
-    };
-  }, [monitoringInterval]);
 
   return (
     <ManufacturerLayout>
@@ -1546,7 +895,7 @@ export const Production = () => {
           }}
         >
           <div className="space-y-6">
-            {/* Header with title and actions */}
+            {/* Header with title */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -1557,434 +906,39 @@ export const Production = () => {
                   {t('production-title', 'Product Management')}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  {t('production-subtitle', 'Manage your products, production lines and manufacturing operations')}
+                  {t('production-subtitle', 'Manage your products and manufacturing operations')}
                 </p>
-              </motion.div>
-
-              <motion.div
-                className="flex gap-2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                {isRealTimeMonitoring ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={stopRealTimeMonitoring}
-                          className="hover-scale-subtle"
-                        >
-                          <PauseCircle className="h-4 w-4 mr-2" />
-                          {t('production-stop-monitoring', 'Stop Monitoring')}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{t('production-stop-real-time', 'Stop real-time monitoring of production lines')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={startRealTimeMonitoring}
-                          className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 hover-scale-subtle"
-                        >
-                          <Play className="h-4 w-4 mr-2" />
-                          {t('production-start-monitoring', 'Start Monitoring')}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{t('production-real-time-monitoring', 'Begin real-time monitoring of production lines')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setActiveTab(
-                            activeTab === "production"
-                              ? "products"
-                              : "production"
-                          )
-                        }
-                        className="hover-scale-subtle"
-                      >
-                        {activeTab === "production" ? (
-                          <>
-                            <Package className="h-4 w-4 mr-2" />
-                            {t("production-products")}
-                          </>
-                        ) : (
-                          <>
-                            <Factory className="h-4 w-4 mr-2" />
-                            {t("production-production-lines")}
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Switch between production lines and products</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </motion.div>
             </div>
 
-            {/* Main content with tabs */}
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
+            {/* Products Content */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
-              <TabsList className="grid grid-cols-2 mb-6 tab-transition">
-                <TabsTrigger
-                  value="production"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground hover-scale-subtle"
-                >
-                  <Factory className="h-4 w-4 mr-2" />
-                  {t("production-production-lines")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="products"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground hover-scale-subtle"
-                >
-                  <Package className="h-4 w-4 mr-2" />
-                  {t("production-products")}
-                </TabsTrigger>
-              </TabsList>
-
-              <AnimatePresence mode="wait">
-                {activeTab === "production" ? (
-                  <motion.div
-                    key="production"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <TabsContent value="production" className="mt-0">
-                      <ProductionTab
-                        productionLines={productionLines}
-                        products={products}
-                        lineStatusFilter={lineStatusFilter}
-                        setLineStatusFilter={setLineStatusFilter}
-                        lineTypeFilter={lineTypeFilter}
-                        setLineTypeFilter={setLineTypeFilter}
-                        isRefreshingLines={isRefreshingLines}
-                        refreshProductionLines={refreshProductionLines}
-                        handleViewLineDetails={handleViewLineDetails}
-                        handleAddProductionLine={handleAddProductionLine}
-                        handleScheduleMaintenance={handleScheduleMaintenance}
-                        handleAssignProduct={handleAssignProduct}
-                        handleToggleLineStatus={handleToggleLineStatus}
-                        activeBatches={activeBatches}
-                        efficiencyHistory={efficiencyHistory}
-                        lineUtilization={lineUtilization}
-                        isRealTimeMonitoring={isRealTimeMonitoring}
-                        handleCompleteBatch={handleCompleteBatch}
-                        handleStartNewBatch={handleStartNewBatch}
-                      />
-                    </TabsContent>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="products"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <TabsContent value="products" className="mt-0">
-                      <ProductsTab
-                        products={filteredProducts}
-                        searchQuery={searchQuery}
-                        setSearchQuery={setSearchQuery}
-                        categoryFilter={categoryFilter}
-                        setCategoryFilter={setCategoryFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilter={setStatusFilter}
-                        categories={categories}
-                        openEditDialog={openEditDialog}
-                        openDeleteDialog={openDeleteDialog}
-                        viewProductDetails={viewProductDetails}
-                        getProductTypeBadge={getProductTypeBadge}
-                      />
-                    </TabsContent>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Tabs>
+              <ProductsTab
+                products={filteredProducts}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                categoryFilter={categoryFilter}
+                setCategoryFilter={setCategoryFilter}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                categories={categories}
+                openEditDialog={openEditDialog}
+                openDeleteDialog={openDeleteDialog}
+                viewProductDetails={viewProductDetails}
+                getProductTypeBadge={getProductTypeBadge}
+              />
+            </motion.div>
           </div>
         </motion.div>
       </MotionConfig>
 
-      {/* Product Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[850px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    {selectedProduct ? (
-                      <Edit className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Plus className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {selectedProduct ? t('production-edit-product', "Edit Product") : t('production-create-new-product', "Create New Product")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {selectedProduct
-                        ? t('production-update-details', "Update the details of your existing product.")
-                        : t('production-add-new-product', "Add a new product to your manufacturing catalog.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                <ProductForm
-                  product={selectedProduct}
-                  onSubmit={
-                    selectedProduct ? handleUpdateProduct : handleCreateProduct
-                  }
-                  isLoading={isLoading}
-                />
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Product Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader>
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2 text-destructive"
-                >
-                  <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                  <DialogTitle className="text-xl">
-                    {t('production-delete-product', "Delete Product")}
-                  </DialogTitle>
-                </motion.div>
-                <DialogDescription className="text-base mt-2">
-                  {t('production-delete-confirmation', "Are you sure you want to delete this product? This action cannot be undone.")}
-                </DialogDescription>
-              </DialogHeader>
-
-              {selectedProduct && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <div className="flex items-center gap-4 py-6 bg-destructive/5 px-4 rounded-lg border border-destructive/20 my-4">
-                    <div className="h-16 w-16 rounded-md bg-destructive/10 flex items-center justify-center flex-shrink-0">
-                      <Package className="h-8 w-8 text-destructive" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-lg">
-                        {selectedProduct.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        SKU: {selectedProduct.sku} | Category:{" "}
-                        {selectedProduct.category}
-                      </p>
-                    </div>
-                  </div>
-
-                  <DialogFooter className="gap-2 mt-6 flex">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsDeleteDialogOpen(false)}
-                      className="flex-1 hover:bg-background hover-scale-subtle"
-                    >
-                      {t('production-cancel', 'Cancel')}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteProduct(selectedProduct.id)}
-                      disabled={isLoading}
-                      className="flex-1 hover-scale-subtle"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {t('production-deleting', 'Deleting...')}
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t('production-delete-product', 'Delete Product')}
-                        </>
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </motion.div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Product Details Dialog */}
-      <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
-        <DialogContent className="sm:max-w-[900px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-6 pt-6 pb-2 border-b">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Eye className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-product-details', "Product Details")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {t('production-product-details-description', "Detailed information about this product.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                {selectedProductDetails && (
-                  <ProductDetailsContent
-                    product={selectedProductDetails}
-                    getProductTypeBadge={getProductTypeBadge}
-                    onEdit={() => {
-                      setIsViewDetailsOpen(false);
-                      setTimeout(
-                        () => openEditDialog(selectedProductDetails),
-                        100
-                      );
-                    }}
-                  />
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Production Line Details Dialog */}
-      <Dialog open={isLineDetailsOpen} onOpenChange={setIsLineDetailsOpen}>
-        <DialogContent className="sm:max-w-[900px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-6 pt-6 pb-2 border-b">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Factory className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-line-details', "Production Line Details")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {t('production-line-details-description', "View and manage details for this production line.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                {selectedProductionLine && (
-                  <LineDetailsContent
-                    line={selectedProductionLine}
-                    products={products}
-                    handleToggleLineStatus={handleToggleLineStatus}
-                    handleScheduleMaintenance={() => {
-                      setIsLineDetailsOpen(false);
-                      setTimeout(
-                        () => handleScheduleMaintenance(selectedProductionLine),
-                        100
-                      );
-                    }}
-                    handleAssignProduct={() => {
-                      setIsLineDetailsOpen(false);
-                      setTimeout(
-                        () => handleAssignProduct(selectedProductionLine),
-                        100
-                      );
-                    }}
-                    activeBatches={activeBatches}
-                    efficiencyHistory={efficiencyHistory}
-                    lineUtilization={lineUtilization}
-                    isRealTimeMonitoring={isRealTimeMonitoring}
-                    handleStartNewBatch={handleStartNewBatch}
-                    handleCompleteBatch={handleCompleteBatch}
-                  />
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Production Line Dialog */}
-      <Dialog open={isAddLineOpen} onOpenChange={setIsAddLineOpen}>
-        <DialogContent className="sm:max-w-[800px] p-0 max-h-[90vh] overflow-hidden">
+      {/* Add Product Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[900px] p-0 max-h-[95vh] overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -2004,50 +958,21 @@ export const Production = () => {
                   </div>
                   <div>
                     <DialogTitle className="text-xl">
-                      Add Production Line
+                      {selectedProduct ? t('production-edit-product', "Edit Product") : t('production-add-product', "Add New Product")}
                     </DialogTitle>
                     <DialogDescription className="text-sm">
-                      Create a new production line in your manufacturing
-                      facility.
+                      {selectedProduct 
+                        ? t('production-edit-product-description', "Update your product details and specifications.") 
+                        : t('production-add-product-description', "Create a new product for your manufacturing catalog.")}
                     </DialogDescription>
                   </div>
                 </motion.div>
               </DialogHeader>
 
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                <AddProductionLineForm
-                  onSubmit={(newLine) => {
-                    setIsLoading(true);
-
-                    // Simulate API call
-                    setTimeout(() => {
-                      const line: ProductionLine = {
-                        ...newLine,
-                        id:
-                          Math.max(...productionLines.map((l) => l.id), 0) + 1,
-                        maintenance_history: [],
-                        downtime_incidents: [],
-                        quality_metrics: {
-                          defect_rate: 0.5,
-                          quality_score: 95,
-                          last_inspection: new Date()
-                            .toISOString()
-                            .split("T")[0],
-                        },
-                        alerts: [],
-                      };
-
-                      setProductionLines([...productionLines, line]);
-                      setIsLoading(false);
-                      setIsAddLineOpen(false);
-
-                      toast({
-                        title: "Production line added",
-                        description: `${line.name} has been added successfully.`,
-                        variant: "default",
-                      });
-                    }, 600);
-                  }}
+              <div className="px-6 py-6 overflow-y-auto max-h-[calc(95vh-130px)]">
+                <ProductForm
+                  product={selectedProduct}
+                  onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
                   isLoading={isLoading}
                 />
               </div>
@@ -2056,12 +981,9 @@ export const Production = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Schedule Maintenance Dialog */}
-      <Dialog
-        open={isScheduleMaintenanceOpen}
-        onOpenChange={setIsScheduleMaintenanceOpen}
-      >
-        <DialogContent className="sm:max-w-[650px] p-0">
+      {/* Delete Product Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
           <AnimatePresence mode="wait">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -2069,177 +991,101 @@ export const Production = () => {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
             >
-              <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Wrench className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-schedule-maintenance', "Schedule Maintenance")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {selectedProductionLine
-                        ? t('production-schedule-maintenance-for', "Schedule maintenance for {{line}}", { line: selectedProductionLine.name })
-                        : t('production-schedule-maintenance-generic', "Schedule maintenance for production line")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
+              <DialogHeader>
+                <DialogTitle className="flex items-center text-destructive">
+                  <Trash2 className="mr-2 h-5 w-5" />
+                  {t('production-delete-product', "Delete Product")}
+                </DialogTitle>
+                <DialogDescription>
+                  {t('production-delete-product-confirmation', "Are you sure you want to delete '{{product}}'? This action cannot be undone.", 
+                    { product: selectedProduct?.name })}
+                </DialogDescription>
               </DialogHeader>
-
-              <div className="px-6 py-6">
-                {selectedProductionLine && (
-                  <ScheduleMaintenanceForm
-                    line={selectedProductionLine}
-                    onSubmit={(maintenanceData) => {
-                      setIsLoading(true);
-
-                      // Simulate API call
-                      setTimeout(() => {
-                        const updatedLines = productionLines.map((line) => {
-                          if (line.id === selectedProductionLine.id) {
-                            // Create new maintenance record
-                            const newRecord: MaintenanceRecord = {
-                              id:
-                                Math.max(
-                                  ...(line.maintenance_history.map(
-                                    (m) => m.id
-                                  ) || [0]),
-                                  0
-                                ) + 1,
-                              date: maintenanceData.date,
-                              type: maintenanceData.type,
-                              technician: maintenanceData.technician,
-                              duration: maintenanceData.duration,
-                              notes: maintenanceData.notes,
-                            };
-
-                            // Update line status if maintenance starts now
-                            const status = maintenanceData.startNow
-                              ? "Maintenance"
-                              : line.status;
-
-                            return {
-                              ...line,
-                              status: status as
-                                | "Active"
-                                | "Maintenance"
-                                | "Idle"
-                                | "Setup"
-                                | "Offline",
-                              maintenance_history: [
-                                newRecord,
-                                ...line.maintenance_history,
-                              ],
-                              next_maintenance: maintenanceData.date,
-                              // If maintenance starts now, set efficiency to 0
-                              efficiency:
-                                status === "Maintenance" ? 0 : line.efficiency,
-                            };
-                          }
-                          return line;
-                        });
-
-                        setProductionLines(updatedLines);
-                        setIsLoading(false);
-                        setIsScheduleMaintenanceOpen(false);
-
-                        toast({
-                          title: t('production-maintenance-scheduled', "Maintenance scheduled"),
-                          description: t('production-maintenance-scheduled-description', "Maintenance for {{line}} has been scheduled for {{date}}.", 
-                            { line: selectedProductionLine.name, date: maintenanceData.date }),
-                          variant: "default",
-                        });
-                      }, 600);
-                    }}
-                    onCancel={() => setIsScheduleMaintenanceOpen(false)}
-                    isLoading={isLoading}
-                  />
-                )}
-              </div>
+              <DialogFooter className="flex justify-end space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={isLoading}
+                >
+                  {t('production-cancel', "Cancel")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => selectedProduct && handleDeleteProduct(selectedProduct.id)}
+                  disabled={isLoading}
+                  className="flex items-center"
+                >
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  {t('production-delete', "Delete")}
+                </Button>
+              </DialogFooter>
             </motion.div>
           </AnimatePresence>
         </DialogContent>
       </Dialog>
 
-      {/* Assign Product Dialog */}
-      <Dialog open={isAssignProductOpen} onOpenChange={setIsAssignProductOpen}>
-        <DialogContent className="sm:max-w-[650px] p-0">
+      {/* Product Details Dialog */}
+      <Dialog open={isProductDetailsOpen} onOpenChange={setIsProductDetailsOpen}>
+        <DialogContent className="sm:max-w-[1200px] p-0 max-h-[95vh] overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="h-full flex flex-col"
             >
               <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
+                  className="flex items-center justify-between"
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Package className="h-4 w-4 text-primary" />
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Eye className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-xl">
+                        {t('production-product-details', "Product Details")}
+                      </DialogTitle>
+                      <DialogDescription className="text-sm">
+                        {selectedProduct?.name}
+                      </DialogDescription>
+                    </div>
                   </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-assign-product', "Assign Product")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {selectedProductionLine
-                        ? t('production-assign-product-to', "Assign a product to {{line}}", { line: selectedProductionLine.name })
-                        : t('production-assign-product-generic', "Assign a product to production line")}
-                    </DialogDescription>
-                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setIsProductDetailsOpen(false);
+                      if (selectedProduct) {
+                        openEditDialog(selectedProduct);
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    {t('production-edit', "Edit")}
+                  </Button>
                 </motion.div>
               </DialogHeader>
 
-              <div className="px-6 py-6">
-                {selectedProductionLine && (
-                  <AssignProductForm
-                    productionLine={selectedProductionLine}
-                    products={products}
-                    onSubmit={(productId) => {
-                      setIsLoading(true);
-
-                      // Find the selected product
-                      const selectedProduct = products.find(
-                        (p) => p.id === productId
-                      );
-
-                      // Simulate API call
-                      setTimeout(() => {
-                        const updatedLines = productionLines.map((line) => {
-                          if (line.id === selectedProductionLine.id) {
-                            return {
-                              ...line,
-                              product: selectedProduct
-                                ? selectedProduct.name
-                                : "N/A",
-                            };
-                          }
-                          return line;
-                        });
-
-                        setProductionLines(updatedLines);
-                        setIsLoading(false);
-                        setIsAssignProductOpen(false);
-
-                        toast({
-                          title: t('production-product-assigned', "Product assigned"),
-                          description: t('production-product-assigned-description', "{{product}} has been assigned to {{line}}.", 
-                            { product: selectedProduct?.name || t('production-generic-product', "Product"), line: selectedProductionLine.name }),
-                          variant: "default",
-                        });
-                      }, 600);
+              <div className="px-6 py-6 overflow-y-auto flex-1">
+                {selectedProduct && (
+                  <ProductDetailsContent
+                    product={selectedProduct}
+                    getProductTypeBadge={getProductTypeBadge}
+                    onEdit={() => {
+                      setIsProductDetailsOpen(false);
+                      openEditDialog(selectedProduct);
                     }}
-                    isLoading={isLoading}
                   />
                 )}
               </div>
@@ -2313,7 +1159,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
           />
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-full sm:w-[180px] form-field-animation hover:border-muted-foreground/50">
               <SelectValue placeholder="Select category" />
@@ -2615,7 +1461,36 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   );
 };
 
-// ProductionTab Component
+// Define types for production lines and batches and props for ProductionTab
+interface ProductionLine {
+  id: number;
+  name: string;
+  status: string;
+  line_type: string;
+  product: string;
+  efficiency: number;
+  daily_capacity: number | string;
+  next_maintenance: string;
+  last_maintenance?: string;
+  operational_since?: string;
+  operator_assigned: string;
+  total_runtime_hours: number;
+  energy_consumption: number;
+  current_batch?: {
+    id: number;
+    status: string;
+    target_quantity: number;
+    produced_quantity: number;
+  };
+}
+
+interface BatchInfo {
+  id: number;
+  status: string;
+  target_quantity: number;
+  produced_quantity: number;
+}
+
 interface ProductionTabProps {
   productionLines: ProductionLine[];
   products: Product[];
@@ -4616,16 +3491,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
 
 // AddProductionLineForm Component
 interface AddProductionLineFormProps {
-  onSubmit: (
-    newLine: Omit<
-      ProductionLine,
-      | "id"
-      | "maintenance_history"
-      | "downtime_incidents"
-      | "quality_metrics"
-      | "alerts"
-    >
-  ) => void;
+  onSubmit: (newLine: Omit<ProductionLine, "id">) => void;
   isLoading: boolean;
 }
 

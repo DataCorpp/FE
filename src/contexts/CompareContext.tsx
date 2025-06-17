@@ -6,11 +6,15 @@ interface Manufacturer {
   name: string;
   location: string;
   logo: string;
-  categories: string[];
-  certifications: string[];
-  minOrderSize: string;
+  industry: string;
+  certification: string;
   establishedYear: number;
-  rating: number;
+  contact: {
+    email: string;
+    phone?: string;
+    website?: string;
+  };
+  description?: string;
 }
 
 interface CompareContextType {

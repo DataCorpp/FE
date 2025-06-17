@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, X, ShoppingBag, Trash2, Eye, Building2, MapPin, Star, Factory, Globe, Mail, Phone } from "lucide-react";
+import { Heart, X, ShoppingBag, Trash2, Eye, Building2, MapPin, Star, Factory, Globe, Mail, Phone, Award, Calendar, ExternalLink } from "lucide-react";
 import { useFavorites } from "@/contexts/FavoriteContext";
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
 import { useProductFavorites } from "@/contexts/ProductFavoriteContext";
@@ -32,17 +32,17 @@ import { cn } from "@/lib/utils";
 interface Manufacturer {
   id: number;
   name: string;
-  logo: string;
   location: string;
-  categories: string[];
-  certifications: string[];
-  rating: number;
-  website?: string;
-  email?: string;
-  phone?: string;
-  description?: string;
-  minOrderSize: string;
+  logo: string;
+  industry: string;
+  certification: string;
   establishedYear: number;
+  contact: {
+    email: string;
+    phone?: string;
+    website?: string;
+  };
+  description?: string;
 }
 
 interface Product {
@@ -118,6 +118,10 @@ const FavoritesMenu = () => {
                       src={selectedManufacturer.logo}
                       alt={selectedManufacturer.name}
                       className="w-full h-full object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.src = '/placeholder-logo.png';
+                      }}
                     />
                   </div>
                 </div>
@@ -158,76 +162,34 @@ const FavoritesMenu = () => {
                         <span className="bg-primary/10 p-1.5 rounded-md">
                           <Building2 className="h-4 w-4 text-primary" />
                         </span>
-                        Categories
+                        Industry
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedManufacturer.categories.map((category) => (
-                          <Badge key={category} variant="secondary" className="bg-primary/10 hover:bg-primary/20 transition-colors">
-                            {category}
-                          </Badge>
-                        ))}
-                      </div>
+                      <Badge variant="secondary" className="bg-primary/10 hover:bg-primary/20 transition-colors">
+                        {selectedManufacturer.industry}
+                      </Badge>
                     </div>
 
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium flex items-center gap-2">
                         <span className="bg-blue-50 p-1.5 rounded-md">
-                          <Star className="h-4 w-4 text-blue-500" />
+                          <Award className="h-4 w-4 text-blue-500" />
                         </span>
-                        Certifications
+                        Certification
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedManufacturer.certifications.map((cert) => (
-                          <Badge key={cert} variant="outline" className="hover:bg-muted/50 transition-colors">
-                            {cert}
-                          </Badge>
-                        ))}
-                      </div>
+                      <Badge variant="outline" className="hover:bg-muted/50 transition-colors">
+                        {selectedManufacturer.certification}
+                      </Badge>
                     </div>
 
                     <div className="space-y-3">
                       <h4 className="text-sm font-medium flex items-center gap-2">
                         <span className="bg-green-50 p-1.5 rounded-md">
-                          <Building2 className="h-4 w-4 text-green-500" />
+                          <Calendar className="h-4 w-4 text-green-500" />
                         </span>
-                        Business Information
-                      </h4>
-                      <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">Established</p>
-                          <p className="text-sm font-medium">{selectedManufacturer.establishedYear}</p>
-                        </div>
-                        <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">Minimum Order</p>
-                          <p className="text-sm font-medium">{selectedManufacturer.minOrderSize}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-medium flex items-center gap-2">
-                        <span className="bg-yellow-50 p-1.5 rounded-md">
-                          <Star className="h-4 w-4 text-yellow-500" />
-                        </span>
-                        Rating
+                        Established
                       </h4>
                       <div className="p-4 bg-muted/30 rounded-lg">
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <Star
-                              key={i}
-                              className={cn(
-                                "h-5 w-5",
-                                i < selectedManufacturer.rating
-                                  ? "text-yellow-400 fill-yellow-400"
-                                  : "text-muted-foreground/30"
-                              )}
-                            />
-                          ))}
-                          <span className="text-sm font-medium text-muted-foreground ml-2">
-                            ({selectedManufacturer.rating}/5)
-                          </span>
-                        </div>
+                        <p className="text-sm font-medium">{selectedManufacturer.establishedYear}</p>
                       </div>
                     </div>
                   </div>
@@ -241,95 +203,47 @@ const FavoritesMenu = () => {
                         Contact Information
                       </h4>
                       <div className="space-y-3 p-4 bg-muted/30 rounded-lg">
-                        {selectedManufacturer.website && (
-                          <div className="flex items-center gap-3 group">
-                            <div className="p-2 rounded-md bg-background">
-                              <Globe className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <a
-                              href={selectedManufacturer.website}
-                              target="_blank"
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{selectedManufacturer.contact.email}</span>
+                        </div>
+                        {selectedManufacturer.contact.phone && (
+                          <div className="flex items-center gap-2">
+                            <Phone className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm">{selectedManufacturer.contact.phone}</span>
+                          </div>
+                        )}
+                        {selectedManufacturer.contact.website && (
+                          <div className="flex items-center gap-2">
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            <a 
+                              href={selectedManufacturer.contact.website} 
+                              target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors"
+                              className="text-sm text-primary hover:underline"
                             >
-                              {selectedManufacturer.website}
+                              {selectedManufacturer.contact.website}
                             </a>
                           </div>
                         )}
-                        {selectedManufacturer.email && (
-                          <div className="flex items-center gap-3 group">
-                            <div className="p-2 rounded-md bg-background">
-                              <Mail className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <a
-                              href={`mailto:${selectedManufacturer.email}`}
-                              className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors"
-                            >
-                              {selectedManufacturer.email}
-                            </a>
-                          </div>
-                        )}
-                        {selectedManufacturer.phone && (
-                          <div className="flex items-center gap-3 group">
-                            <div className="p-2 rounded-md bg-background">
-                              <Phone className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <a
-                              href={`tel:${selectedManufacturer.phone}`}
-                              className="text-sm text-muted-foreground hover:text-primary hover:underline transition-colors"
-                            >
-                              {selectedManufacturer.phone}
-                            </a>
-                          </div>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-2 hover:bg-primary hover:text-primary-foreground"
-                          onClick={() => {
-                            window.location.href = `mailto:${selectedManufacturer.email}?subject=Inquiry about ${selectedManufacturer.name}`;
-                          }}
-                        >
-                          <Mail className="h-4 w-4 mr-2" />
-                          Send Email Inquiry
-                        </Button>
                       </div>
                     </div>
-
-                    {selectedManufacturer.description && (
-                      <div className="space-y-3">
-                        <h4 className="text-sm font-medium flex items-center gap-2">
-                          <span className="bg-orange-50 p-1.5 rounded-md">
-                            <Building2 className="h-4 w-4 text-orange-500" />
-                          </span>
-                          About
-                        </h4>
-                        <div className="p-4 bg-muted/30 rounded-lg">
-                          <p className="text-sm text-muted-foreground leading-relaxed">
-                            {selectedManufacturer.description}
-                          </p>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                <div className="mt-8 flex justify-end gap-3">
-                  <Button
+                <div className="flex gap-3 mt-8 pt-6 border-t">
+                  <Button 
+                    onClick={() => handleViewDetails(selectedManufacturer.id)}
+                    className="flex-1"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View Full Details
+                  </Button>
+                  <Button 
                     variant="outline"
-                    className="sm:w-auto"
                     onClick={() => setShowManufacturerDetails(false)}
                   >
                     Close
-                  </Button>
-                  <Button
-                    className="sm:w-auto"
-                    onClick={() => {
-                      setShowManufacturerDetails(false);
-                      handleViewDetails(selectedManufacturer.id);
-                    }}
-                  >
-                    View Full Profile
                   </Button>
                 </div>
               </div>

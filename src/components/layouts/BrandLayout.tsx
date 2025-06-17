@@ -29,7 +29,9 @@ import {
   ArrowRight,
   HandHelpingIcon,
   Globe,
-  Boxes
+  Boxes,
+  Users,
+  Handshake
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from '@/hooks/use-toast';
@@ -273,19 +275,19 @@ const BrandLayout: FC<BrandLayoutProps> = ({ children }) => {
           icon: item.icon
         }));
       
-      // Mock some product results for brand
+      // Mock some product results
       const mockProducts = [
-        { name: "Organic Cereal", category: "Food", id: "p1" },
-        { name: "Protein Powder", category: "Supplements", id: "p2" },
-        { name: "Vitamin Tablets", category: "Health", id: "p3" },
-        { name: "Energy Bars", category: "Snacks", id: "p4" }
+        { name: "Brand Marketing Kit", category: "Marketing", id: "p1" },
+        { name: "Product Catalog", category: "Branding", id: "p2" },
+        { name: "Campaign Assets", category: "Creative", id: "p3" },
+        { name: "Brand Guidelines", category: "Standards", id: "p4" }
       ];
       
       // Mock some report results
       const mockReports = [
-        { title: "Sales Analytics", type: "Chart", id: "r1" },
-        { title: "Retailer Performance", type: "PDF", id: "r2" },
-        { title: "Distribution Status", type: "Dashboard", id: "r3" }
+        { title: "Brand Performance", type: "Chart", id: "r1" },
+        { title: "Partnership Analytics", type: "PDF", id: "r2" },
+        { title: "Market Analysis", type: "Dashboard", id: "r3" }
       ];
       
       // Filter mock data
@@ -630,7 +632,7 @@ const BrandLayout: FC<BrandLayoutProps> = ({ children }) => {
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                      className="absolute left-3 top-1/4 transform -translate-y-1/2 text-muted-foreground"
                     >
                       <Search className="h-4 w-4" />
                     </motion.div>
@@ -657,6 +659,154 @@ const BrandLayout: FC<BrandLayoutProps> = ({ children }) => {
                         >
                           <X className="h-3 w-3" />
                         </Button>
+                      </motion.div>
+                    )}
+                    
+                    {searchQuery && (
+                      <motion.div 
+                        className="absolute top-full left-0 right-0 mt-1 bg-background/95 backdrop-blur-sm rounded-md shadow-lg border border-border/50 overflow-hidden z-50 max-h-[70vh] overflow-y-auto no-scrollbar"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                      >
+                        {(searchResults.pages.length === 0 && 
+                          searchResults.products.length === 0 && 
+                          searchResults.reports.length === 0) ? (
+                          
+                          <div className="p-6 text-center">
+                            <motion.div
+                              initial={{ scale: 0.9 }}
+                              animate={{ scale: 1 }}
+                              transition={{ duration: 0.2 }}
+                              className="mx-auto rounded-full bg-muted h-12 w-12 flex items-center justify-center mb-3"
+                            >
+                              <Search className="h-6 w-6 text-muted-foreground" />
+                            </motion.div>
+                            <p className="text-sm font-medium">No results found</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Try different keywords or browse categories
+                            </p>
+                          </div>
+                          
+                        ) : (
+                          <>
+                            {searchResults.pages.length > 0 && (
+                              <div className="px-2 pt-2">
+                                <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">{t('brand-layout-pages')}</div>
+                                {searchResults.pages.map((page, i) => (
+                                  <motion.div 
+                                    key={page.path}
+                                    initial={{ opacity: 0, x: -5 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: i * 0.03 }}
+                                    whileHover={{ x: 2 }}
+                                  >
+                                    <Link
+                                      to={page.path}
+                                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded-md transition-colors"
+                                      onClick={() => {
+                                        setSearchOpen(false);
+                                        setSearchQuery('');
+                                      }}
+                                    >
+                                      <div className="h-8 w-8 flex items-center justify-center rounded-md bg-primary/10 shrink-0">
+                                        {page.icon}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{page.title}</p>
+                                      </div>
+                                      <motion.div 
+                                        className="shrink-0 flex items-center opacity-50"
+                                        whileHover={{ x: 2, opacity: 1 }}
+                                      >
+                                        <ArrowRight className="h-3 w-3" />
+                                      </motion.div>
+                                    </Link>
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {searchResults.products.length > 0 && (
+                              <div className="px-2 pt-2 mt-1">
+                                <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">{t('brand-layout-products-section')}</div>
+                                {searchResults.products.map((product, i) => (
+                                  <motion.div 
+                                    key={product.id}
+                                    initial={{ opacity: 0, x: -5 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: (searchResults.pages.length * 0.03) + (i * 0.03) }}
+                                  >
+                                    <div
+                                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded-md transition-colors cursor-pointer"
+                                      onClick={() => {
+                                        navigate(`/brand/products?product=${product.id}`);
+                                        setSearchOpen(false);
+                                        setSearchQuery('');
+                                      }}
+                                    >
+                                      <div className="h-8 w-8 flex items-center justify-center rounded-md bg-blue-500/10 shrink-0">
+                                        <Package className="h-4 w-4 text-blue-500" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{product.name}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{product.category}</p>
+                                      </div>
+                                      <Badge variant="outline" className="shrink-0 text-xs h-5">
+                                        {t('brand-layout-products')}
+                                      </Badge>
+                                    </div>
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {searchResults.reports.length > 0 && (
+                              <div className="px-2 pt-2 pb-2 mt-1">
+                                <div className="text-xs font-medium text-muted-foreground px-2 py-1.5">{t('brand-layout-reports')}</div>
+                                {searchResults.reports.map((report, i) => (
+                                  <motion.div 
+                                    key={report.id}
+                                    initial={{ opacity: 0, x: -5 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ 
+                                      delay: (searchResults.pages.length * 0.03) + 
+                                             (searchResults.products.length * 0.03) + 
+                                             (i * 0.03) 
+                                    }}
+                                  >
+                                    <div
+                                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-muted rounded-md transition-colors cursor-pointer"
+                                      onClick={() => {
+                                        navigate(`/brand/analytics?report=${report.id}`);
+                                        setSearchOpen(false);
+                                        setSearchQuery('');
+                                      }}
+                                    >
+                                      <div className="h-8 w-8 flex items-center justify-center rounded-md bg-green-500/10 shrink-0">
+                                        <BarChart3 className="h-4 w-4 text-green-500" />
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-sm font-medium truncate">{report.title}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{report.type}</p>
+                                      </div>
+                                      <Badge variant="outline" className="shrink-0 text-xs h-5">
+                                        Report
+                                      </Badge>
+                                    </div>
+                                  </motion.div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            <div className="p-2 bg-muted/30 mt-1">
+                              <div className="flex justify-center items-center text-xs text-muted-foreground">
+                                <span>{t('brand-layout-press-esc')}</span>
+                              </div>
+                            </div>
+                          </>
+                        )}
                       </motion.div>
                     )}
                   </div>
