@@ -463,8 +463,9 @@ export const foodProductApi = {
 
 // API cho xác thực người dùng
 export const authApi = {
-  login: (email: string, password: string) => {
-    return api.post<ApiResponse>('/users/login', { email, password });
+  login: (email: string, password: string, useSession: boolean = false) => {
+    const config = useSession ? { withCredentials: true } : {};
+    return api.post<ApiResponse>('/users/login', { email, password }, config);
   },
   
   register: (userData: {
@@ -495,15 +496,18 @@ export const authApi = {
   },
   
   getCurrentUser: () => {
-    return api.get<ApiResponse>('/users/me');
+    return api.get<ApiResponse>('/users/me', { withCredentials: true });
   },
   
   updateProfile: (userData: Partial<ProductData>) => {
-    return api.put<ApiResponse>('/users/profile', userData);
+    return api.put<ApiResponse>('/users/profile', userData, { withCredentials: true });
   },
   
   logout: () => {
     localStorage.removeItem('auth_token');
+    // Also logout from session if used
+    api.post('/users/logout', {}, { withCredentials: true })
+      .catch(err => console.error("Session logout error:", err));
     return Promise.resolve();
   }
 };

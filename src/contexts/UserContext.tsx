@@ -71,7 +71,7 @@ interface UserContextType {
   role: UserRole;
   isAuthenticated: boolean;
   user: UserData | null;
-  login: (email: string, password: string, role?: UserRole) => Promise<void>;
+  login: (email: string, password: string, role?: UserRole, useSession?: boolean) => Promise<void>;
   register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<RegistrationResponse>;
   logout: () => void;
   switchRole: (newRole: UserRole) => void;
@@ -104,10 +104,19 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const login = async (email: string, password: string, selectedRole?: UserRole): Promise<void> => {
+  const login = async (email: string, password: string, selectedRole?: UserRole, useSession: boolean = false): Promise<void> => {
     try {
       // Make an actual API call to authenticate
-      const response = await authApi.login(email, password);
+      let response;
+      
+      if (password === "" && useSession) {
+        // OAuth login case - use the session data from backend
+        console.log("OAuth login flow - checking current user from session");
+        response = await authApi.getCurrentUser();
+      } else {
+        // Normal login with password
+        response = await authApi.login(email, password, useSession);
+      }
       
       if (!response.data || !response.data._id) {
         throw new Error(response.data?.message || "Login failed");
@@ -173,8 +182,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         ...roleSpecificSettings
       };
       
-      // Store the token in localStorage
-      if (responseData.token) {
+      // Store the token in localStorage only if not using session
+      if (responseData.token && !useSession) {
         localStorage.setItem("auth_token", responseData.token as string);
       }
       

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Factory, ShoppingBag, Store } from "lucide-react";
+import axios from "axios";
 
 const formSchema = z.object({
   email: z.string().email(),
@@ -64,6 +65,117 @@ const SignInForm = () => {
     },
   });
 
+  // Xử lý message từ popup OAuth
+  useEffect(() => {
+    // Hàm lắng nghe message từ popup Google OAuth
+    const handleOAuthMessage = async (event) => {
+      // Kiểm tra nguồn message để đảm bảo an toàn
+      if (event.origin !== window.location.origin && 
+          !event.origin.includes('accounts.google.com')) {
+        return;
+      }
+      
+      // Kiểm tra nếu đây là message OAuth 
+      if (event.data?.type === 'oauth_response' && event.data?.provider === 'google') {
+        try {
+          setIsLoading(true);
+          
+          const tokenResponse = event.data.response;
+          
+          // Get user info from Google
+          const userInfoResponse = await axios.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            {
+              headers: {
+                'Authorization': `Bearer ${tokenResponse.access_token}`
+              }
+            }
+          );
+          
+          const userInfo = userInfoResponse.data;
+          
+          // API URL để xử lý Google OAuth
+          const apiBaseUrl = 'http://localhost:3000/api'; // Backend API URL
+          console.log('API URL being used:', `${apiBaseUrl}/users/google-login`);
+          
+          // Send token to backend for verification and login/signup
+          const backendResponse = await axios.post(
+            `${apiBaseUrl}/users/google-login`,
+            {
+              token: tokenResponse.access_token,
+              email: userInfo.email,
+              name: userInfo.name,
+              picture: userInfo.picture
+            },
+            {
+              withCredentials: true // Important: enables cookies to be sent with request
+            }
+          );
+          
+          // Log response để debug
+          console.log('Backend response:', backendResponse.data);
+          
+          // Destructure dữ liệu từ response
+          const { isNewUser, ...userData } = backendResponse.data;
+          
+          console.log('User data:', { email: userInfo.email, role: userData.role, isNewUser });
+          
+          // Lấy thông tin user từ session đã được thiết lập bởi backend
+          try {
+            // Gọi API để lấy thông tin user hiện tại từ session
+            const userResponse = await axios.get(`${apiBaseUrl}/users/me`, {
+              withCredentials: true
+            });
+            console.log("Current user from session:", userResponse.data);
+            
+            // Handle login with the user context - sử dụng thông tin từ response ban đầu
+            await login(userData.email, "", userData.role, true);
+            
+            if (isNewUser) {
+              // Redirect to profile setup for new users
+              toast({
+                title: t("welcome", "Welcome to Lovely Mate!"),
+                description: t("complete-profile", "Please complete your profile to continue."),
+              });
+              navigate("/profile-setup");
+            } else {
+              // Redirect existing users to dashboard
+              toast({
+                title: t("welcome-back", "Welcome back"),
+                description: t("sign-in-success", "You've successfully signed in."),
+              });
+              navigate("/dashboard");
+            }
+          } catch (error) {
+            console.error("Error getting current user:", error);
+            toast({
+              title: t("auth-failed", "Authentication failed"),
+              description: t("google-auth-error", "Could not sign in with Google. Please try again."),
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error("Google authentication error:", error);
+          toast({
+            title: t("auth-failed", "Authentication failed"),
+            description: t("google-auth-error", "Could not sign in with Google. Please try again."),
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Đăng ký listener
+    window.addEventListener('message', handleOAuthMessage);
+    
+    // Cleanup listener khi component unmount
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+    };
+  }, [login, navigate, t, toast]);
+
   // Sign in form handler
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
@@ -92,20 +204,39 @@ const SignInForm = () => {
   };
 
   // Social login handlers
-  const handleGoogleSignIn = async () => {
-    try {
-      // Implement Google OAuth
-      toast({
-        title: "Google Sign In",
-        description: "Google authentication will be implemented here.",
-      });
-    } catch (error) {
-      toast({
-        title: "Authentication failed",
-        description: "Could not sign in with Google.",
-        variant: "destructive",
-      });
-    }
+  const handleGoogleSignIn = () => {
+    // Mở popup để đăng nhập Google
+    const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    const clientId = '340699793505-8dg7ikuikohofh8ueh6p78kcfh38d7rm.apps.googleusercontent.com';
+    
+    // Biết chính xác redirect URI đã được đăng ký trong Google Console
+    const redirectUri = 'http://localhost:8080/google-auth-callback.html';
+    
+    // Tạo URL OAuth với các tham số cần thiết
+    const queryParams = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri, // Sử dụng URI cố định
+      response_type: 'token',
+      scope: 'email profile',
+      prompt: 'select_account',
+      access_type: 'online'
+    });
+    
+    // Log URI để debug
+    console.log('Using redirect URI:', redirectUri);
+    
+    // Tính toán vị trí popup để hiển thị ở giữa màn hình
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    // Open popup
+    window.open(
+      `${googleOAuthUrl}?${queryParams.toString()}`, 
+      'Google Sign In',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
   };
 
   const handleLineSignIn = async () => {
@@ -299,7 +430,7 @@ const SignInForm = () => {
           </span>
         </Button>
 
-        <Button
+        {/* <Button
           type="button"
           variant="outline"
           className="w-full flex items-center h-11 transition-all group dark:text-white bg-[#06c755] dark:bg-[#06c755] text-white hover:bg-[#06c755]/90 dark:hover:bg-[#06c755]/90 border-[#06c755] dark:border-[#06c755]"
@@ -332,7 +463,7 @@ const SignInForm = () => {
           <span className="flex-1 text-center group-hover:translate-x-1 transition-transform">
             {t("continue-with-outlook", "Continue with Outlook")}
           </span>
-        </Button>
+        </Button> */}
       </motion.div>
 
       <div className="flex items-center gap-2 my-6 relative z-10">
