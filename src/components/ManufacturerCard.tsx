@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Heart, Eye, MapPin, Calendar, Building, Award, GitCompare } from "lucide-react";
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
 import { useManufacturerCompare } from "@/contexts/ManufacturerCompareContext";
+import { createSafeBlurVariants, createClampedBlurVariants } from "@/hooks/use-safe-blur";
 import { cn } from "@/lib/utils";
 
 // Updated interface to match actual database fields only
@@ -37,25 +38,28 @@ const cardVariants = {
     opacity: 0, 
     y: 24, 
     scale: 0.94,
-    filter: "blur(2px)"
+    ...createClampedBlurVariants('sm', 'none').hidden
   },
   visible: { 
     opacity: 1, 
     y: 0,
     scale: 1,
-    filter: "blur(0px)",
+    ...createClampedBlurVariants('sm', 'none').visible,
     transition: {
       type: "spring",
       stiffness: 280,
       damping: 22,
       mass: 0.9,
-      duration: 0.6
+      duration: 0.6,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
     }
   },
   hover: {
     y: -10,
     scale: 1.02,
-    filter: "blur(0px)",
+    filter: "blur(0px)", // Explicit zero value
     transition: {
       type: "spring",
       stiffness: 350,
@@ -69,23 +73,26 @@ const imageVariants = {
   hidden: { 
     scale: 1.08, 
     opacity: 0,
-    filter: "blur(4px)"
+    ...createClampedBlurVariants('md', 'none').hidden
   },
   visible: { 
     scale: 1, 
     opacity: 1,
-    filter: "blur(0px)",
+    ...createClampedBlurVariants('md', 'none').visible,
     transition: {
       type: "spring",
       stiffness: 260,
       damping: 25,
       duration: 0.8,
-      delay: 0.1
+      delay: 0.1,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
     }
   },
   hover: {
     scale: 1.06,
-    filter: "blur(0px)",
+    filter: "blur(0px)", // Explicit zero value
     transition: {
       type: "spring",
       stiffness: 300,

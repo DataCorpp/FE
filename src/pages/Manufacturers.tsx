@@ -55,25 +55,42 @@ import { toast } from "sonner";
 import ManufacturerDetails from "@/components/ManufacturerDetails";
 import { cn } from "@/lib/utils";
 import { manufacturerApi } from "@/lib/api";
+import { createSafeBlurVariants, createClampedBlurVariants } from "@/hooks/use-safe-blur";
 
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-// Updated interface to match backend data structure exactly
+// Updated interface to match User model from backend exactly
 export interface ApiManufacturer {
   _id: string;
   name: string;
-  location: string;
-  establish: number;
-  industry: string;
-  certification: string;
-  contact: {
-    email: string;
-    phone?: string;
-    website?: string;
-  };
-  image?: string;
+  email: string;
+  companyName: string;
+  role: string;
+  status: string;
+  profileComplete: boolean;
+  lastLogin: string;
+  phone?: string;
+  website?: string;
+  websiteUrl?: string;
+  address?: string;
   description?: string;
+  companyDescription?: string;
+  industry?: string;
+  certificates?: string | string[];
+  avatar?: string;
+  connectionPreferences?: {
+    connectWith: string[];
+    industryInterests: string[];
+    interests: string[];
+    lookingFor: string[];
+  };
+  manufacturerSettings?: {
+    productionCapacity: number;
+    certifications: string[];
+    preferredCategories: string[];
+    minimumOrderValue: number;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -124,24 +141,28 @@ const itemVariants = {
     opacity: 0, 
     y: 32, 
     scale: 0.94,
-    filter: "blur(4px)"
+    ...createClampedBlurVariants('md', 'none').hidden
   },
   visible: {
     opacity: 1,
     y: 0,
     scale: 1,
-    filter: "blur(0px)",
+    ...createClampedBlurVariants('md', 'none').visible,
     transition: {
       type: "spring",
       stiffness: 260,
       damping: 22,
       mass: 0.9,
-      duration: 0.8
+      duration: 0.8,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
     }
   },
   hover: {
     y: -12,
     scale: 1.03,
+    filter: "blur(0px)", // Explicitly set to avoid interpolation issues
     transition: {
       type: "spring",
       stiffness: 400,
@@ -176,26 +197,29 @@ const filterVariants = {
     opacity: 0, 
     x: -32, 
     scale: 0.92,
-    filter: "blur(4px)"
+    ...createClampedBlurVariants('md', 'none').hidden
   },
   visible: { 
     opacity: 1, 
     x: 0,
     scale: 1,
-    filter: "blur(0px)",
+    ...createClampedBlurVariants('md', 'none').visible,
     transition: { 
       type: "spring", 
       stiffness: 280,
       damping: 24,
       mass: 0.8,
-      duration: 0.7
+      duration: 0.7,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
     } 
   },
   exit: { 
     opacity: 0, 
     x: -32,
     scale: 0.92,
-    filter: "blur(4px)",
+    ...createClampedBlurVariants('md', 'none').hidden,
     transition: { 
       duration: 0.4,
       ease: [0.4, 0, 0.2, 1]
@@ -295,22 +319,27 @@ const Manufacturers = () => {
     document.title = "Manufacturers - CPG Matchmaker";
   }, []);
 
-  // Function to convert API manufacturer to UI format - only using actual DB fields
+  // Function to convert API manufacturer to UI format - using User model fields
   const convertApiToUI = useCallback((apiManufacturer: ApiManufacturer): Manufacturer => {
     return {
       id: parseInt(apiManufacturer._id.slice(-8), 16) || Math.random(), // Use last 8 chars of ObjectId
-      name: apiManufacturer.name,
-      location: apiManufacturer.location,
-      logo: apiManufacturer.image || "/placeholder-logo.png",
+      name: apiManufacturer.companyName || apiManufacturer.name,
+      location: apiManufacturer.address || "Not specified",
+      logo: apiManufacturer.avatar || "/placeholder-logo.png",
       industry: apiManufacturer.industry || "Not specified",
-      certification: apiManufacturer.certification || "Not specified",
-      establishedYear: apiManufacturer.establish || new Date().getFullYear(),
+      certification: apiManufacturer.manufacturerSettings?.certifications?.join(", ") || 
+                     (apiManufacturer.certificates ? 
+                       (Array.isArray(apiManufacturer.certificates) ? 
+                         apiManufacturer.certificates.join(", ") : 
+                         apiManufacturer.certificates) : 
+                       "Not specified"),
+      establishedYear: new Date(apiManufacturer.createdAt).getFullYear(),
       contact: {
-        email: apiManufacturer.contact.email,
-        phone: apiManufacturer.contact.phone,
-        website: apiManufacturer.contact.website
+        email: apiManufacturer.email,
+        phone: apiManufacturer.phone,
+        website: apiManufacturer.websiteUrl || apiManufacturer.website
       },
-      description: apiManufacturer.description
+      description: apiManufacturer.companyDescription || apiManufacturer.description
     };
   }, []);
 
@@ -389,7 +418,7 @@ const Manufacturers = () => {
       );
     }
 
-    console.log(`Filtered manufacturers: ${filtered.length} out of ${manufacturersList.length}`);
+    // console.log(`Filtered manufacturers: ${filtered.length} out of ${manufacturersList.length}`);
     return filtered;
   }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites]);
 
@@ -399,7 +428,7 @@ const Manufacturers = () => {
       setLoadingFilters(true);
       
       // Load all manufacturers first to extract unique values
-      const response = await fetch(`${API_BASE_URL}/api/manufacturers?page=1&limit=1000`);
+      const response = await fetch(`${API_BASE_URL}/api/users/manufacturers?page=1&limit=1000`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.manufacturers) {
@@ -417,7 +446,7 @@ const Manufacturers = () => {
           // Extract unique locations
           const uniqueLocations = [...new Set(
             manufacturersData
-              .map((m: ApiManufacturer) => m.location)
+              .map((m: ApiManufacturer) => m.address)
               .filter((location: string) => location && location.trim())
               .sort()
           )] as string[];
@@ -427,22 +456,22 @@ const Manufacturers = () => {
           const uniqueCertifications = [...new Set(
             manufacturersData
               .flatMap((m: ApiManufacturer) => {
-                if (!m.certification || !m.certification.trim()) return [];
-                // Split by common separators and clean up
-                return m.certification
-                  .split(/[;,|]/)
-                  .map(cert => cert.trim())
-                  .filter(cert => cert.length > 0);
+                if (!m.certificates) return [];
+                if (Array.isArray(m.certificates)) {
+                  return (m.certificates as string[]).map(cert => cert.trim());
+                } else {
+                  return [(m.certificates as string).trim()];
+                }
               })
               .sort()
           )] as string[];
           setCertifications(uniqueCertifications);
           
-          console.log('Filter options loaded:', {
-            industries: uniqueIndustries.length,
-            locations: uniqueLocations.length,
-            certifications: uniqueCertifications.length
-          });
+          // console.log('Filter options loaded:', {
+          //   industries: uniqueIndustries.length,
+          //   locations: uniqueLocations.length,
+          //   certifications: uniqueCertifications.length
+          // });
         }
       }
       
@@ -468,7 +497,7 @@ const Manufacturers = () => {
         limit: '1000' // Load all for client-side filtering
       });
       
-      const response = await fetch(`${API_BASE_URL}/api/manufacturers?${params}`);
+      const response = await fetch(`${API_BASE_URL}/api/users/manufacturers?${params}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -478,7 +507,7 @@ const Manufacturers = () => {
       
       if (data.success && data.manufacturers) {
         const convertedManufacturers = data.manufacturers.map(convertApiToUI);
-        console.log('Loaded manufacturers:', convertedManufacturers.length, convertedManufacturers); // Debug log
+        // console.log('Loaded manufacturers:', convertedManufacturers.length, convertedManufacturers); // Debug log
         setManufacturers(convertedManufacturers);
         setTotalCount(data.total || convertedManufacturers.length);
       } else {
@@ -520,7 +549,7 @@ const Manufacturers = () => {
     if (manufacturers.length > 0) {
       const filtered = applyFilters(manufacturers);
       const sorted = applySorting(filtered, sortBy);
-      console.log('Filtered and sorted manufacturers:', filtered.length, sorted.length); // Debug log
+      // console.log('Filtered and sorted manufacturers:', filtered.length, sorted.length); // Debug log
       setFilteredManufacturers(sorted);
       
       // Update pagination
@@ -632,21 +661,21 @@ const Manufacturers = () => {
   const displayedManufacturers = getPaginatedResults();
 
   // Debug info
-  console.log('Debug info:', {
-    totalManufacturers: manufacturers.length,
-    filteredManufacturers: filteredManufacturers.length,
-    displayedManufacturers: displayedManufacturers.length,
-    currentPage,
-    totalPages,
-    hasActiveFilters,
-    filters: {
-      searchTerm,
-      selectedIndustry,
-      selectedLocation,
-      establishYearRange,
-      showFavoritesOnly
-    }
-  });
+  // console.log('Debug info:', {
+  //   totalManufacturers: manufacturers.length,
+  //   filteredManufacturers: filteredManufacturers.length,
+  //   displayedManufacturers: displayedManufacturers.length,
+  //   currentPage,
+  //   totalPages,
+  //   hasActiveFilters,
+  //   filters: {
+  //     searchTerm,
+  //     selectedIndustry,
+  //     selectedLocation,
+  //     establishYearRange,
+  //     showFavoritesOnly
+  //   }
+  // });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/98 to-muted/10">
