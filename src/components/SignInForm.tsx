@@ -207,7 +207,7 @@ const SignInForm = () => {
   const handleGoogleSignIn = () => {
     // Mở popup để đăng nhập Google
     const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    const clientId = import.meta.env.GOOGLE_CLIENT_ID;
     
     // Biết chính xác redirect URI đã được đăng ký trong Google Console
     const redirectUri = 'http://localhost:8080/google-auth-callback.html';
