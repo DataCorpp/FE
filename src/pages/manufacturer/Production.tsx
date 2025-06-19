@@ -1,129 +1,38 @@
-import { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Search, Plus, Filter, Eye, Edit, Trash2, MoreHorizontal, AlertTriangle, Calendar, Target, TrendingUp, Settings, Users, Zap, Clock, Wrench, RotateCcw, Play, Pause, CheckCircle, AlertCircle, Loader2, Activity, Award, Package, Building, Beaker, Wheat, Package2, PlusCircle, X, FileText, BarChart, Pencil, RefreshCw, Factory, PauseCircle, MoreVertical, Info, DollarSign, PackageCheck, Box, ArrowLeft, Star, CalendarCheck, InfoIcon, Layers, LinkIcon, Save, Tag, UploadCloud, User, ExternalLink, ArrowRight, ArrowUpDown, ArrowUp, ArrowDown, Leaf } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "react-i18next";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import ProductFormFoodBeverage from '@/components/form/ProductFormFood';
+import ProductFormNaturalProduct from '@/components/form/ProductFormNaturalProduct';
+import ProductFormHealthyProduct from '@/components/form/ProductFormHealthyProduct';
+import { ProductFormBeverage } from '@/components/form/ProductFormBeverage';
+import { ProductFormPackaging } from '@/components/form/ProductFormPackaging';
+import { ProductFormOther } from '@/components/form/ProductFormOther';
+import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
 import { productApi, foodProductApi } from "@/lib/api";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import {
-  Factory,
-  Settings,
-  ArrowLeft,
-  Calendar,
-  BarChart,
-  Clock,
-  AlertCircle,
-  Package,
-  PlusCircle,
-  Pencil,
-  Trash2,
-  Search,
-  Filter,
-  ChevronDown,
-  Save,
-  RefreshCw,
-  X,
-  CheckCircle,
-  Loader2,
-  MoreHorizontal,
-  TrendingUp,
-  Play,
-  PauseCircle,
-  LayoutGrid,
-  CalendarDays,
-  PowerOff,
-  ShieldAlert,
-  Bell,
-  BellRing,
-  Wrench,
-  Activity,
-  LineChart,
-  Layers,
-  Zap,
-  AlertTriangle,
-  Upload,
-  Link as LinkIcon,
-  Image,
-  ImageIcon,
-  MoreVertical,
-  Plus,
-  CircleDashed,
-  Edit,
-  Eye,
-  Copy,
-  Ban,
-  InfoIcon,
-  PackageCheck,
-  Tag,
-  User,
-  FileText,
-  CalendarCheck,
-  LineChartIcon,
-  DollarSign,
-  Box,
-  Info,
-  Star,
-} from "lucide-react";
-import { useUser } from "@/contexts/UserContext";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Progress } from "@/components/ui/progress";
-import { motion, AnimatePresence, MotionConfig } from "framer-motion";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
 import ManufacturerLayout from "@/components/layouts/ManufacturerLayout";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { cn } from "@/lib/utils";
-import { UploadCloud } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useTranslation } from "react-i18next";
+import { cn } from "@/lib/utils";
+import { RadioGroup } from "@radix-ui/react-dropdown-menu";
+import { RadioGroupItem } from "@radix-ui/react-radio-group";
 
 // Global style to hide scrollbars
 const styles = `
@@ -319,6 +228,20 @@ const styles = `
   .tab-transition {
     transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
   }
+  
+  /* Custom scrollable dialog content */
+  .scrollable-dialog-content {
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .scrollable-dialog-content .dialog-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
 `;
 
 // Food product specific data interface
@@ -329,6 +252,164 @@ interface FoodProductData {
   packagingSize: string;
   shelfLife: string;
   manufacturerRegion: string;
+  foodType: string;
+  allergens?: string[];
+}
+
+interface NaturalProductData {
+  naturalType: string[];
+  certifications: string[];
+  sustainabilityFeatures: string[];
+  origin: string;
+  extractionMethod: string;
+  purityLevel: string;
+  organicCertified: boolean;
+  environmentalImpact: string;
+}
+
+// Add HealthyProductData interface
+interface HealthyProductData {
+  healthBenefits: string[];
+  nutritionalInfo: {
+    calories: string;
+    protein: string;
+    carbs: string;
+    fat: string;
+    fiber: string;
+    sugar: string;
+  };
+  dietaryRestrictions: string[];
+  healthCertifications: string[];
+  targetHealthGoals: string[];
+  allergenInfo: string[];
+  supplementFacts?: string;
+  clinicalStudies?: string;
+}
+
+// Beverage product specific data interface
+interface BeverageProductData {
+  beverageType: string[];
+  flavorProfile: string[];
+  ingredients: string[];
+  alcoholContent?: string;
+  carbonationLevel: string;
+  servingTemperature: string;
+  shelfLife: string;
+  packagingType: string[];
+  volumeOptions: string[];
+  nutritionalInfo: {
+    calories: string;
+    sugar: string;
+    caffeine?: string;
+    sodium: string;
+    carbs: string;
+    protein: string;
+  };
+  certifications: string[];
+  targetMarket: string[];
+  seasonality: string;
+  mixingInstructions?: string;
+  storageConditions: string;
+  allergenInfo: string[];
+  preservatives: string[];
+  coloringAgents: string[];
+  healthBenefits: string[];
+}
+
+// Packaging product specific data interface
+interface PackagingProductData {
+  packagingType: string[];
+  material: string[];
+  dimensions: {
+    length: string;
+    width: string;
+    height: string;
+    weight: string;
+  };
+  capacity: {
+    volume: string;
+    maxWeight: string;
+  };
+  durability: string;
+  sustainability: string[];
+  barrierProperties: string[];
+  printingOptions: string[];
+  closureType: string[];
+  certifications: string[];
+  targetIndustries: string[];
+  storageConditions: string;
+  shelfLife: string;
+  customization: {
+    colorOptions: string[];
+    logoPlacement: string[];
+    finishOptions: string[];
+  };
+  compliance: string[];
+  recyclability: string;
+  biodegradability: string;
+  temperatureResistance: {
+    minTemp: string;
+    maxTemp: string;
+  };
+  moistureResistance: string;
+  lightProtection: string;
+  gasBarrier: string;
+  costFactors: string[];
+  minimumOrderQuantity: string;
+  leadTimeProduction: string;
+  qualityStandards: string[];
+}
+
+// Other product specific data interface
+interface OtherProductData {
+  productCategory: string[];
+  specifications: {
+    model: string;
+    version: string;
+    serialNumber: string;
+    partNumber: string;
+  };
+  technicalSpecs: {
+    dimensions: string;
+    weight: string;
+    material: string;
+    color: string;
+  };
+  features: string[];
+  applications: string[];
+  compatibility: string[];
+  certifications: string[];
+  qualityStandards: string[];
+  targetMarkets: string[];
+  usageInstructions: string;
+  maintenanceRequirements: string;
+  warrantyInfo: {
+    duration: string;
+    coverage: string;
+    terms: string;
+  };
+  safetyInformation: string[];
+  storageConditions: string;
+  shelfLife: string;
+  customization: {
+    availableOptions: string[];
+    customColors: string[];
+    customSizes: string[];
+    brandingOptions: string[];
+  };
+  compliance: string[];
+  environmentalImpact: string;
+  sustainability: string[];
+  packaging: {
+    type: string;
+    material: string;
+    recyclable: boolean;
+  };
+  accessories: string[];
+  relatedProducts: string[];
+  priceFactors: string[];
+  distributionChannels: string[];
+  marketingFeatures: string[];
 }
 
 // ProductData interface for API
@@ -354,354 +435,278 @@ interface ProductData {
   shelfLife?: string;
   manufacturerName?: string;
   manufacturerRegion?: string;
+  foodType?: string;
+  allergens?: string[];
 }
 
 // Product interface
 interface Product {
-  id: number;
+  id?: number;
   name: string;
   category: string;
-  sku: string; // Generated automatically, not required for input
-  minOrderQuantity: number; // Changed from moq to match Products.tsx
+  sku?: string;
+  minOrderQuantity: number;
   dailyCapacity: number;
   unitType: string;
   currentAvailable: number;
   pricePerUnit: number;
   productType: string;
   image: string;
-  createdAt: string;
+  createdAt?: string;
   description: string;
-  updatedAt: string;
-  lastProduced: string;
+  updatedAt?: string;
+  lastProduced?: string;
   leadTime: string;
   leadTimeUnit: string;
-  reorderPoint: number;
-  rating?: number; // Optional field, filled by matching users, not by manufacturers
-  sustainable: boolean; // This is a product characteristic determined by the manufacturer
-  foodProductData?: FoodProductData; // Optional field for food product specific data
+  reorderPoint?: number;
+  rating?: number;
+  sustainable: boolean;
+  foodProductData?: FoodProductData;
+  naturalProductData?: NaturalProductData;
+  healthyProductData?: HealthyProductData;
+  beverageProductData?: BeverageProductData;
+  packagingProductData?: PackagingProductData;
+  otherProductData?: OtherProductData;
 }
 
 // Empty products array to be filled from the database
 const initialProducts: Product[] = [];
 
-// ProductionLine interface
-interface ProductionLine {
-  id: number;
-  name: string;
-  status: "Active" | "Maintenance" | "Idle" | "Setup" | "Offline";
-  product: string;
-  efficiency: number;
-  daily_capacity: string;
-  next_maintenance: string;
-  operational_since: string;
-  operator_assigned: string;
-  last_maintenance: string;
-  maintenance_history: MaintenanceRecord[];
-  downtime_incidents: DowntimeIncident[];
-  quality_metrics: QualityMetric;
-  line_type: string;
-  current_batch?: BatchInfo; // Added field for current batch tracking
-  total_runtime_hours?: number; // Total runtime in hours
-  energy_consumption?: number; // Energy consumption in kWh
-  alerts?: LineAlert[]; // Line-specific alerts
-}
+// Define sort options
+type SortOption = {
+  label: string;
+  value: string;
+  key: keyof Product | ((product: Product) => any);
+  direction?: 'asc' | 'desc';
+};
 
-interface MaintenanceRecord {
-  id: number;
-  date: string;
-  type: "Routine" | "Emergency" | "Upgrade";
-  technician: string;
-  duration: string;
-  notes: string;
-}
+const SORT_OPTIONS: SortOption[] = [
+  { label: 'Name (A-Z)', value: 'name-asc', key: 'name', direction: 'asc' },
+  { label: 'Name (Z-A)', value: 'name-desc', key: 'name', direction: 'desc' },
+  { label: 'Price (Low to High)', value: 'price-asc', key: 'pricePerUnit', direction: 'asc' },
+  { label: 'Price (High to Low)', value: 'price-desc', key: 'pricePerUnit', direction: 'desc' },
+  { label: 'Created Date (Newest)', value: 'created-desc', key: 'createdAt', direction: 'desc' },
+  { label: 'Created Date (Oldest)', value: 'created-asc', key: 'createdAt', direction: 'asc' },
+  { label: 'Stock (High to Low)', value: 'stock-desc', key: 'currentAvailable', direction: 'desc' },
+  { label: 'Stock (Low to High)', value: 'stock-asc', key: 'currentAvailable', direction: 'asc' },
+  { label: 'Category (A-Z)', value: 'category-asc', key: 'category', direction: 'asc' },
+  { label: 'Daily Capacity (High to Low)', value: 'capacity-desc', key: 'dailyCapacity', direction: 'desc' },
+];
 
-interface DowntimeIncident {
-  id: number;
-  date: string;
-  duration: string;
-  reason: string;
-  resolved: boolean;
-}
+// Define comprehensive category options
+const PRODUCT_CATEGORIES = [
+  'all',
+  'Food Products',
+  'Beverage Products',
+  'Natural Products',
+  'Health & Wellness',
+  'Packaging Materials',
+  'Raw Materials',
+  'Finished Goods',
+  'Components',
+  'Ingredients',
+  'Supplements',
+  'Organic Products',
+  'Beverages',
+  'Snacks',
+  'Dairy Products',
+  'Meat & Poultry',
+  'Seafood',
+  'Bakery Items',
+  'Confectionery',
+  'Condiments & Sauces',
+  'Spices & Seasonings',
+  'Oils & Fats',
+  'Grains & Cereals',
+  'Fruits & Vegetables',
+  'Nuts & Seeds',
+  'Personal Care',
+  'Cosmetics',
+  'Cleaning Products',
+  'Industrial Materials',
+  'Textiles',
+  'Electronics Components',
+  'Automotive Parts',
+  'Construction Materials',
+  'Agricultural Products',
+  'Chemicals',
+  'Pharmaceuticals',
+  'Medical Devices',
+  'Laboratory Equipment',
+  'Machinery Parts',
+  'Tools & Equipment',
+  'Safety Products',
+  'Environmental Products',
+  'Sustainable Materials',
+  'Eco-Friendly Products',
+  'Biodegradable Items',
+  'Recyclable Materials'
+];
 
-interface QualityMetric {
-  defect_rate: number;
-  quality_score: number;
-  last_inspection: string;
-}
+// Define comprehensive status options with descriptions
+const DETAILED_PRODUCT_STATUSES = [
+  { value: 'all', label: 'All Statuses', description: 'Show all products regardless of status' },
+  { value: 'Active', label: 'Active', description: 'Products currently in production and available' },
+  { value: 'Active - Sustainable', label: 'Active - Sustainable', description: 'Active products with eco-friendly features' },
+  { value: 'Active - Premium', label: 'Active - Premium', description: 'High-value active products' },
+  { value: 'Active - Standard', label: 'Active - Standard', description: 'Regular active products' },
+  { value: 'Low Stock', label: 'Low Stock', description: 'Products below reorder point' },
+  { value: 'Critical Stock', label: 'Critical Stock', description: 'Products with critically low inventory' },
+  { value: 'Out of Stock', label: 'Out of Stock', description: 'Products currently unavailable' },
+  { value: 'Below MOQ', label: 'Below MOQ', description: 'Products below minimum order quantity' },
+  { value: 'Discontinued', label: 'Discontinued', description: 'Products no longer in production' },
+  { value: 'In Development', label: 'In Development', description: 'Products under development' },
+  { value: 'Pending Approval', label: 'Pending Approval', description: 'Products awaiting approval' },
+  { value: 'Quality Hold', label: 'Quality Hold', description: 'Products on quality hold' },
+  { value: 'Seasonal', label: 'Seasonal', description: 'Seasonal products' },
+  { value: 'Limited Edition', label: 'Limited Edition', description: 'Limited time products' },
+  { value: 'Pre-Launch', label: 'Pre-Launch', description: 'Products preparing for launch' },
+  { value: 'Prototype', label: 'Prototype', description: 'Prototype stage products' },
+  { value: 'Testing', label: 'Testing', description: 'Products under testing' },
+  { value: 'Recalled', label: 'Recalled', description: 'Products under recall' },
+  { value: 'Expired', label: 'Expired', description: 'Products past expiration' },
+  { value: 'Maintenance', label: 'Under Maintenance', description: 'Products under maintenance' },
+  { value: 'Archived', label: 'Archived', description: 'Archived products' }
+];
 
-// New interfaces for enhanced functionality
-interface BatchInfo {
-  id: string;
-  product_id: number;
-  start_time: string;
-  expected_end_time: string;
-  target_quantity: number;
-  produced_quantity: number;
-  status: "in_progress" | "completed" | "paused" | "cancelled";
-  quality_check_status?: "pending" | "passed" | "failed";
-}
+// Enhanced product status logic with more granular statuses
+const getProductStatus = (product: Product): string => {
+  const currentStock = product.currentAvailable || 0;
+  const reorderPoint = product.reorderPoint || 0;
+  const minOrder = product.minOrderQuantity || 0;
+  const price = product.pricePerUnit || 0;
 
-interface LineAlert {
-  id: string;
-  type: "warning" | "critical" | "info";
-  message: string;
-  timestamp: string;
-  acknowledged: boolean;
-}
+  // Check for critical conditions first
+  if (currentStock <= 0) return 'Out of Stock';
+  if (currentStock <= (reorderPoint * 0.3)) return 'Critical Stock';
+  if (currentStock <= reorderPoint) return 'Low Stock';
+  if (currentStock < minOrder) return 'Below MOQ';
+  if (product.sustainable) return 'Active - Sustainable';
+  return 'Active';
+};
 
-// Enhanced mock production data
-const initialProductionLines: ProductionLine[] = [
-  {
-    id: 1,
-    name: "Line A",
-    status: "Active",
-    product: "Organic Cereal",
-    efficiency: 92,
-    daily_capacity: "10,000 units",
-    next_maintenance: "2023-10-15",
-    operational_since: "2020-03-15",
-    operator_assigned: "John Smith",
-    last_maintenance: "2023-09-01",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "4 hours",
-        notes: "All systems checked, bearings replaced.",
-      },
-      {
-        id: 2,
-        date: "2023-07-15",
-        type: "Upgrade",
-        technician: "Sarah Williams",
-        duration: "8 hours",
-        notes: "Software upgrade and calibration.",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-08-20",
-        duration: "2 hours",
-        reason: "Power outage",
-        resolved: true,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.5,
-      quality_score: 98,
-      last_inspection: "2023-09-05",
-    },
-    line_type: "Processing & Packaging",
-    current_batch: {
-      id: "BATCH-A1001",
-      product_id: 1,
-      start_time: "2023-09-20T08:00:00",
-      expected_end_time: "2023-09-20T16:00:00",
-      target_quantity: 8000,
-      produced_quantity: 5400,
-      status: "in_progress",
-    },
-    total_runtime_hours: 15420,
-    energy_consumption: 450,
-    alerts: [
-      {
-        id: "ALT-A001",
-        type: "info",
-        message: "Batch is 67% complete, running slightly ahead of schedule",
-        timestamp: "2023-09-20T12:30:00",
-        acknowledged: true,
-      },
-    ],
-  },
-  {
-    id: 2,
-    name: "Line B",
-    status: "Maintenance",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "8,000 units",
-    next_maintenance: "2023-10-02",
-    operational_since: "2021-01-10",
-    operator_assigned: "N/A",
-    last_maintenance: "2023-09-02",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-02",
-        type: "Emergency",
-        technician: "Robert Chen",
-        duration: "6 hours",
-        notes: "Motor replacement",
-      },
-      {
-        id: 2,
-        date: "2023-06-20",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "4 hours",
-        notes: "Regular maintenance",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        duration: "ongoing",
-        reason: "Motor failure",
-        resolved: false,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 1.2,
-      quality_score: 94,
-      last_inspection: "2023-08-25",
-    },
-    line_type: "Processing",
-  },
-  {
-    id: 3,
-    name: "Line C",
-    status: "Active",
-    product: "Protein Bars",
-    efficiency: 87,
-    daily_capacity: "15,000 units",
-    next_maintenance: "2023-11-05",
-    operational_since: "2019-11-22",
-    operator_assigned: "Lisa Cooper",
-    last_maintenance: "2023-08-15",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-08-15",
-        type: "Routine",
-        technician: "Sarah Williams",
-        duration: "4 hours",
-        notes: "All systems operational",
-      },
-      {
-        id: 2,
-        date: "2023-05-10",
-        type: "Emergency",
-        technician: "Robert Chen",
-        duration: "3 hours",
-        notes: "Conveyor belt repair",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-07-25",
-        duration: "3 hours",
-        reason: "Calibration issue",
-        resolved: true,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.8,
-      quality_score: 96,
-      last_inspection: "2023-09-01",
-    },
-    line_type: "Molding & Packaging",
-  },
-  {
-    id: 4,
-    name: "Line D",
-    status: "Active",
-    product: "Granola Packaging",
-    efficiency: 95,
-    daily_capacity: "12,000 units",
-    next_maintenance: "2023-10-22",
-    operational_since: "2022-04-05",
-    operator_assigned: "Michael Torres",
-    last_maintenance: "2023-08-30",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-08-30",
-        type: "Routine",
-        technician: "Mike Johnson",
-        duration: "3 hours",
-        notes: "Full inspection complete",
-      },
-      {
-        id: 2,
-        date: "2023-05-15",
-        type: "Upgrade",
-        technician: "Sarah Williams",
-        duration: "6 hours",
-        notes: "Control system upgrade",
-      },
-    ],
-    downtime_incidents: [],
-    quality_metrics: {
-      defect_rate: 0.3,
-      quality_score: 99,
-      last_inspection: "2023-09-04",
-    },
-    line_type: "Packaging",
-  },
-  {
-    id: 5,
-    name: "Line E",
-    status: "Idle",
-    product: "N/A",
-    efficiency: 0,
-    daily_capacity: "9,000 units",
-    next_maintenance: "2023-10-18",
-    operational_since: "2021-08-12",
-    operator_assigned: "N/A",
-    last_maintenance: "2023-09-01",
-    maintenance_history: [
-      {
-        id: 1,
-        date: "2023-09-01",
-        type: "Routine",
-        technician: "Robert Chen",
-        duration: "4 hours",
-        notes: "Preventive maintenance",
-      },
-    ],
-    downtime_incidents: [
-      {
-        id: 1,
-        date: "2023-09-02",
-        duration: "ongoing",
-        reason: "Production schedule gap",
-        resolved: false,
-      },
-    ],
-    quality_metrics: {
-      defect_rate: 0.6,
-      quality_score: 97,
-      last_inspection: "2023-08-28",
-    },
-    line_type: "Processing & Packaging",
-  },
+// Define all possible product statuses
+const PRODUCT_STATUSES = [
+  'all',
+  'Active',
+  'Active - Sustainable', 
+  'Low Stock',
+  'Out of Stock',
+  'Below MOQ',
+  'Discontinued',
+  'In Development'
 ];
 
 export const Production = () => {
   const { isAuthenticated, user, role } = useUser();
   const navigate = useNavigate();
-  const { toast } = useToast();
   const { t } = useTranslation();
+  const { toast } = useToast();
 
-  // States for product management
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  // Products state
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState("production");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [selectedProductDetails, setSelectedProductDetails] =
-    useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProductDetails, setSelectedProductDetails] = useState<Product | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
-    
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isProductDetailsOpen, setIsProductDetailsOpen] = useState(false);
+  const [animateCards, setAnimateCards] = useState(false);
+  const [sortBy, setSortBy] = useState<string>('name-asc');
+  const [isReverseSorted, setIsReverseSorted] = useState(false);
+  const [newlyCreatedProductId, setNewlyCreatedProductId] = useState<number | null>(null);
+
+  // Production line state
+  const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
+  const [lineStatusFilter, setLineStatusFilter] = useState("all");
+  const [lineTypeFilter, setLineTypeFilter] = useState("all");
+  const [isRefreshingLines, setIsRefreshingLines] = useState(false);
+  const [activeBatches, setActiveBatches] = useState<Record<number, BatchInfo>>({});
+  const [efficiencyHistory, setEfficiencyHistory] = useState<Record<number, { timestamp: string; value: number }[]>>({});
+  const [lineUtilization, setLineUtilization] = useState<Record<number, number>>({});
+  const [isRealTimeMonitoring, setIsRealTimeMonitoring] = useState(false);
+
+  // Production line functions
+  const refreshProductionLines = async () => {
+    setIsRefreshingLines(true);
+    try {
+      // Simulate API call - replace with actual API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      // In a real app, you would fetch production lines from API
+      console.log('Refreshing production lines...');
+    } catch (error) {
+      console.error('Error refreshing production lines:', error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh production lines.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshingLines(false);
+    }
+  };
+
+  const handleAddProductionLine = () => {
+    // Open dialog or navigate to add production line form
+    console.log('Add production line clicked');
+    toast({
+      title: "Feature Coming Soon",
+      description: "Production line management is under development.",
+    });
+  };
+
+  const handleViewLineDetails = (line: ProductionLine) => {
+    console.log('View line details:', line);
+    toast({
+      title: "Feature Coming Soon",
+      description: "Line details view is under development.",
+    });
+  };
+
+  const handleScheduleMaintenance = (line: ProductionLine) => {
+    console.log('Schedule maintenance for:', line);
+    toast({
+      title: "Feature Coming Soon",
+      description: "Maintenance scheduling is under development.",
+    });
+  };
+
+  const handleAssignProduct = (line: ProductionLine) => {
+    console.log('Assign product to:', line);
+    toast({
+      title: "Feature Coming Soon",
+      description: "Product assignment is under development.",
+    });
+  };
+
+  const handleToggleLineStatus = (line: ProductionLine) => {
+    console.log('Toggle line status:', line);
+    toast({
+      title: "Feature Coming Soon",
+      description: "Line status management is under development.",
+    });
+  };
+
+  const handleCompleteBatch = (lineId: number) => {
+    console.log('Complete batch for line:', lineId);
+    toast({
+      title: "Feature Coming Soon",
+      description: "Batch completion is under development.",
+    });
+  };
+
+  const handleStartNewBatch = (line: ProductionLine, productId: number, targetQuantity: number) => {
+    console.log('Start new batch:', { line, productId, targetQuantity });
+    toast({
+      title: "Feature Coming Soon",
+      description: "Batch starting is under development.",
+    });
+  };
+
   // Fetch products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -719,21 +724,21 @@ export const Production = () => {
             id: index + 1,
             name: product.name,
             category: product.category,
-            sku: product.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
-            minOrderQuantity: product.minimumOrderQuantity || product.minOrderQuantity,
+            sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+            minOrderQuantity: product.minimumOrderQuantity,
             dailyCapacity: product.dailyCapacity,
             unitType: product.unitType,
-            currentAvailable: product.currentAvailableStock || product.currentAvailable,
-            pricePerUnit: product.price || product.pricePerUnit,
+            currentAvailable: product.currentAvailableStock,
+            pricePerUnit: product.price,
             productType: product.productType,
             image: product.image,
-            createdAt: product.createdAt || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             description: product.description,
-            updatedAt: product.updatedAt || new Date().toISOString(),
-            lastProduced: product.lastProduced || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            lastProduced: new Date().toISOString(),
             leadTime: product.leadTime,
             leadTimeUnit: product.leadTimeUnit,
-            reorderPoint: product.reorderPoint || Math.floor((product.minimumOrderQuantity || product.minOrderQuantity) * 0.5),
+            reorderPoint: Math.floor(product.minimumOrderQuantity * 0.5),
             sustainable: product.sustainable,
             // If it's a food product, include the food product data
             ...(product.flavorType && {
@@ -744,6 +749,8 @@ export const Production = () => {
                 packagingSize: product.packagingSize,
                 shelfLife: product.shelfLife,
                 manufacturerRegion: product.manufacturerRegion,
+                foodType: product.foodType,
+                allergens: product.allergens,
               }
             })
           }));
@@ -789,6 +796,8 @@ export const Production = () => {
                   packagingSize: foodProduct.packagingSize || '',
                   shelfLife: foodProduct.shelfLife || '',
                   manufacturerRegion: foodProduct.manufacturerRegion || '',
+                  foodType: foodProduct.foodType || '',
+                  allergens: foodProduct.allergens,
                 }
               }));
               
@@ -801,26 +810,6 @@ export const Production = () => {
         }
         
         setProducts(mappedProducts);
-
-        // In a real app, you would fetch from API here
-        // Try to fetch from API - uncomment when backend is ready
-        // const response = await productApi.getProducts();
-        // if (response.data && response.data.data) {
-        //   setProducts(response.data.data);
-        // }
-        
-        // Fetch food products from API - uncomment when backend is ready
-        /* 
-        try {
-          const foodProductsResponse = await foodProductApi.getFoodProducts();
-          if (foodProductsResponse.data) {
-            // Process and add food products to the list
-            // ...
-          }
-        } catch (foodError) {
-          console.error('Error fetching food products:', foodError);
-        }
-        */
       } catch (error) {
         console.error('Error fetching products:', error);
         toast({
@@ -838,35 +827,6 @@ export const Production = () => {
     }
   }, [isAuthenticated, role, toast]);
 
-  // Production Line States
-  const [productionLines, setProductionLines] = useState<ProductionLine[]>(
-    initialProductionLines
-  );
-  const [selectedProductionLine, setSelectedProductionLine] =
-    useState<ProductionLine | null>(null);
-  const [isLineDetailsOpen, setIsLineDetailsOpen] = useState(false);
-  const [isAddLineOpen, setIsAddLineOpen] = useState(false);
-  const [isScheduleMaintenanceOpen, setIsScheduleMaintenanceOpen] =
-    useState(false);
-  const [isAssignProductOpen, setIsAssignProductOpen] = useState(false);
-  const [lineStatusFilter, setLineStatusFilter] = useState("all");
-  const [lineTypeFilter, setLineTypeFilter] = useState("all");
-  const [isRefreshingLines, setIsRefreshingLines] = useState(false);
-
-  // New state variables for enhanced functionality
-  const [activeBatches, setActiveBatches] = useState<Record<number, BatchInfo>>(
-    {}
-  );
-  const [efficiencyHistory, setEfficiencyHistory] = useState<
-    Record<number, { timestamp: string; value: number }[]>
-  >({});
-  const [lineUtilization, setLineUtilization] = useState<
-    Record<number, number>
-  >({});
-  const [isRealTimeMonitoring, setIsRealTimeMonitoring] = useState(false);
-  const [monitoringInterval, setMonitoringInterval] =
-    useState<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     document.title = "Product Management - CPG Matchmaker";
 
@@ -875,13 +835,6 @@ export const Production = () => {
       navigate("/auth?type=signin");
     } else if (role !== "manufacturer") {
       navigate("/dashboard");
-    }
-
-    // Check URL parameters for tab selection
-    const urlParams = new URLSearchParams(window.location.search);
-    const tabParam = urlParams.get("tab");
-    if (tabParam === "products") {
-      setActiveTab("products");
     }
   }, [isAuthenticated, navigate, role]);
 
@@ -898,26 +851,228 @@ export const Production = () => {
   }, []);
 
   if (!isAuthenticated || role !== "manufacturer") {
-    return null;
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  // Filter products based on search query and filters
-  const filteredProducts = products.filter((product) => {
-    const matchesSearch =
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory =
-      categoryFilter === "all" || product.category === categoryFilter;
+  // Enhanced search logic - searches multiple fields
+  const searchProducts = (products: Product[], query: string): Product[] => {
+    if (!query.trim()) return products;
+    
+    const searchTerm = query.toLowerCase().trim();
+    
+    return products.filter((product) => {
+      // Basic product info
+      const basicMatch = [
+        product.name,
+        product.sku,
+        product.description,
+        product.category,
+        product.productType,
+        product.unitType,
+      ].some(field => field?.toLowerCase().includes(searchTerm));
 
-    return matchesSearch && matchesCategory;
-  });
+      // Price and numeric fields
+      const numericMatch = [
+        product.pricePerUnit?.toString(),
+        product.currentAvailable?.toString(),
+        product.dailyCapacity?.toString(),
+        product.minOrderQuantity?.toString(),
+      ].some(field => field?.includes(searchTerm));
 
-  // Get unique categories for filter dropdown
-  const categories = [
-    "all",
-    ...Array.from(new Set(products.map((p) => p.category))),
-  ];
+      // Product type specific data search
+      let specificMatch = false;
+      
+      if (product.foodProductData) {
+        specificMatch = [
+          ...(product.foodProductData.flavorType || []),
+          ...(product.foodProductData.ingredients || []),
+          ...(product.foodProductData.usage || []),
+          product.foodProductData.packagingSize,
+          product.foodProductData.shelfLife,
+          product.foodProductData.manufacturerRegion,
+          product.foodProductData.foodType,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+      
+      if (product.naturalProductData) {
+        specificMatch = [
+          ...(product.naturalProductData.naturalType || []),
+          ...(product.naturalProductData.certifications || []),
+          ...(product.naturalProductData.sustainabilityFeatures || []),
+          product.naturalProductData.origin,
+          product.naturalProductData.extractionMethod,
+          product.naturalProductData.purityLevel,
+          product.naturalProductData.environmentalImpact,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+
+      if (product.healthyProductData) {
+        specificMatch = [
+          ...(product.healthyProductData.healthBenefits || []),
+          ...(product.healthyProductData.dietaryRestrictions || []),
+          ...(product.healthyProductData.healthCertifications || []),
+          ...(product.healthyProductData.targetHealthGoals || []),
+          ...(product.healthyProductData.allergenInfo || []),
+          product.healthyProductData.supplementFacts,
+          product.healthyProductData.clinicalStudies,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+
+      if (product.beverageProductData) {
+        specificMatch = [
+          ...(product.beverageProductData.beverageType || []),
+          ...(product.beverageProductData.flavorProfile || []),
+          ...(product.beverageProductData.ingredients || []),
+          ...(product.beverageProductData.packagingType || []),
+          ...(product.beverageProductData.volumeOptions || []),
+          ...(product.beverageProductData.certifications || []),
+          ...(product.beverageProductData.targetMarket || []),
+          product.beverageProductData.alcoholContent,
+          product.beverageProductData.carbonationLevel,
+          product.beverageProductData.servingTemperature,
+          product.beverageProductData.seasonality,
+          product.beverageProductData.storageConditions,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+
+      if (product.packagingProductData) {
+        specificMatch = [
+          ...(product.packagingProductData.packagingType || []),
+          ...(product.packagingProductData.material || []),
+          ...(product.packagingProductData.sustainability || []),
+          ...(product.packagingProductData.barrierProperties || []),
+          ...(product.packagingProductData.printingOptions || []),
+          ...(product.packagingProductData.closureType || []),
+          ...(product.packagingProductData.certifications || []),
+          ...(product.packagingProductData.targetIndustries || []),
+          product.packagingProductData.durability,
+          product.packagingProductData.recyclability,
+          product.packagingProductData.biodegradability,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+
+      if (product.otherProductData) {
+        specificMatch = [
+          ...(product.otherProductData.productCategory || []),
+          ...(product.otherProductData.features || []),
+          ...(product.otherProductData.applications || []),
+          ...(product.otherProductData.compatibility || []),
+          ...(product.otherProductData.certifications || []),
+          ...(product.otherProductData.qualityStandards || []),
+          ...(product.otherProductData.targetMarkets || []),
+          product.otherProductData.specifications?.model,
+          product.otherProductData.specifications?.version,
+          product.otherProductData.technicalSpecs?.material,
+          product.otherProductData.technicalSpecs?.color,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+
+      return basicMatch || numericMatch || specificMatch;
+    });
+  };
+
+  // Enhanced sorting logic
+  const sortProducts = (products: Product[], sortOption: string): Product[] => {
+    const option = SORT_OPTIONS.find(opt => opt.value === sortOption);
+    if (!option) return products;
+
+    const sorted = [...products].sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      if (typeof option.key === 'function') {
+        aValue = option.key(a);
+        bValue = option.key(b);
+      } else {
+        aValue = a[option.key];
+        bValue = b[option.key];
+      }
+
+      // Handle null/undefined values
+      if (aValue == null && bValue == null) return 0;
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+
+      // Handle string comparison
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        return option.direction === 'asc' 
+          ? aValue.localeCompare(bValue)
+          : bValue.localeCompare(aValue);
+      }
+
+      // Handle number comparison
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return option.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      // Handle date comparison
+      if (aValue instanceof Date || bValue instanceof Date) {
+        const dateA = new Date(aValue).getTime();
+        const dateB = new Date(bValue).getTime();
+        return option.direction === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+
+      // Default string comparison
+      const strA = String(aValue).toLowerCase();
+      const strB = String(bValue).toLowerCase();
+      return option.direction === 'asc' 
+        ? strA.localeCompare(strB)
+        : strB.localeCompare(strA);
+    });
+
+    return isReverseSorted ? sorted.reverse() : sorted;
+  };
+
+  // Memoized filtered and sorted products for performance
+  const filteredAndSortedProducts = useMemo(() => {
+    let result = products;
+
+    // Apply search filter
+    result = searchProducts(result, searchQuery);
+
+    // Apply category filter
+    if (categoryFilter !== 'all') {
+      result = result.filter(product => product.category === categoryFilter);
+    }
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      result = result.filter(product => {
+        const productStatus = getProductStatus(product);
+        return productStatus === statusFilter;
+      });
+    }
+
+    // Apply sorting
+    result = sortProducts(result, sortBy);
+
+    return result;
+  }, [products, searchQuery, categoryFilter, statusFilter, sortBy, isReverseSorted]);
+
+  // Get unique categories from products with enhanced options
+  const categories = useMemo(() => {
+    const productCategories = [...new Set(products.map(p => p.category))];
+    // Combine predefined categories with actual product categories
+    const allCategories = ['all', ...new Set([...PRODUCT_CATEGORIES.slice(1), ...productCategories])];
+    return allCategories;
+  }, [products]);
+
+  // Get available statuses with enhanced options
+  const availableStatuses = useMemo(() => {
+    const productStatuses = [...new Set(products.map(p => getProductStatus(p)))];
+    // Get all possible status values from DETAILED_PRODUCT_STATUSES
+    const allStatuses = DETAILED_PRODUCT_STATUSES.map(status => status.value);
+    // Combine with actual product statuses
+    const combinedStatuses = ['all', ...new Set([...productStatuses, ...allStatuses.slice(1)])];
+    return combinedStatuses;
+  }, [products]);
 
   // Create a new product
   const handleCreateProduct = async (
@@ -989,7 +1144,8 @@ export const Production = () => {
       description: t('production-product-added', "{{name}} has been added to your product list.", { name: productToAdd.name }),
     });
       
-    setIsEditDialogOpen(false);
+    setIsAddDialogOpen(false);
+    setNewlyCreatedProductId(productToAdd.id);
     } catch (error) {
       console.error('Error creating product:', error);
       toast({
@@ -1060,7 +1216,7 @@ export const Production = () => {
         variant: "default",
       });
       
-      setIsEditDialogOpen(false);
+      setIsAddDialogOpen(false);
     } catch (error) {
       console.error('Error updating product:', error);
       toast({
@@ -1150,7 +1306,7 @@ export const Production = () => {
   // Open edit dialog for creating or updating a product
   const openEditDialog = (product?: Product) => {
     setSelectedProduct(product || null);
-    setIsEditDialogOpen(true);
+    setIsAddDialogOpen(true);
   };
 
   // Open delete confirmation dialog
@@ -1204,334 +1360,26 @@ export const Production = () => {
 
   // Function to open product details dialog
   const viewProductDetails = (product: Product) => {
-    setSelectedProductDetails(product);
-    setIsViewDetailsOpen(true);
+    setSelectedProduct(product);
+    setIsProductDetailsOpen(true);
   };
 
-  // Production Line Functions
-  const handleViewLineDetails = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsLineDetailsOpen(true);
-  };
-
-  const handleAddProductionLine = () => {
-    setIsAddLineOpen(true);
-  };
-
-  const handleScheduleMaintenance = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsScheduleMaintenanceOpen(true);
-  };
-
-  const handleAssignProduct = (line: ProductionLine) => {
-    setSelectedProductionLine(line);
-    setIsAssignProductOpen(true);
-  };
-
-  const handleToggleLineStatus = (line: ProductionLine) => {
-    // Toggle between active and idle
-    const newStatus = line.status === "Active" ? "Idle" : "Active";
-
-    setIsLoading(true);
-
-    // Simulate API call
-    setTimeout(() => {
-      const updatedLines = productionLines.map((l) => {
-        if (l.id === line.id) {
-          return {
-            ...l,
-            status: newStatus as "Active" | "Idle",
-            efficiency: newStatus === "Active" ? l.efficiency || 80 : 0,
-            operator_assigned:
-              newStatus === "Active"
-                ? l.operator_assigned || "Assigned Operator"
-                : "N/A",
-          };
-        }
-        return l;
-      });
-
-      setProductionLines(updatedLines);
-      setIsLoading(false);
-
-      toast({
-        title: t('production-line-status-changed', "Line status changed"),
-        description: t('production-line-status-changed-description', "{{line}} has been {{status}}.", { line: line.name, status: newStatus }),
-        variant: "default",
-      });
-    }, 600);
-  };
-
-  const refreshProductionLines = () => {
-    setIsRefreshingLines(true);
-
-    // Simulate API call to refresh data
-    setTimeout(() => {
-      // Here you would typically fetch fresh data from an API
-      // For now, we'll just update the efficiency values randomly to simulate changes
-      const updatedLines = productionLines.map((line) => {
-        if (line.status === "Active") {
-          const randomChange = Math.random() * 6 - 3; // Random value between -3 and +3
-          let newEfficiency = line.efficiency + randomChange;
-          // Keep efficiency between 70 and 99
-          newEfficiency = Math.min(99, Math.max(70, newEfficiency));
-          return { ...line, efficiency: Math.round(newEfficiency * 10) / 10 };
-        }
-        return line;
-      });
-
-      setProductionLines(updatedLines);
-      setIsRefreshingLines(false);
-
-      toast({
-        title: t('production-data-refreshed', "Data refreshed"),
-        description: t('production-line-info-updated', "Production line information has been updated."),
-        variant: "default",
-      });
-    }, 800);
-  };
-
-  // Filter production lines based on status and type
-  const filteredLines = productionLines.filter((line) => {
-    const matchesStatus =
-      lineStatusFilter === "all" || line.status === lineStatusFilter;
-    const matchesType =
-      lineTypeFilter === "all" || line.line_type.includes(lineTypeFilter);
-    return matchesStatus && matchesType;
-  });
-
-  // Get unique line types for filter dropdown
-  const lineTypes = [
-    "all",
-    ...Array.from(
-      new Set(
-        productionLines
-          .map((line) =>
-            line.line_type.includes(" & ")
-              ? [line.line_type, ...line.line_type.split(" & ")]
-              : line.line_type
-          )
-          .flat()
-      )
-    ),
-  ];
-
-  // New functions for batch management
-  const handleStartNewBatch = (
-    line: ProductionLine,
-    productId: number,
-    targetQuantity: number
-  ) => {
-    if (line.status !== "Active") {
-      toast({
-        title: t('production-cannot-start-batch', "Cannot start batch"),
-        description: t('production-line-must-be-active', "Production line must be active to start a new batch"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const now = new Date();
-    const endTime = new Date(now);
-    // Estimate end time based on target quantity and daily capacity
-    const dailyCapacityNum = parseInt(
-      line.daily_capacity.replace(/[^0-9]/g, "")
-    );
-    const hoursNeeded = (targetQuantity / dailyCapacityNum) * 24;
-    endTime.setHours(endTime.getHours() + hoursNeeded);
-
-    const newBatch: BatchInfo = {
-      id: `BATCH-${line.id}${Math.floor(Math.random() * 10000)}`,
-      product_id: productId,
-      start_time: now.toISOString(),
-      expected_end_time: endTime.toISOString(),
-      target_quantity: targetQuantity,
-      produced_quantity: 0,
-      status: "in_progress",
-    };
-
-    setProductionLines((lines) =>
-      lines.map((l) => {
-        if (l.id === line.id) {
-          return { ...l, current_batch: newBatch };
-        }
-        return l;
-      })
-    );
-
-    setActiveBatches((prev) => ({
-      ...prev,
-      [line.id]: newBatch,
-    }));
-
-    toast({
-      title: t('production-batch-started', "Batch started"),
-      description: t('production-new-batch-started', "New batch {{id}} started on {{line}}", { id: newBatch.id, line: line.name }),
-      variant: "default",
-    });
-  };
-
-  const handleCompleteBatch = (lineId: number) => {
-    const line = productionLines.find((l) => l.id === lineId);
-    if (!line || !line.current_batch) {
-      return;
-    }
-
-    const batch = line.current_batch;
-    batch.status = "completed";
-
-    setProductionLines((lines) =>
-      lines.map((l) => {
-        if (l.id === lineId) {
-          return {
-            ...l,
-            current_batch: undefined,
-            // Update quality metrics based on this batch
-            quality_metrics: {
-              ...l.quality_metrics,
-              defect_rate: l.quality_metrics.defect_rate * 0.9, // Simulate improvement
-              quality_score: Math.min(
-                100,
-                l.quality_metrics.quality_score + 0.5
-              ),
-              last_inspection: new Date().toISOString().split("T")[0],
-            },
-          };
-        }
-        return l;
-      })
-    );
-
-    setActiveBatches((prev) => {
-      const updated = { ...prev };
-      delete updated[lineId];
-      return updated;
-    });
-
-    toast({
-      title: t('production-batch-completed', "Batch completed"),
-      description: t('production-batch-completed-successfully', "Batch {{id}} completed successfully on Line {{line}}", 
-        { id: batch.id, line: line.name }),
-      variant: "default",
-    });
-  };
-
-  // Real-time monitoring functionality
-  const startRealTimeMonitoring = () => {
-    if (monitoringInterval) {
-      clearInterval(monitoringInterval);
-    }
-
-    const interval = setInterval(() => {
-      // Update active lines with simulated real-time data
-      setProductionLines((lines) =>
-        lines.map((line) => {
-          if (line.status === "Active") {
-            // Update efficiency with small variations
-            const variation = Math.random() * 4 - 2; // Random between -2 and 2
-            const newEfficiency = Math.min(
-              99.9,
-              Math.max(75, line.efficiency + variation)
-            );
-
-            // Update batch progress if there's an active batch
-            let updatedBatch = line.current_batch;
-            if (updatedBatch && updatedBatch.status === "in_progress") {
-              const targetPerHour =
-                parseInt(line.daily_capacity.replace(/[^0-9]/g, "")) / 24;
-              const incrementAmount = Math.round(
-                targetPerHour * (newEfficiency / 100) * (5 / 60)
-              ); // 5 minutes worth of production
-              updatedBatch = {
-                ...updatedBatch,
-                produced_quantity: Math.min(
-                  updatedBatch.target_quantity,
-                  updatedBatch.produced_quantity + incrementAmount
-                ),
-              };
-
-              // If batch is complete, mark it for completion
-              if (
-                updatedBatch.produced_quantity >= updatedBatch.target_quantity
-              ) {
-                setTimeout(() => handleCompleteBatch(line.id), 2000);
-              }
-            }
-
-            // Track efficiency history
-            const timestamp = new Date().toISOString();
-            setEfficiencyHistory((prev) => ({
-              ...prev,
-              [line.id]: [
-                ...(prev[line.id] || []),
-                { timestamp, value: newEfficiency },
-              ].slice(-60), // Keep last 60 records
-            }));
-
-            return {
-              ...line,
-              efficiency: parseFloat(newEfficiency.toFixed(1)),
-              current_batch: updatedBatch,
-              energy_consumption:
-                (line.energy_consumption || 0) + Math.random() * 0.5,
-            };
-          }
-          return line;
-        })
-      );
-
-      // Update line utilization metrics
-      setLineUtilization((prev) => {
-        const updated = { ...prev };
-        productionLines.forEach((line) => {
-          if (line.status === "Active") {
-            updated[line.id] = Math.min(
-              100,
-              (updated[line.id] || 0) + Math.random() * 0.1
-            );
-          } else if (line.status === "Idle") {
-            updated[line.id] = Math.max(
-              0,
-              (updated[line.id] || 0) - Math.random() * 0.2
-            );
-          }
-        });
-        return updated;
-      });
-    }, 5000); // Update every 5 seconds
-
-    setMonitoringInterval(interval);
-    setIsRealTimeMonitoring(true);
-
-    toast({
-      title: t('production-real-time-monitoring-started', "Real-time monitoring started"),
-      description: t('production-live-updates', "Production lines will be monitored with live updates every 5 seconds"),
-      variant: "default",
-    });
-  };
-
-  const stopRealTimeMonitoring = () => {
-    if (monitoringInterval) {
-      clearInterval(monitoringInterval);
-      setMonitoringInterval(null);
-      setIsRealTimeMonitoring(false);
-
-      toast({
-        title: t('production-real-time-monitoring-stopped', "Real-time monitoring stopped"),
-        description: t('production-monitoring-paused', "Production line monitoring has been paused"),
-        variant: "default",
-      });
-    }
-  };
-
-  // Cleanup interval on unmount
+  // Trigger animation when component mounts or products change
   useEffect(() => {
-    return () => {
-      if (monitoringInterval) {
-        clearInterval(monitoringInterval);
-      }
-    };
-  }, [monitoringInterval]);
+    setAnimateCards(false);
+    const timer = setTimeout(() => setAnimateCards(true), 100);
+    return () => clearTimeout(timer);
+  }, [products.length]);
+
+  // Clear newly created product highlight after 5 seconds
+  useEffect(() => {
+    if (newlyCreatedProductId) {
+      const timer = setTimeout(() => {
+        setNewlyCreatedProductId(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [newlyCreatedProductId]);
 
   return (
     <ManufacturerLayout>
@@ -1546,7 +1394,7 @@ export const Production = () => {
           }}
         >
           <div className="space-y-6">
-            {/* Header with title and actions */}
+            {/* Header with title */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
@@ -1557,434 +1405,46 @@ export const Production = () => {
                   {t('production-title', 'Product Management')}
                 </h1>
                 <p className="text-muted-foreground mt-1">
-                  {t('production-subtitle', 'Manage your products, production lines and manufacturing operations')}
+                  {t('production-subtitle', 'Manage your products and manufacturing operations')}
                 </p>
-              </motion.div>
-
-              <motion.div
-                className="flex gap-2"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                {isRealTimeMonitoring ? (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={stopRealTimeMonitoring}
-                          className="hover-scale-subtle"
-                        >
-                          <PauseCircle className="h-4 w-4 mr-2" />
-                          {t('production-stop-monitoring', 'Stop Monitoring')}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{t('production-stop-real-time', 'Stop real-time monitoring of production lines')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={startRealTimeMonitoring}
-                          className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 hover-scale-subtle"
-                        >
-                          <Play className="h-4 w-4 mr-2" />
-                          {t('production-start-monitoring', 'Start Monitoring')}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{t('production-real-time-monitoring', 'Begin real-time monitoring of production lines')}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setActiveTab(
-                            activeTab === "production"
-                              ? "products"
-                              : "production"
-                          )
-                        }
-                        className="hover-scale-subtle"
-                      >
-                        {activeTab === "production" ? (
-                          <>
-                            <Package className="h-4 w-4 mr-2" />
-                            {t("production-products")}
-                          </>
-                        ) : (
-                          <>
-                            <Factory className="h-4 w-4 mr-2" />
-                            {t("production-production-lines")}
-                          </>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Switch between production lines and products</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
               </motion.div>
             </div>
 
-            {/* Main content with tabs */}
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
+            {/* Products Content */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             >
-              <TabsList className="grid grid-cols-2 mb-6 tab-transition">
-                <TabsTrigger
-                  value="production"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground hover-scale-subtle"
-                >
-                  <Factory className="h-4 w-4 mr-2" />
-                  {t("production-production-lines")}
-                </TabsTrigger>
-                <TabsTrigger
-                  value="products"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground hover-scale-subtle"
-                >
-                  <Package className="h-4 w-4 mr-2" />
-                  {t("production-products")}
-                </TabsTrigger>
-              </TabsList>
-
-              <AnimatePresence mode="wait">
-                {activeTab === "production" ? (
-                  <motion.div
-                    key="production"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <TabsContent value="production" className="mt-0">
-                      <ProductionTab
-                        productionLines={productionLines}
-                        products={products}
-                        lineStatusFilter={lineStatusFilter}
-                        setLineStatusFilter={setLineStatusFilter}
-                        lineTypeFilter={lineTypeFilter}
-                        setLineTypeFilter={setLineTypeFilter}
-                        isRefreshingLines={isRefreshingLines}
-                        refreshProductionLines={refreshProductionLines}
-                        handleViewLineDetails={handleViewLineDetails}
-                        handleAddProductionLine={handleAddProductionLine}
-                        handleScheduleMaintenance={handleScheduleMaintenance}
-                        handleAssignProduct={handleAssignProduct}
-                        handleToggleLineStatus={handleToggleLineStatus}
-                        activeBatches={activeBatches}
-                        efficiencyHistory={efficiencyHistory}
-                        lineUtilization={lineUtilization}
-                        isRealTimeMonitoring={isRealTimeMonitoring}
-                        handleCompleteBatch={handleCompleteBatch}
-                        handleStartNewBatch={handleStartNewBatch}
-                      />
-                    </TabsContent>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="products"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <TabsContent value="products" className="mt-0">
-                      <ProductsTab
-                        products={filteredProducts}
-                        searchQuery={searchQuery}
-                        setSearchQuery={setSearchQuery}
-                        categoryFilter={categoryFilter}
-                        setCategoryFilter={setCategoryFilter}
-                        statusFilter={statusFilter}
-                        setStatusFilter={setStatusFilter}
-                        categories={categories}
-                        openEditDialog={openEditDialog}
-                        openDeleteDialog={openDeleteDialog}
-                        viewProductDetails={viewProductDetails}
-                        getProductTypeBadge={getProductTypeBadge}
-                      />
-                    </TabsContent>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </Tabs>
+              <ProductsTab
+                products={filteredAndSortedProducts}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                categoryFilter={categoryFilter}
+                setCategoryFilter={setCategoryFilter}
+                statusFilter={statusFilter}
+                setStatusFilter={setStatusFilter}
+                categories={categories}
+                availableStatuses={availableStatuses}
+                sortBy={sortBy}
+                setSortBy={setSortBy}
+                isReverseSorted={isReverseSorted}
+                setIsReverseSorted={setIsReverseSorted}
+                openEditDialog={openEditDialog}
+                openDeleteDialog={openDeleteDialog}
+                viewProductDetails={viewProductDetails}
+                getProductTypeBadge={getProductTypeBadge}
+                getProductStatus={getProductStatus}
+                newlyCreatedProductId={newlyCreatedProductId}
+              />
+            </motion.div>
           </div>
         </motion.div>
       </MotionConfig>
 
-      {/* Product Edit Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[850px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    {selectedProduct ? (
-                      <Edit className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Plus className="h-4 w-4 text-primary" />
-                    )}
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {selectedProduct ? t('production-edit-product', "Edit Product") : t('production-create-new-product', "Create New Product")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {selectedProduct
-                        ? t('production-update-details', "Update the details of your existing product.")
-                        : t('production-add-new-product', "Add a new product to your manufacturing catalog.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                <ProductForm
-                  product={selectedProduct}
-                  onSubmit={
-                    selectedProduct ? handleUpdateProduct : handleCreateProduct
-                  }
-                  isLoading={isLoading}
-                />
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Product Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader>
-                <motion.div
-                  initial={{ opacity: 0, y: -5 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2 text-destructive"
-                >
-                  <div className="h-8 w-8 rounded-full bg-destructive/10 flex items-center justify-center">
-                    <AlertTriangle className="h-4 w-4" />
-                  </div>
-                  <DialogTitle className="text-xl">
-                    {t('production-delete-product', "Delete Product")}
-                  </DialogTitle>
-                </motion.div>
-                <DialogDescription className="text-base mt-2">
-                  {t('production-delete-confirmation', "Are you sure you want to delete this product? This action cannot be undone.")}
-                </DialogDescription>
-              </DialogHeader>
-
-              {selectedProduct && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <div className="flex items-center gap-4 py-6 bg-destructive/5 px-4 rounded-lg border border-destructive/20 my-4">
-                    <div className="h-16 w-16 rounded-md bg-destructive/10 flex items-center justify-center flex-shrink-0">
-                      <Package className="h-8 w-8 text-destructive" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium text-lg">
-                        {selectedProduct.name}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        SKU: {selectedProduct.sku} | Category:{" "}
-                        {selectedProduct.category}
-                      </p>
-                    </div>
-                  </div>
-
-                  <DialogFooter className="gap-2 mt-6 flex">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsDeleteDialogOpen(false)}
-                      className="flex-1 hover:bg-background hover-scale-subtle"
-                    >
-                      {t('production-cancel', 'Cancel')}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => handleDeleteProduct(selectedProduct.id)}
-                      disabled={isLoading}
-                      className="flex-1 hover-scale-subtle"
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          {t('production-deleting', 'Deleting...')}
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {t('production-delete-product', 'Delete Product')}
-                        </>
-                      )}
-                    </Button>
-                  </DialogFooter>
-                </motion.div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* View Product Details Dialog */}
-      <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
-        <DialogContent className="sm:max-w-[900px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-6 pt-6 pb-2 border-b">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Eye className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-product-details', "Product Details")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {t('production-product-details-description', "Detailed information about this product.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                {selectedProductDetails && (
-                  <ProductDetailsContent
-                    product={selectedProductDetails}
-                    getProductTypeBadge={getProductTypeBadge}
-                    onEdit={() => {
-                      setIsViewDetailsOpen(false);
-                      setTimeout(
-                        () => openEditDialog(selectedProductDetails),
-                        100
-                      );
-                    }}
-                  />
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Production Line Details Dialog */}
-      <Dialog open={isLineDetailsOpen} onOpenChange={setIsLineDetailsOpen}>
-        <DialogContent className="sm:max-w-[900px] p-0 max-h-[90vh] overflow-hidden">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-6 pt-6 pb-2 border-b">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Factory className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-line-details', "Production Line Details")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {t('production-line-details-description', "View and manage details for this production line.")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                {selectedProductionLine && (
-                  <LineDetailsContent
-                    line={selectedProductionLine}
-                    products={products}
-                    handleToggleLineStatus={handleToggleLineStatus}
-                    handleScheduleMaintenance={() => {
-                      setIsLineDetailsOpen(false);
-                      setTimeout(
-                        () => handleScheduleMaintenance(selectedProductionLine),
-                        100
-                      );
-                    }}
-                    handleAssignProduct={() => {
-                      setIsLineDetailsOpen(false);
-                      setTimeout(
-                        () => handleAssignProduct(selectedProductionLine),
-                        100
-                      );
-                    }}
-                    activeBatches={activeBatches}
-                    efficiencyHistory={efficiencyHistory}
-                    lineUtilization={lineUtilization}
-                    isRealTimeMonitoring={isRealTimeMonitoring}
-                    handleStartNewBatch={handleStartNewBatch}
-                    handleCompleteBatch={handleCompleteBatch}
-                  />
-                )}
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Production Line Dialog */}
-      <Dialog open={isAddLineOpen} onOpenChange={setIsAddLineOpen}>
-        <DialogContent className="sm:max-w-[800px] p-0 max-h-[90vh] overflow-hidden">
+      {/* Add Product Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[900px] p-0 max-h-[95vh] overflow-hidden">
           <AnimatePresence mode="wait">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -2004,160 +1464,30 @@ export const Production = () => {
                   </div>
                   <div>
                     <DialogTitle className="text-xl">
-                      Add Production Line
+                      {selectedProduct ? t('production-edit-product', "Edit Product") : t('production-add-product', "Add New Product")}
                     </DialogTitle>
                     <DialogDescription className="text-sm">
-                      Create a new production line in your manufacturing
-                      facility.
+                      {selectedProduct 
+                        ? t('production-edit-product-description', "Update your product details and specifications.") 
+                        : t('production-add-product-description', "Create a new product for your manufacturing catalog.")}
                     </DialogDescription>
                   </div>
                 </motion.div>
               </DialogHeader>
 
-              <div className="px-6 py-6 overflow-y-auto max-h-[calc(90vh-130px)]">
-                <AddProductionLineForm
-                  onSubmit={(newLine) => {
-                    setIsLoading(true);
-
-                    // Simulate API call
-                    setTimeout(() => {
-                      const line: ProductionLine = {
-                        ...newLine,
-                        id:
-                          Math.max(...productionLines.map((l) => l.id), 0) + 1,
-                        maintenance_history: [],
-                        downtime_incidents: [],
-                        quality_metrics: {
-                          defect_rate: 0.5,
-                          quality_score: 95,
-                          last_inspection: new Date()
-                            .toISOString()
-                            .split("T")[0],
-                        },
-                        alerts: [],
-                      };
-
-                      setProductionLines([...productionLines, line]);
-                      setIsLoading(false);
-                      setIsAddLineOpen(false);
-
-                      toast({
-                        title: "Production line added",
-                        description: `${line.name} has been added successfully.`,
-                        variant: "default",
-                      });
-                    }, 600);
-                  }}
-                  isLoading={isLoading}
-                />
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </DialogContent>
-      </Dialog>
-
-      {/* Schedule Maintenance Dialog */}
-      <Dialog
-        open={isScheduleMaintenanceOpen}
-        onOpenChange={setIsScheduleMaintenanceOpen}
-      >
-        <DialogContent className="sm:max-w-[650px] p-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.3, delay: 0.1 }}
-                  className="flex items-center gap-2"
-                >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Wrench className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <DialogTitle className="text-xl">
-                      {t('production-schedule-maintenance', "Schedule Maintenance")}
-                    </DialogTitle>
-                    <DialogDescription className="text-sm">
-                      {selectedProductionLine
-                        ? t('production-schedule-maintenance-for', "Schedule maintenance for {{line}}", { line: selectedProductionLine.name })
-                        : t('production-schedule-maintenance-generic', "Schedule maintenance for production line")}
-                    </DialogDescription>
-                  </div>
-                </motion.div>
-              </DialogHeader>
-
-              <div className="px-6 py-6">
-                {selectedProductionLine && (
-                  <ScheduleMaintenanceForm
-                    line={selectedProductionLine}
-                    onSubmit={(maintenanceData) => {
-                      setIsLoading(true);
-
-                      // Simulate API call
-                      setTimeout(() => {
-                        const updatedLines = productionLines.map((line) => {
-                          if (line.id === selectedProductionLine.id) {
-                            // Create new maintenance record
-                            const newRecord: MaintenanceRecord = {
-                              id:
-                                Math.max(
-                                  ...(line.maintenance_history.map(
-                                    (m) => m.id
-                                  ) || [0]),
-                                  0
-                                ) + 1,
-                              date: maintenanceData.date,
-                              type: maintenanceData.type,
-                              technician: maintenanceData.technician,
-                              duration: maintenanceData.duration,
-                              notes: maintenanceData.notes,
-                            };
-
-                            // Update line status if maintenance starts now
-                            const status = maintenanceData.startNow
-                              ? "Maintenance"
-                              : line.status;
-
-                            return {
-                              ...line,
-                              status: status as
-                                | "Active"
-                                | "Maintenance"
-                                | "Idle"
-                                | "Setup"
-                                | "Offline",
-                              maintenance_history: [
-                                newRecord,
-                                ...line.maintenance_history,
-                              ],
-                              next_maintenance: maintenanceData.date,
-                              // If maintenance starts now, set efficiency to 0
-                              efficiency:
-                                status === "Maintenance" ? 0 : line.efficiency,
-                            };
-                          }
-                          return line;
-                        });
-
-                        setProductionLines(updatedLines);
-                        setIsLoading(false);
-                        setIsScheduleMaintenanceOpen(false);
-
-                        toast({
-                          title: t('production-maintenance-scheduled', "Maintenance scheduled"),
-                          description: t('production-maintenance-scheduled-description', "Maintenance for {{line}} has been scheduled for {{date}}.", 
-                            { line: selectedProductionLine.name, date: maintenanceData.date }),
-                          variant: "default",
-                        });
-                      }, 600);
-                    }}
-                    onCancel={() => setIsScheduleMaintenanceOpen(false)}
+              <div className="px-6 py-6 overflow-y-auto max-h-[calc(95vh-130px)]">
+                {/* Conditionally render appropriate form component based on product type */}
+                {selectedProduct?.productType === "Food Product" ? (
+                  <ProductFormFoodBeverage
+                    product={selectedProduct as any}
+                    onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
+                    isLoading={isLoading}
+                    parentCategory="Food & Beverage"
+                  />
+                ) : (
+                  <ProductForm
+                    product={selectedProduct as any}
+                    onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
                     isLoading={isLoading}
                   />
                 )}
@@ -2167,15 +1497,72 @@ export const Production = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Assign Product Dialog */}
-      <Dialog open={isAssignProductOpen} onOpenChange={setIsAssignProductOpen}>
-        <DialogContent className="sm:max-w-[650px] p-0">
+      {/* Delete Product Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-lg border-destructive/20">
           <AnimatePresence mode="wait">
             <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <DialogHeader>
+                <DialogTitle className="flex items-center text-destructive">
+                  <Trash2 className="mr-2 h-5 w-5 text-destructive" />
+                  {t('production-delete-product', "Delete Product")}
+                </DialogTitle>
+                <DialogDescription className="text-foreground/80">
+                  {t('production-delete-product-confirmation', "Are you sure you want to delete '{{product}}'? This action cannot be undone.", 
+                    { product: selectedProduct?.name })}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="p-4 mt-2 rounded-md bg-destructive/10 border border-destructive/20">
+                <div className="flex items-center gap-3 text-foreground">
+                  <AlertTriangle className="h-5 w-5 text-destructive" />
+                  <div>
+                    <p className="font-medium">Warning: This action is irreversible</p>
+                    <p className="text-sm text-foreground/80">All product data will be permanently deleted</p>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter className="flex justify-end space-x-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsDeleteDialogOpen(false)}
+                  disabled={isLoading}
+                >
+                  {t('production-cancel', "Cancel")}
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => selectedProduct && handleDeleteProduct(selectedProduct.id)}
+                  disabled={isLoading}
+                  className="flex items-center bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                >
+                  {isLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="mr-2 h-4 w-4" />
+                  )}
+                  {t('production-delete', "Delete")}
+                </Button>
+              </DialogFooter>
+            </motion.div>
+          </AnimatePresence>
+        </DialogContent>
+      </Dialog>
+
+      {/* Product Details Dialog */}
+      <Dialog open={isProductDetailsOpen} onOpenChange={setIsProductDetailsOpen}>
+        <DialogContent className="sm:max-w-[1200px] p-0 scrollable-dialog-content">
+          <AnimatePresence mode="wait">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-col h-full"
             >
               <DialogHeader className="px-6 pt-6 pb-2 border-b sticky top-0 z-10 bg-background/95 backdrop-blur-sm">
                 <motion.div
@@ -2185,61 +1572,28 @@ export const Production = () => {
                   className="flex items-center gap-2"
                 >
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Package className="h-4 w-4 text-primary" />
+                    <Eye className="h-4 w-4 text-primary" />
                   </div>
                   <div>
                     <DialogTitle className="text-xl">
-                      {t('production-assign-product', "Assign Product")}
+                      {t('production-product-details', "Product Details")}
                     </DialogTitle>
                     <DialogDescription className="text-sm">
-                      {selectedProductionLine
-                        ? t('production-assign-product-to', "Assign a product to {{line}}", { line: selectedProductionLine.name })
-                        : t('production-assign-product-generic', "Assign a product to production line")}
+                      {selectedProduct?.name}
                     </DialogDescription>
                   </div>
                 </motion.div>
               </DialogHeader>
 
-              <div className="px-6 py-6">
-                {selectedProductionLine && (
-                  <AssignProductForm
-                    productionLine={selectedProductionLine}
-                    products={products}
-                    onSubmit={(productId) => {
-                      setIsLoading(true);
-
-                      // Find the selected product
-                      const selectedProduct = products.find(
-                        (p) => p.id === productId
-                      );
-
-                      // Simulate API call
-                      setTimeout(() => {
-                        const updatedLines = productionLines.map((line) => {
-                          if (line.id === selectedProductionLine.id) {
-                            return {
-                              ...line,
-                              product: selectedProduct
-                                ? selectedProduct.name
-                                : "N/A",
-                            };
-                          }
-                          return line;
-                        });
-
-                        setProductionLines(updatedLines);
-                        setIsLoading(false);
-                        setIsAssignProductOpen(false);
-
-                        toast({
-                          title: t('production-product-assigned', "Product assigned"),
-                          description: t('production-product-assigned-description', "{{product}} has been assigned to {{line}}.", 
-                            { product: selectedProduct?.name || t('production-generic-product', "Product"), line: selectedProductionLine.name }),
-                          variant: "default",
-                        });
-                      }, 600);
+              <div className="dialog-body">
+                {selectedProduct && (
+                  <ProductDetailsContent
+                    product={selectedProduct}
+                    getProductTypeBadge={getProductTypeBadge}
+                    onEdit={() => {
+                      setIsProductDetailsOpen(false);
+                      openEditDialog(selectedProduct);
                     }}
-                    isLoading={isLoading}
                   />
                 )}
               </div>
@@ -2264,10 +1618,17 @@ interface ProductsTabProps {
   statusFilter: string;
   setStatusFilter: (status: string) => void;
   categories: string[];
+  availableStatuses: string[];
+  sortBy: string;
+  setSortBy: (sort: string) => void;
+  isReverseSorted: boolean;
+  setIsReverseSorted: (reverse: boolean) => void;
   openEditDialog: (product?: Product) => void;
   openDeleteDialog: (product: Product) => void;
   viewProductDetails: (product: Product) => void;
   getProductTypeBadge: (productType: string) => JSX.Element;
+  getProductStatus: (product: Product) => string;
+  newlyCreatedProductId?: number | null;
 }
 
 const ProductsTab: React.FC<ProductsTabProps> = ({
@@ -2279,10 +1640,17 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   statusFilter,
   setStatusFilter,
   categories,
+  availableStatuses,
+  sortBy,
+  setSortBy,
+  isReverseSorted,
+  setIsReverseSorted,
   openEditDialog,
   openDeleteDialog,
   viewProductDetails,
   getProductTypeBadge,
+  getProductStatus,
+  newlyCreatedProductId,
 }) => {
   const { t } = useTranslation();
   const [animateCards, setAnimateCards] = useState(false);
@@ -2294,93 +1662,186 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
     return () => clearTimeout(timer);
   }, [products.length]);
 
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+    setSortBy('name-asc');
+    setIsReverseSorted(false);
+  };
+
+  const hasActiveFilters = searchQuery || categoryFilter !== 'all' || statusFilter !== 'all' || sortBy !== 'name-asc' || isReverseSorted;
+
   return (
     <div className="space-y-6">
-      {/* Filters and Search */}
+      {/* Enhanced Filters and Search */}
       <motion.div
-        className="flex flex-col sm:flex-row justify-between space-y-4 sm:space-y-0 sm:space-x-4"
+        className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
       >
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 w-full form-field-animation hover:border-muted-foreground/50"
-          />
-        </div>
+        {/* Left group: search & filters */}
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full lg:flex-1">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products, ingredients, features..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-full form-field-animation hover:border-muted-foreground/50"
+            />
+          </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2">
+          {/* Category Filter */}
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-full sm:w-[180px] form-field-animation hover:border-muted-foreground/50">
-              <SelectValue placeholder="Select category" />
+            <SelectTrigger className="w-full sm:w-[200px] form-field-animation hover:border-muted-foreground/50">
+              <SelectValue placeholder="Select Category" />
             </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
+            <SelectContent side="bottom" className="max-h-[300px]">
+              <SelectItem value="all" className="font-medium">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  {t('production-all-categories', 'All Categories')}
+                </div>
+              </SelectItem>
+              <SelectSeparator />
+              {categories.slice(1).map((category) => (
                 <SelectItem key={category} value={category}>
-                  {category === "all" ? t('production-all-categories', "All Categories") : category}
+                  <div className="flex items-center gap-2">
+                    {category.includes('Food') && <Wheat className="h-4 w-4 text-green-600" />}
+                    {category.includes('Natural') && <Leaf className="h-4 w-4 text-green-600" />}
+                    {category.includes('Health') && <Activity className="h-4 w-4 text-blue-600" />}
+                    {category.includes('Packaging') && <Package2 className="h-4 w-4 text-purple-600" />}
+                    {category.includes('Beverage') && <Package className="h-4 w-4 text-cyan-600" />}
+                    {category.includes('Industrial') && <Factory className="h-4 w-4 text-gray-600" />}
+                    {category.includes('Chemical') && <Beaker className="h-4 w-4 text-orange-600" />}
+                    {category.includes('Medical') && <Award className="h-4 w-4 text-red-600" />}
+                    {category.includes('Electronic') && <Zap className="h-4 w-4 text-yellow-600" />}
+                    {category.includes('Sustainable') && <Leaf className="h-4 w-4 text-green-600" />}
+                    {!category.includes('Food') && !category.includes('Natural') && !category.includes('Health') && 
+                     !category.includes('Packaging') && !category.includes('Beverage') && !category.includes('Industrial') && 
+                     !category.includes('Chemical') && !category.includes('Medical') && !category.includes('Electronic') && 
+                     !category.includes('Sustainable') && <Tag className="h-4 w-4 text-muted-foreground" />}
+                    <span>{category}</span>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
+          {/* Status Filter */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[180px] form-field-animation hover:border-muted-foreground/50">
-              <SelectValue placeholder="Select status" />
+            <SelectTrigger className="w-full sm:w-[260px] form-field-animation hover:border-muted-foreground/50 overflow-hidden whitespace-nowrap">
+              <SelectValue placeholder="Select Status" className="truncate" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('production-all-statuses', "All Statuses")}</SelectItem>
-              <SelectItem value="Active">{t('production-active', 'Active')}</SelectItem>
-              <SelectItem value="Maintenance">{t('production-maintenance', 'Maintenance')}</SelectItem>
-              <SelectItem value="Idle">{t('production-idle', 'Idle')}</SelectItem>
-              <SelectItem value="Setup">{t('production-setup', 'Setup')}</SelectItem>
-              <SelectItem value="Offline">{t('production-offline', 'Offline')}</SelectItem>
+            <SelectContent side="bottom" className="max-h-[300px] min-w-full">
+              {DETAILED_PRODUCT_STATUSES.filter(status => 
+                status.value === 'all' || availableStatuses.includes(status.value)
+              ).map((status) => (
+                <SelectItem key={status.value} value={status.value}>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      {status.value === 'all' && <Package className="h-4 w-4" />}
+                      {status.value.includes('Active') && <CheckCircle className="h-4 w-4 text-green-600" />}
+                      {status.value.includes('Stock') && <AlertTriangle className="h-4 w-4 text-yellow-600" />}
+                      {status.value === 'Out of Stock' && <AlertCircle className="h-4 w-4 text-red-600" />}
+                      {status.value === 'Discontinued' && <X className="h-4 w-4 text-gray-600" />}
+                      {status.value === 'In Development' && <Settings className="h-4 w-4 text-blue-600" />}
+                      {status.value === 'Seasonal' && <Calendar className="h-4 w-4 text-purple-600" />}
+                      {status.value === 'Limited Edition' && <Star className="h-4 w-4 text-yellow-600" />}
+                      {status.value === 'Prototype' && <Beaker className="h-4 w-4 text-orange-600" />}
+                      {status.value === 'Testing' && <Activity className="h-4 w-4 text-blue-600" />}
+                      {status.value === 'Quality Hold' && <Pause className="h-4 w-4 text-red-600" />}
+                      {status.value === 'Maintenance' && <Wrench className="h-4 w-4 text-gray-600" />}
+                      {!status.value.includes('Active') && !status.value.includes('Stock') && 
+                       status.value !== 'Out of Stock' && status.value !== 'Discontinued' && 
+                       status.value !== 'In Development' && status.value !== 'Seasonal' && 
+                       status.value !== 'Limited Edition' && status.value !== 'Prototype' && 
+                       status.value !== 'Testing' && status.value !== 'Quality Hold' && 
+                       status.value !== 'Maintenance' && status.value !== 'all' && 
+                       <InfoIcon className="h-4 w-4 text-muted-foreground" />}
+                      <span className="font-medium">{status.label}</span>
+                    </div>
+                    {status.value !== 'all' && (
+                      <span className="text-xs text-muted-foreground ml-6">
+                        {status.description}
+                      </span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
-          {(searchQuery ||
-            categoryFilter !== "all" ||
-            statusFilter !== "all") && (
+          {/* Sort By */}
+          <div className="flex items-center gap-1">
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-full sm:w-[180px] form-field-animation hover:border-muted-foreground/50">
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent side="bottom">
+                {SORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Reverse Sort Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsReverseSorted(!isReverseSorted)}
+              className={cn(
+                "p-2 transition-colors",
+                isReverseSorted && "bg-primary text-primary-foreground"
+              )}
+              title={isReverseSorted ? "Normal order" : "Reverse order"}
+            >
+              {isReverseSorted ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
+            </Button>
+          </div>
+
+          {/* Clear Filters */}
+          {hasActiveFilters && (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSearchQuery("");
-                setCategoryFilter("all");
-                setStatusFilter("all");
-              }}
+              onClick={clearAllFilters}
               className="text-xs flex items-center gap-1 hover-scale-subtle"
             >
               <X className="h-3.5 w-3.5" />
-              Clear
+              Clear All
             </Button>
           )}
         </div>
-      </motion.div>
 
-      {/* Create New Product Button */}
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
-      >
-        <Button
-          onClick={() => openEditDialog()}
-          className="w-full sm:w-auto submit-button-hover hover-scale-medium group"
-        >
-          <motion.div
-            initial={{ rotate: 0 }}
-            whileHover={{ rotate: 90 }}
-            transition={{ duration: 0.3 }}
-            className="mr-2"
+        {/* Right group: create button & results count */}
+        <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Results Count */}
+          <div className="text-sm text-muted-foreground">
+            {products.length} {products.length === 1 ? 'product' : 'products'}
+            {hasActiveFilters && ` (filtered)`}
+          </div>
+          
+          <Button
+            onClick={() => openEditDialog()}
+            className="w-full sm:w-auto submit-button-hover hover-scale-medium group"
           >
-            <PlusCircle className="h-4 w-4" />
-          </motion.div>
-          <span>{t('production-create-new-product', "Create New Product")}</span>
-        </Button>
+            <motion.div
+              initial={{ rotate: 0 }}
+              whileHover={{ rotate: 90 }}
+              transition={{ duration: 0.3 }}
+              className="mr-2"
+            >
+              <PlusCircle className="h-4 w-4" />
+            </motion.div>
+            <span>{t('production-create-new-product', 'Create New Product')}</span>
+          </Button>
+        </div>
       </motion.div>
 
       {/* Products Grid */}
@@ -2408,17 +1869,13 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
             >
               <h3 className="text-xl font-medium mb-2">{t('production-no-products-found', "No products found")}</h3>
               <p className="text-muted-foreground max-w-md">
-                {searchQuery ||
-                categoryFilter !== "all" ||
-                statusFilter !== "all"
+                {hasActiveFilters
                   ? t('production-adjust-search', "Try adjusting your search criteria or filters to find what you're looking for.")
                   : t('production-start-create', "Start by creating your first product using the button above.")}
               </p>
             </motion.div>
 
-            {(searchQuery ||
-              categoryFilter !== "all" ||
-              statusFilter !== "all") && (
+            {hasActiveFilters && (
               <motion.div
                 initial={{ y: 10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
@@ -2427,14 +1884,10 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setCategoryFilter("all");
-                    setStatusFilter("all");
-                  }}
+                  onClick={clearAllFilters}
                   className="mt-2 hover-scale-subtle"
                 >
-                  Clear Filters
+                  Clear All Filters
                 </Button>
               </motion.div>
             )}
@@ -2467,12 +1920,27 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                 }
                 className="group"
               >
-                <Card className="overflow-hidden card-hover-effect border border-muted-foreground/20 bg-background/60 backdrop-blur-sm">
+                <Card className={cn(
+                  "overflow-hidden card-hover-effect border border-muted-foreground/20 bg-background/60 backdrop-blur-sm",
+                  newlyCreatedProductId === product.id && "ring-2 ring-primary ring-opacity-50 shadow-lg border-primary/50 bg-primary/5"
+                )}>
                   <CardHeader className="p-0">
                     <div
                       className="aspect-video w-full bg-muted relative group cursor-pointer overflow-hidden"
                       onClick={() => viewProductDetails(product)}
                     >
+                      {newlyCreatedProductId === product.id && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="absolute top-2 right-2 z-10"
+                        >
+                          <Badge className="bg-primary text-primary-foreground shadow-md">
+                            <Star className="h-3 w-3 mr-1" />
+                            New
+                          </Badge>
+                        </motion.div>
+                      )}
                       {product.image ? (
                         <motion.img
                           src={product.image}
@@ -2503,7 +1971,6 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                           <h3 className="text-white font-medium truncate">
                             {product.name}
                           </h3>
-                          {getProductTypeBadge(product.productType)}
                         </div>
                       </div>
                     </div>
@@ -2519,91 +1986,89 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                         </p>
                       </div>
                       <div className="flex flex-col items-end">
-                        <div className="text-sm font-medium">MOQ</div>
-                        <div className="text-xl font-semibold">
-                          {product.minOrderQuantity}
-                        </div>
+                        <p className="text-lg font-semibold">
+                          ${product.pricePerUnit?.toFixed(2) || '0.00'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          per {product.unitType}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Inventory</span>
-                        <span
-                          className={
-                            product.currentAvailable <
-                            product.minOrderQuantity * 0.5
-                              ? "text-red-500 font-medium"
-                              : product.currentAvailable <
-                                product.minOrderQuantity
-                              ? "text-amber-500 font-medium"
-                              : "text-green-600 font-medium"
+                    {/* Enhanced Status Badge */}
+                    <div className="flex items-center justify-between">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          {
+                            'border-green-500 text-green-700 bg-green-50 dark:bg-green-950/30 dark:text-green-400 dark:border-green-800': getProductStatus(product) === 'Active' || getProductStatus(product) === 'Active - Sustainable',
+                            'border-yellow-500 text-yellow-700 bg-yellow-50 dark:bg-yellow-950/30 dark:text-yellow-400 dark:border-yellow-800': getProductStatus(product) === 'Low Stock' || getProductStatus(product) === 'Below MOQ',
+                            'border-red-500 text-red-700 bg-red-50 dark:bg-red-950/30 dark:text-red-400 dark:border-red-800': getProductStatus(product) === 'Out of Stock',
+                            'border-blue-500 text-blue-700 bg-blue-50 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800': getProductStatus(product) === 'In Development',
+                            'border-gray-500 text-gray-700 bg-gray-50 dark:bg-gray-800/30 dark:text-gray-400 dark:border-gray-700': getProductStatus(product) === 'Discontinued',
                           }
-                        >
-                          {product.currentAvailable} {product.unitType}
-                        </span>
-                      </div>
-                      <Progress
-                        value={
-                          (product.currentAvailable /
-                            (product.minOrderQuantity * 3)) *
-                          100
-                        }
-                        className={`h-1.5 rounded-full ${
-                          product.currentAvailable <
-                          product.minOrderQuantity * 0.5
-                            ? "bg-red-500"
-                            : product.currentAvailable <
-                              product.minOrderQuantity
-                            ? "bg-amber-500"
-                            : "bg-green-600"
-                        }`}
-                      />
+                        )}
+                      >
+                        {getProductStatus(product)}
+                      </Badge>
+                      {product.sustainable && (
+                        <div className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                          <Leaf className="h-3 w-3" />
+                          <span className="text-xs">Eco</span>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex justify-between items-center text-sm">
-                      <div className="text-muted-foreground">
-                        Daily Capacity
+                    {/* Stock and Capacity Info */}
+                    <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                      <div>
+                        <span className="font-medium">Stock:</span> {product.currentAvailable || 0}
                       </div>
-                      <div className="font-medium">
-                        {product.dailyCapacity} {product.unitType}/day
+                      <div>
+                        <span className="font-medium">Capacity:</span> {product.dailyCapacity || 0}/day
                       </div>
+                    </div>
+
+                    {/* Lead Time */}
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">Lead Time:</span> {product.leadTime} {product.leadTimeUnit}
                     </div>
                   </CardContent>
-                  <CardFooter className="p-3 pt-0 flex justify-between border-t border-muted/40 mt-2">
+                  <CardFooter className="p-4 pt-0 flex justify-between">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-primary hover:text-primary-foreground hover:bg-primary hover-scale-subtle transition-all duration-300"
                       onClick={() => viewProductDetails(product)}
+                      className="flex items-center gap-1 hover-scale-subtle"
                     >
-                      <Eye className="h-4 w-4 mr-1" />
-                      Details
+                      <Eye className="h-3.5 w-3.5" />
+                      View Details
                     </Button>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover-scale-subtle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditDialog(product);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 hover-scale-subtle"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openDeleteDialog(product);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[160px]">
+                        <DropdownMenuItem
+                          onClick={() => openEditDialog(product)}
+                          className="flex items-center gap-2"
+                        >
+                          <Edit className="h-4 w-4" />
+                          Edit Product
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openDeleteDialog(product)}
+                          className="flex items-center gap-2 text-destructive dark:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Product
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </CardFooter>
                 </Card>
               </motion.div>
@@ -2615,7 +2080,36 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   );
 };
 
-// ProductionTab Component
+// Define types for production lines and batches and props for ProductionTab
+interface ProductionLine {
+  id: number;
+  name: string;
+  status: string;
+  line_type: string;
+  product: string;
+  efficiency: number;
+  daily_capacity: number | string;
+  next_maintenance: string;
+  last_maintenance?: string;
+  operational_since?: string;
+  operator_assigned: string;
+  total_runtime_hours: number;
+  energy_consumption: number;
+  current_batch?: {
+    id: number;
+    status: string;
+    target_quantity: number;
+    produced_quantity: number;
+  };
+}
+
+interface BatchInfo {
+  id: number;
+  status: string;
+  target_quantity: number;
+  produced_quantity: number;
+}
+
 interface ProductionTabProps {
   productionLines: ProductionLine[];
   products: Product[];
@@ -3269,7 +2763,7 @@ const LineDetailsContent: React.FC<LineDetailsContentProps> = ({
         <Card className="card-hover-effect">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center">
-              <Calendar className="h-4 w-4 mr-2 text-primary/70" />
+              <CalendarCheck className="h-4 w-4 mr-2 text-primary/70" />
               {t('production-next-maintenance', 'Next Maintenance')}
             </CardTitle>
           </CardHeader>
@@ -3979,653 +3473,145 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
-  return (
-    <motion.form
-      onSubmit={handleSubmit}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-      className="space-y-6"
-    >
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">{t('production-create-product-details', 'Product Details')}</h2>
-        <Button 
-          variant="outline" 
-          type="button" 
-          size="sm"
-          onClick={() => setCurrentStep('typeSelection')}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          {t('production-change-type', 'Change Type')}
-        </Button>
-      </div>
-      
+  // Navigate to ProductFormFoodBeverage for Food Products
+  if (currentStep === 'details' && selectedProductType === 'Food Product') {
+    return (
+      <ProductFormFoodBeverage
+        product={product as any}
+        parentCategory="Food & Beverage"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // Navigate to ProductFormNaturalProduct for Natural Products
+  if (currentStep === 'details' && selectedProductType === 'Natural Product') {
+    return (
+      <ProductFormNaturalProduct
+        product={product as any}
+        parentCategory="Natural & Organic"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // Navigate to ProductFormHealthyProduct for Healthy Products
+  if (currentStep === 'details' && selectedProductType === 'Healthy Product') {
+    return (
+      <ProductFormHealthyProduct
+        product={product as any}
+        parentCategory="Health & Wellness"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // Navigate to ProductFormBeverage for Beverage Products
+  if (currentStep === 'details' && selectedProductType === 'Beverage Product') {
+    return (
+      <ProductFormBeverage
+        product={product as any}
+        parentCategory="Beverages"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // Navigate to ProductFormPackaging for Packaging Products
+  if (currentStep === 'details' && selectedProductType === 'Packaging Product') {
+    return (
+      <ProductFormPackaging
+        product={product as any}
+        parentCategory="Packaging"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // Navigate to ProductFormOther for Other Products
+  if (currentStep === 'details' && selectedProductType === 'Other Product') {
+    return (
+      <ProductFormOther
+        product={product as any}
+        parentCategory="Other Products"
+        onSubmit={onSubmit}
+        isLoading={isLoading}
+        onBack={() => setCurrentStep('typeSelection')}
+      />
+    );
+  }
+
+  // For other product types, redirect to separate form
+  if (currentStep === 'details') {
+    return (
       <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.1 }}
+        transition={{ duration: 0.4 }}
+        className="flex flex-col items-center justify-center min-h-[400px] space-y-6"
       >
-        <div className="space-y-2">
-          <Label htmlFor="name" className="text-base">
-            {t('production-product-name', 'Product Name')}
-          </Label>
-          <Input
-            id="name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            placeholder={t('production-enter-product-name', "Enter product name")}
-            className={cn(
-              "enhanced-input form-field-animation",
-              errors.name && "error"
-            )}
-          />
-          {errors.name && (
-            <p className="text-sm text-destructive">{errors.name}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="category" className="text-base">
-            {t('production-category', 'Category')}
-          </Label>
-          <Select
-            name="category"
-            value={formData.category}
-            onValueChange={(value) =>
-              setFormData({ ...formData, category: value })
-            }
-          >
-            <SelectTrigger
-              className={cn(
-                "enhanced-input form-field-animation",
-                errors.category && "error"
-              )}
-            >
-              <SelectValue placeholder={t('production-select-category', "Select a category")} />
-            </SelectTrigger>
-            <SelectContent>
-              {selectedProductType === 'Food Product' ? (
-                <>
-                  <SelectItem value="Soy Sauce">Soy Sauce</SelectItem>
-                  <SelectItem value="Miso">Miso</SelectItem>
-                  <SelectItem value="Tofu">Tofu</SelectItem>
-                  <SelectItem value="Fermented">Fermented Products</SelectItem>
-                  <SelectItem value="Dried Foods">Dried Foods</SelectItem>
-                  <SelectItem value="Condiments">Condiments</SelectItem>
-                  <SelectItem value="Spices">Spices</SelectItem>
-                </>
-              ) : (
-                <>
-              <SelectItem value="Food">{t('production-food', "Food")}</SelectItem>
-              <SelectItem value="Beverage">{t('production-beverage', "Beverage")}</SelectItem>
-              <SelectItem value="Health">{t('production-health', "Health")}</SelectItem>
-              <SelectItem value="Packaging">{t('production-packaging', "Packaging")}</SelectItem>
-              <SelectItem value="Ingredients">{t('production-ingredients', "Ingredients")}</SelectItem>
-              <SelectItem value="Other">{t('production-other', "Other")}</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
-          {errors.category && (
-            <p className="text-sm text-destructive">{errors.category}</p>
-          )}
-        </div>
-      </motion.div>
-
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.2 }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="minOrderQuantity" className="text-base">
-            {t('production-minimum-order', 'Minimum Order Quantity')}
-          </Label>
-          <Input
-            id="minOrderQuantity"
-            name="minOrderQuantity"
-            type="number"
-            value={formData.minOrderQuantity}
-            onChange={handleChange}
-            className={cn(
-              "enhanced-input form-field-animation",
-              errors.minOrderQuantity && "error"
-            )}
-          />
-          {errors.minOrderQuantity && (
-            <p className="text-sm text-destructive">
-              {errors.minOrderQuantity}
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="dailyCapacity" className="text-base">
-            {t('production-daily-capacity', 'Daily Capacity')}
-          </Label>
-          <Input
-            id="dailyCapacity"
-            name="dailyCapacity"
-            type="number"
-            value={formData.dailyCapacity}
-            onChange={handleChange}
-            className={cn(
-              "enhanced-input form-field-animation",
-              errors.dailyCapacity && "error"
-            )}
-          />
-          {errors.dailyCapacity && (
-            <p className="text-sm text-destructive">{errors.dailyCapacity}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="unitType" className="text-base">
-            {t('production-unit-type', 'Unit Type')}
-          </Label>
-          <Select
-            name="unitType"
-            value={formData.unitType}
-            onValueChange={(value) =>
-              setFormData({ ...formData, unitType: value })
-            }
-          >
-            <SelectTrigger
-              className={cn(
-                "enhanced-input form-field-animation",
-                errors.unitType && "error"
-              )}
-            >
-              <SelectValue placeholder={t('production-select-unit-type', 'Select unit type')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="units">{t('production-units', 'units')}</SelectItem>
-              <SelectItem value="boxes">{t('production-boxes', 'Boxes')}</SelectItem>
-              <SelectItem value="bottles">{t('production-bottles', 'Bottles')}</SelectItem>
-              <SelectItem value="kg">{t('production-kilograms', 'Kilograms')}</SelectItem>
-              <SelectItem value="liters">{t('production-liters', 'Liters')}</SelectItem>
-              <SelectItem value="sachets">{t('production-sachets', 'Sachets')}</SelectItem>
-              <SelectItem value="pairs">{t('production-pairs', 'Pairs')}</SelectItem>
-              <SelectItem value="cases">{t('production-cases', 'Cases')}</SelectItem>
-            </SelectContent>
-          </Select>
-          {errors.unitType && (
-            <p className="text-sm text-destructive">{errors.unitType}</p>
-          )}
-        </div>
-      </motion.div>
-
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="currentAvailable" className="text-base">
-            {t('production-current-available', 'Current Available')}
-          </Label>
-          <Input
-            id="currentAvailable"
-            name="currentAvailable"
-            type="number"
-            value={formData.currentAvailable}
-            onChange={handleChange}
-            className="enhanced-input form-field-animation"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="pricePerUnit" className="text-base">
-            {t('production-price-per-unit', 'Price Per Unit ($)')}
-          </Label>
-          <Input
-            id="pricePerUnit"
-            name="pricePerUnit"
-            type="number"
-            step="0.01"
-            value={formData.pricePerUnit}
-            onChange={handleChange}
-            className={cn(
-              "enhanced-input form-field-animation",
-              errors.pricePerUnit && "error"
-            )}
-          />
-          {errors.pricePerUnit && (
-            <p className="text-sm text-destructive">{errors.pricePerUnit}</p>
-          )}
-        </div>
-
-        <div className="space-y-2 flex items-center">
-          <div className="flex-1 pt-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="sustainable"
-                name="sustainable"
-                checked={formData.sustainable}
-                onCheckedChange={(checked) =>
-                  setFormData({ ...formData, sustainable: checked as boolean })
-                }
-              />
-              <label
-                htmlFor="sustainable"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center"
-              >
-                <Zap className="h-4 w-4 mr-2 text-green-600" />
-                Sustainable Product
-              </label>
-            </div>
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+            <Package className="h-8 w-8 text-primary" />
+          </div>
+          <h2 className="text-2xl font-bold text-foreground">
+            {t('production-create-product-form', 'Create Product Form')}
+          </h2>
+          <p className="text-muted-foreground max-w-md">
+            {t('production-form-redirect-description', 'You will be redirected to a specialized form for creating your product.')}
+          </p>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="px-2 py-1 bg-primary/10 rounded-full text-primary font-medium">
+              {selectedProductType}
+            </span>
+            <span>product form</span>
           </div>
         </div>
-      </motion.div>
-
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-3 gap-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.4 }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="leadTime" className="text-base">
-            Lead Time
-          </Label>
-          <Input
-            id="leadTime"
-            name="leadTime"
-            value={formData.leadTime}
-            onChange={handleChange}
-            className="enhanced-input form-field-animation"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="leadTimeUnit" className="text-base">
-            Lead Time Unit
-          </Label>
-          <Select
-            name="leadTimeUnit"
-            value={formData.leadTimeUnit}
-            onValueChange={(value) =>
-              setFormData({ ...formData, leadTimeUnit: value })
-            }
+        
+        <div className="flex gap-3">
+          <Button 
+            variant="outline" 
+            onClick={() => setCurrentStep('typeSelection')}
+            className="flex items-center gap-2"
           >
-            <SelectTrigger className="enhanced-input form-field-animation">
-              <SelectValue placeholder="Select unit" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="days">Days</SelectItem>
-              <SelectItem value="weeks">Weeks</SelectItem>
-              <SelectItem value="months">Months</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </motion.div>
-
-      {/* Food Product specific fields */}
-      {selectedProductType === 'Food Product' && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-          className="space-y-6 border-t pt-6 mt-6 bg-primary/5 p-6 rounded-lg"
-        >
-          <h3 className="text-lg font-semibold flex items-center text-primary">
-            <Package className="h-5 w-5 mr-2" />
-            Food Product Details
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-base flex items-center">
-                <span className="bg-primary/10 p-1 rounded-md mr-2">
-                  <Star className="h-4 w-4 text-primary" />
-                </span>
-                Flavor Profile
-              </Label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-                {['salty', 'sweet', 'spicy', 'umami', 'sour'].map(flavor => (
-                  <div key={flavor} className="flex items-center space-x-2">
-              <Checkbox
-                      id={`flavor-${flavor}`}
-                      checked={foodProductData.flavorType.includes(flavor)}
-                      onCheckedChange={() => handleFlavorTypeChange(flavor)}
-                      className="data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                    <Label 
-                      htmlFor={`flavor-${flavor}`}
-                      className="capitalize cursor-pointer hover:text-primary transition-colors"
-                    >
-                      {flavor}
-                    </Label>
-            </div>
-                ))}
-              </div>
-              {errors.flavorType && (
-                <p className="text-sm text-destructive">{errors.flavorType}</p>
-              )}
-            </div>
-            
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="space-y-2">
-                 <Label htmlFor="ingredients" className="text-base flex items-center">
-                   <span className="bg-primary/10 p-1 rounded-md mr-2">
-                     <Layers className="h-4 w-4 text-primary" />
-                   </span>
-                   Ingredients
-                 </Label>
-                 <div className="relative">
-                   <Textarea
-                     id="ingredients"
-                     placeholder="Enter ingredients separated by commas"
-                     className="enhanced-input form-field-animation min-h-[120px] pr-8"
-                     value={foodProductData.ingredients.join(', ')}
-                     onChange={(e) => handleArrayInputChange('ingredients', e.target.value)}
-                   />
-                   <div className="absolute right-3 top-3 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md">
-                     Comma separated
-                   </div>
-                 </div>
-                 {errors.ingredients && (
-                   <p className="text-sm text-destructive">{errors.ingredients}</p>
-                 )}
-                 {foodProductData.ingredients.length > 0 && (
-                   <div className="flex flex-wrap gap-1 mt-2">
-                     {foodProductData.ingredients.map((ingredient, index) => (
-                       <Badge key={index} variant="outline" className="bg-primary/10 hover:bg-primary/20">
-                         {ingredient.trim()}
-                       </Badge>
-                     ))}
-                   </div>
-                 )}
-               </div>
-               
-               <div className="space-y-2">
-                 <Label htmlFor="usage" className="text-base flex items-center">
-                   <span className="bg-primary/10 p-1 rounded-md mr-2">
-                     <FileText className="h-4 w-4 text-primary" />
-                   </span>
-                   Usage Examples
-                 </Label>
-                 <div className="relative">
-                   <Textarea
-                     id="usage"
-                     placeholder="Enter usage examples separated by commas"
-                     className="enhanced-input form-field-animation min-h-[120px] pr-8"
-                     value={foodProductData.usage.join(', ')}
-                     onChange={(e) => handleArrayInputChange('usage', e.target.value)}
-                   />
-                   <div className="absolute right-3 top-3 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md">
-                     Comma separated
-                   </div>
-                 </div>
-                 {foodProductData.usage.length > 0 && (
-                   <div className="flex flex-wrap gap-1 mt-2">
-                     {foodProductData.usage.map((usage, index) => (
-                       <Badge key={index} variant="outline" className="bg-primary/10 hover:bg-primary/20">
-                         {usage.trim()}
-                       </Badge>
-                     ))}
-                   </div>
-                 )}
-               </div>
-             </div>
-            
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-               <div className="space-y-2">
-                 <Label htmlFor="packagingSize" className="text-base flex items-center">
-                   <span className="bg-primary/10 p-1 rounded-md mr-2">
-                     <Package className="h-4 w-4 text-primary" />
-                   </span>
-                   Packaging Size
-                 </Label>
-                 <div className="relative">
-                   <Input
-                     id="packagingSize"
-                     name="packagingSize"
-                     value={foodProductData.packagingSize}
-                     onChange={handleFoodProductChange}
-                     placeholder="e.g. 250g, 1L, 500mL"
-                     className={cn(
-                       "enhanced-input form-field-animation pl-10",
-                       errors.packagingSize && "error"
-                     )}
-                   />
-                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-primary/60">
-                     <Tag className="h-4 w-4" />
-                   </div>
-                 </div>
-                 {errors.packagingSize && (
-                   <p className="text-sm text-destructive">{errors.packagingSize}</p>
-                 )}
-                 
-                 <div className="flex flex-wrap gap-2 mt-3">
-                   {['100g', '250g', '500g', '1kg', '5L'].map((size) => (
-                     <Button
-                       key={size}
-                       type="button"
-                       variant="outline"
-                       size="sm"
-                       className={cn(
-                         "bg-muted/50 hover:bg-primary/10 hover:text-primary",
-                         foodProductData.packagingSize === size && "bg-primary/10 text-primary border-primary/30"
-                       )}
-                       onClick={() => setFoodProductData({...foodProductData, packagingSize: size})}
-                     >
-                       {size}
-                     </Button>
-                   ))}
-                 </div>
-               </div>
-               
-               <div className="space-y-2">
-                 <Label htmlFor="shelfLife" className="text-base flex items-center">
-                   <span className="bg-primary/10 p-1 rounded-md mr-2">
-                     <Calendar className="h-4 w-4 text-primary" />
-                   </span>
-                   Shelf Life
-                 </Label>
-                 <div className="relative">
-                   <Input
-                     id="shelfLife"
-                     name="shelfLife"
-                     value={foodProductData.shelfLife}
-                     onChange={handleFoodProductChange}
-                     placeholder="e.g. 12 months, 2 years"
-                     className={cn(
-                       "enhanced-input form-field-animation pl-10",
-                       errors.shelfLife && "error"
-                     )}
-                   />
-                   <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-primary/60">
-                     <Clock className="h-4 w-4" />
-                   </div>
-                 </div>
-                 {errors.shelfLife && (
-                   <p className="text-sm text-destructive">{errors.shelfLife}</p>
-                 )}
-                 
-                 <div className="flex flex-wrap gap-2 mt-3">
-                   {['6 months', '1 year', '18 months', '2 years', '3 years'].map((duration) => (
-                     <Button
-                       key={duration}
-                       type="button"
-                       variant="outline"
-                       size="sm"
-                       className={cn(
-                         "bg-muted/50 hover:bg-primary/10 hover:text-primary",
-                         foodProductData.shelfLife === duration && "bg-primary/10 text-primary border-primary/30"
-                       )}
-                       onClick={() => setFoodProductData({...foodProductData, shelfLife: duration})}
-                     >
-                       {duration}
-                     </Button>
-                   ))}
-                 </div>
-               </div>
-             </div>
-            
-                         <div className="space-y-2">
-               <Label htmlFor="manufacturerRegion" className="text-base">
-                 Manufacturing Region
-               </Label>
-               <Select
-                 name="manufacturerRegion"
-                 value={foodProductData.manufacturerRegion}
-                 onValueChange={(value) =>
-                   setFoodProductData({ ...foodProductData, manufacturerRegion: value })
-                 }
-               >
-                 <SelectTrigger className="enhanced-input form-field-animation">
-                   <SelectValue placeholder="Select manufacturing region" />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="Asia">Asia</SelectItem>
-                   <SelectItem value="North America">North America</SelectItem>
-                   <SelectItem value="Europe">Europe</SelectItem>
-                   <SelectItem value="South America">South America</SelectItem>
-                   <SelectItem value="Africa">Africa</SelectItem>
-                   <SelectItem value="Australia">Australia</SelectItem>
-                 </SelectContent>
-               </Select>
-          </div>
-        </div>
-      </motion.div>
-      )}
-
-      <motion.div
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.6 }}
-      >
-        <div className="space-y-2">
-          <Label htmlFor="description" className="text-base">
-            Description
-          </Label>
-          <Textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Enter product description"
-            className={cn(
-              "h-[120px] enhanced-input form-field-animation",
-              errors.description && "error"
-            )}
-          />
-          {errors.description && (
-            <p className="text-sm text-destructive">{errors.description}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-base">Product Image</Label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            className="hidden"
-          />
-
-          <motion.div
-            className={cn(
-              "image-upload-area w-full h-[120px] border-2 border-dashed rounded-md flex flex-col items-center justify-center cursor-pointer",
-              isDragging
-                ? "border-primary bg-primary/5"
-                : formData.image
-                ? "border-primary/30 bg-primary/5"
-                : "border-muted-foreground/25 hover:border-primary/30 hover:bg-primary/5"
-            )}
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            whileHover={{ y: -5 }}
-            transition={{ type: "spring", stiffness: 500, damping: 15 }}
+            <ArrowLeft className="h-4 w-4" />
+            {t('production-back-to-selection', 'Back to Selection')}
+          </Button>
+          <Button 
+            onClick={() => {
+              // Here you would navigate to the separate form
+              // For now, we'll show a coming soon message
+              toast({
+                title: "Coming Soon",
+                description: `Specialized form for ${selectedProductType} is under development.`,
+              });
+            }}
+            className="flex items-center gap-2"
           >
-            {formData.image ? (
-              <div className="relative w-full h-full">
-                <img
-                  src={formData.image}
-                  alt="Product preview"
-                  className="w-full h-full object-contain p-2"
-                />
-                <div className="absolute inset-0 bg-black/0 hover:bg-black/60 transition-all flex items-center justify-center opacity-0 hover:opacity-100">
-                  <p className="text-white text-sm font-medium">
-                    Click or drop to change
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <motion.div
-                  className="upload-icon-animation text-primary/60"
-                  animate={{ y: [0, -5, 0] }}
-                  transition={{
-                    duration: 2,
-                    repeat: Infinity,
-                    repeatType: "loop",
-                  }}
-                >
-                  <UploadCloud className="h-8 w-8 mb-2" />
-                </motion.div>
-                <p className="text-sm text-muted-foreground">
-                  Click or drag & drop an image
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PNG, JPG or GIF up to 5MB
-                </p>
-              </>
-            )}
-          </motion.div>
+            <Package className="h-4 w-4" />
+            {t('production-open-form', 'Open Form')}
+          </Button>
         </div>
       </motion.div>
+    );
+  }
 
-      <motion.div
-        className="flex justify-end mt-6 space-x-2"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.7 }}
-      >
-        <Button
-          type="submit"
-          disabled={isLoading || submitLoading}
-          className="submit-button-hover hover-scale-subtle"
-        >
-          {isLoading || submitLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {product ? "Updating..." : "Creating..."}
-            </>
-          ) : (
-            <>
-              <Save className="mr-2 h-4 w-4" />
-              {product ? "Update Product" : "Create Product"}
-            </>
-          )}
-        </Button>
-      </motion.div>
-    </motion.form>
-  );
+  return null;
 };
 
 // AddProductionLineForm Component
 interface AddProductionLineFormProps {
-  onSubmit: (
-    newLine: Omit<
-      ProductionLine,
-      | "id"
-      | "maintenance_history"
-      | "downtime_incidents"
-      | "quality_metrics"
-      | "alerts"
-    >
-  ) => void;
+  onSubmit: (newLine: Omit<ProductionLine, "id">) => void;
   isLoading: boolean;
 }
 
@@ -5370,22 +4356,6 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
             </p>
           </div>
         </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onEdit}
-            className="hover-scale-subtle"
-          >
-            <Edit className="h-4 w-4 mr-2" />
-            Edit Product
-          </Button>
-        </motion.div>
       </div>
 
       <motion.div
@@ -5565,6 +4535,124 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* Product Type Specific Data */}
+      {product.foodProductData && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <Card className="card-hover-effect">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center">
+                <Wheat className="h-5 w-5 mr-2 text-primary" />
+                Food Product Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                {product.foodProductData.flavorType && product.foodProductData.flavorType.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Flavor Types</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {product.foodProductData.flavorType.map((flavor, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {flavor}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {product.foodProductData.ingredients && product.foodProductData.ingredients.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Ingredients</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {product.foodProductData.ingredients.map((ingredient, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {ingredient}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {product.foodProductData.allergens && product.foodProductData.allergens.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Allergens</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {product.foodProductData.allergens.map((allergen, index) => (
+                        <Badge key={index} variant="destructive" className="text-xs">
+                          {allergen}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {product.foodProductData.usage && product.foodProductData.usage.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Usage</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {product.foodProductData.usage.map((use, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {use}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {product.foodProductData.packagingSize && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Packaging Size</h4>
+                    <p className="font-medium">{product.foodProductData.packagingSize}</p>
+                  </div>
+                )}
+                
+                {product.foodProductData.shelfLife && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Shelf Life</h4>
+                    <p className="font-medium">{product.foodProductData.shelfLife}</p>
+                  </div>
+                )}
+                
+                {product.foodProductData.manufacturerRegion && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Manufacturer Region</h4>
+                    <p className="font-medium">{product.foodProductData.manufacturerRegion}</p>
+                  </div>
+                )}
+                
+                {product.foodProductData.foodType && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground">Food Type</h4>
+                    <p className="font-medium">{product.foodProductData.foodType}</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Actions */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.5 }}
+        className="flex justify-end gap-3"
+      >
+        <Button
+          variant="outline"
+          onClick={onEdit}
+          className="hover-scale-subtle"
+        >
+          <Edit className="h-4 w-4 mr-2" />
+          Edit Product
+        </Button>
       </motion.div>
     </div>
   );

@@ -43,7 +43,7 @@ import {
   Trash2,
   SlidersHorizontal,
   X,
-  Loader,
+  LoaderCircle,
   Calendar as CalendarIcon,
   Download,
   Save,
@@ -294,7 +294,7 @@ const SearchSection = () => {
                 )}
               </Button>
             </SheetTrigger>
-            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto no-scrollbar">
+            <SheetContent className="w-[400px] sm:w-[540px] overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>Advanced Filters</SheetTitle>
                 <SheetDescription>
@@ -537,7 +537,7 @@ const SearchSection = () => {
                   onChange={handleSearchChange}
                 />
                 {isLoading ? (
-                  <Loader className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+                  <LoaderCircle className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
                 ) : (
                   <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 )}
@@ -566,7 +566,7 @@ const SearchSection = () => {
               </div>
               <Button type="submit" className="flex-shrink-0" disabled={isLoading}>
                 {isLoading ? (
-                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                  <LoaderCircle className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Search className="h-4 w-4 mr-2" />
                 )}
