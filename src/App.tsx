@@ -94,8 +94,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 const queryClient = new QueryClient();
 
 // Hardcode Client ID tạm thời để test
-const GOOGLE_CLIENT_ID = "";
-
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 // console.log("Google Client ID:", GOOGLE_CLIENT_ID);
 
 const App = () => (

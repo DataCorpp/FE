@@ -96,7 +96,7 @@ const SignInForm = () => {
           
           // API URL để xử lý Google OAuth
           const apiBaseUrl = 'http://localhost:3000/api'; // Backend API URL
-          console.log('API URL being used:', `${apiBaseUrl}/users/google-login`);
+          // console.log('API URL being used:', `${apiBaseUrl}/users/google-login`);
           
           // Send token to backend for verification and login/signup
           const backendResponse = await axios.post(
@@ -113,12 +113,12 @@ const SignInForm = () => {
           );
           
           // Log response để debug
-          console.log('Backend response:', backendResponse.data);
+          // console.log('Backend response:', backendResponse.data);
           
           // Destructure dữ liệu từ response
           const { isNewUser, ...userData } = backendResponse.data;
           
-          console.log('User data:', { email: userInfo.email, role: userData.role, isNewUser });
+          // console.log('User data:', { email: userInfo.email, role: userData.role, isNewUser });
           
           // Lấy thông tin user từ session đã được thiết lập bởi backend
           try {
@@ -126,7 +126,7 @@ const SignInForm = () => {
             const userResponse = await axios.get(`${apiBaseUrl}/users/me`, {
               withCredentials: true
             });
-            console.log("Current user from session:", userResponse.data);
+            // console.log("Current user from session:", userResponse.data);
             
             // Handle login with the user context - sử dụng thông tin từ response ban đầu
             await login(userData.email, "", userData.role, true);
@@ -223,7 +223,7 @@ const SignInForm = () => {
     });
     
     // Log URI để debug
-    console.log('Using redirect URI:', redirectUri);
+    // console.log('Using redirect URI:', redirectUri);
     
     // Tính toán vị trí popup để hiển thị ở giữa màn hình
     const width = 500;

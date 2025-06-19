@@ -111,7 +111,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       
       if (password === "" && useSession) {
         // OAuth login case - use the session data from backend
-        console.log("OAuth login flow - checking current user from session");
+        // console.log("OAuth login flow - checking current user from session");
         response = await authApi.getCurrentUser();
       } else {
         // Normal login with password
