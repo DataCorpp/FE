@@ -40,9 +40,9 @@
 </head>
 <body>
   <div class="container">
-    <h2>Đăng nhập Google</h2>
+    <h2>Login Google</h2>
     <div class="loader"></div>
-    <p class="message">Xác thực thành công. Đang chuyển hướng...</p>
+    <p class="message">Login successful. Redirecting...</p>
   </div>
 
   <script>
@@ -83,15 +83,14 @@
             window.close();
           }, 1000);
         } else {
-          document.querySelector('.message').textContent = 'Xác thực thất bại. Vui lòng thử lại.';
-          // Đóng popup sau khi hiển thị thông báo lỗi
+          document.querySelector('.message').textContent = 'Login failed. Please try again.';
           setTimeout(() => {
             window.close();
           }, 2000);
         }
       } catch (error) {
         console.error('Error in callback:', error);
-        document.querySelector('.message').textContent = 'Đã xảy ra lỗi trong quá trình xác thực.';
+        document.querySelector('.message').textContent = 'An error occurred during authentication.';
         // Đóng popup
         setTimeout(() => {
           window.close();

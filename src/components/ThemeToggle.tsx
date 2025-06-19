@@ -10,6 +10,16 @@ import {
 } from "@/components/ui/tooltip";
 import { useEffect, useState } from "react";
 
+// Add CSS variables for improved dark mode visibility
+const darkModeStyles = `
+  :root[class~="dark"] {
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --destructive-border: 0 72% 51%;
+    --destructive-hover: 0 84% 65%;
+  }
+`;
+
 // Animation variants
 const toggleVariants = {
   light: {
@@ -45,6 +55,30 @@ const ThemeToggle = () => {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
+
+  // Add dark mode styles when theme changes
+  useEffect(() => {
+    // Create or update style element for dark mode enhancements
+    let styleEl = document.getElementById('dark-mode-enhancements');
+    
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = 'dark-mode-enhancements';
+      document.head.appendChild(styleEl);
+    }
+    
+    if (isDark) {
+      styleEl.textContent = darkModeStyles;
+    } else {
+      styleEl.textContent = '';
+    }
+    
+    return () => {
+      if (styleEl && styleEl.parentNode) {
+        styleEl.parentNode.removeChild(styleEl);
+      }
+    };
+  }, [isDark]);
 
   // Function to handle theme toggle with animation
   const handleToggle = () => {

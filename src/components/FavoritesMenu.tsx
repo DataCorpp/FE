@@ -82,9 +82,11 @@ const FavoritesMenu = () => {
     }
   }, [totalFavorites]);
 
-  const viewProductDetails = (productId: number) => {
+  const viewProductDetails = (productId: string | number | undefined) => {
     setIsOpen(false);
-    navigate(`/products?productId=${productId}`);
+    if (productId !== undefined) {
+      navigate(`/products?productId=${productId}`);
+    }
   };
 
   const viewManufacturerDetails = (manufacturer: Manufacturer) => {

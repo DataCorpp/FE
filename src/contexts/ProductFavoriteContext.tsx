@@ -17,12 +17,14 @@ interface ProductFavoriteContextProps {
   favorites: Product[];
   isFavorite: (id: string | number | undefined) => boolean;
   toggleFavorite: (product: Product) => void;
+  clearFavorites: () => void;
 }
 
 const ProductFavoriteContext = createContext<ProductFavoriteContextProps>({
   favorites: [],
   isFavorite: () => false,
   toggleFavorite: () => {},
+  clearFavorites: () => {},
 });
 
 export const useProductFavorites = () => useContext(ProductFavoriteContext);
@@ -64,8 +66,14 @@ export const ProductFavoriteProvider: React.FC<{ children: React.ReactNode }> = 
     }
   };
 
+  // Clear all favorite products
+  const clearFavorites = () => {
+    setFavorites([]);
+    toast.success("All product favorites cleared");
+  };
+
   return (
-    <ProductFavoriteContext.Provider value={{ favorites, isFavorite, toggleFavorite }}>
+    <ProductFavoriteContext.Provider value={{ favorites, isFavorite, toggleFavorite, clearFavorites }}>
       {children}
     </ProductFavoriteContext.Provider>
   );
