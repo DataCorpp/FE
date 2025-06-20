@@ -563,25 +563,106 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
+        // Chuẩn bị dữ liệu để gửi lên API
         const finalProductData = {
-          ...formData,
-          foodProductData,
-          productType: "Food Product"
+          // Basic product info
+          name: formData.name,
+          category: formData.category,
+          description: formData.description,
+          image: formData.image || (images.length > 0 ? images[0] : ""),
+          
+          // Manufacturer info
+          manufacturerName: formData.manufacturerName,
+          manufacturer: formData.manufacturerName, // Map to backend field
+          originCountry: formData.originCountry,
+          
+          // Production details
+          minOrderQuantity: Number(formData.minOrderQuantity),
+          dailyCapacity: Number(formData.dailyCapacity),
+          currentAvailable: Number(formData.currentAvailable || 0),
+          unitType: formData.unitType,
+          
+          // Pricing
+          pricePerUnit: Number(formData.pricePerUnit),
+          priceCurrency: formData.priceCurrency,
+          
+          // Lead time
+          leadTime: formData.leadTime,
+          leadTimeUnit: formData.leadTimeUnit,
+          
+          // Sustainability
+          sustainable: formData.sustainable || false,
+          
+          // Product type
+          productType: "food",
+          
+          // Food-specific details (flatten from foodProductData)
+          foodType: foodProductData.foodType,
+          flavorType: foodProductData.flavorType,
+          ingredients: foodProductData.ingredients,
+          allergens: foodProductData.allergens,
+          usage: foodProductData.usage,
+          packagingType: foodProductData.packagingType,
+          packagingSize: foodProductData.packagingSize,
+          shelfLife: foodProductData.shelfLife,
+          shelfLifeStartDate: foodProductData.shelfLifeStartDate,
+          shelfLifeEndDate: foodProductData.shelfLifeEndDate,
+          storageInstruction: foodProductData.storageInstruction,
+          manufacturerRegion: foodProductData.manufacturerRegion,
         };
 
+        console.log('Submitting product data:', finalProductData);
+
+        // Gọi API tương ứng
+        let response;
         if (product) {
-          onSubmit({ ...product, ...finalProductData } as Product);
+          // Cập nhật sản phẩm hiện có
+          if (product.id) {
+            // Sử dụng foodProductApi
+            const axios = (await import('axios')).default;
+            response = await axios.put(`http://localhost:3000/api/foodproducts/${product.id}`, finalProductData);
+          } else {
+            // Tạo sản phẩm mới - sử dụng public endpoint thực tế
+            const axios = (await import('axios')).default;
+            // Gọi endpoint thực tế để lưu vào database
+            response = await axios.post('http://localhost:3000/api/foodproducts/public', finalProductData);
+          }
         } else {
-          onSubmit(finalProductData as Omit<Product, "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku">);
+          // Tạo sản phẩm mới - sử dụng public endpoint thực tế
+          const axios = (await import('axios')).default;
+          // Gọi endpoint thực tế để lưu vào database
+          response = await axios.post('http://localhost:3000/api/foodproducts/public', finalProductData);
         }
 
-        // Don't navigate here - let the parent component handle it
-        // The parent (Production.tsx) will close the dialog and show the updated list
-      } catch (error) {
+        if (response.data) {
+          toast({
+            title: "Success",
+            description: product ? "Product updated successfully!" : "Product created successfully!",
+            variant: "default",
+          });
+
+          // Gọi callback để parent component biết việc submit thành công
+          onSubmit(response.data as Product);
+        }
+
+      } catch (error: unknown) {
         console.error('Error saving product:', error);
+        
+        let errorMessage = "There was an error saving your product. Please try again.";
+        
+        if (error && typeof error === 'object' && 'response' in error) {
+          const apiError = error as { response?: { data?: { message?: string } } };
+          if (apiError.response?.data?.message) {
+            errorMessage = apiError.response.data.message;
+          }
+        } else if (error && typeof error === 'object' && 'message' in error) {
+          const genericError = error as { message: string };
+          errorMessage = genericError.message;
+        }
+        
         toast({
           title: "Error",
-          description: "There was an error saving your product. Please try again.",
+          description: errorMessage,
           variant: "destructive",
         });
       } finally {

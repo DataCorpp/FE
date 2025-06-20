@@ -970,10 +970,10 @@ export const Production = () => {
 
   // Get unique categories from products with enhanced options
   const categories = useMemo(() => {
-    const productCategories = [...new Set(products.map(p => p.category))];
+    const productCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
     // Combine predefined categories with actual product categories
     const allCategories = ['all', ...new Set([...PRODUCT_CATEGORIES.slice(1), ...productCategories])];
-    return allCategories;
+    return allCategories.filter(category => category && typeof category === 'string');
   }, [products]);
 
   // Get available statuses with enhanced options
@@ -1520,6 +1520,11 @@ interface ProductsTabProps {
   newlyCreatedProductId?: number | null;
 }
 
+// Helper function để kiểm tra category an toàn
+const safeIncludes = (str: any, searchString: string): boolean => {
+  return typeof str === 'string' && str.includes(searchString);
+};
+
 const ProductsTab: React.FC<ProductsTabProps> = ({
   products,
   searchQuery,
@@ -1596,23 +1601,23 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                 </div>
               </SelectItem>
               <SelectSeparator />
-              {categories.slice(1).map((category) => (
+              {categories.slice(1).filter(category => category && typeof category === 'string').map((category) => (
                 <SelectItem key={category} value={category}>
                   <div className="flex items-center gap-2">
-                    {category.includes('Food') && <Wheat className="h-4 w-4 text-green-600" />}
-                    {category.includes('Natural') && <Leaf className="h-4 w-4 text-green-600" />}
-                    {category.includes('Health') && <Activity className="h-4 w-4 text-blue-600" />}
-                    {category.includes('Packaging') && <Package2 className="h-4 w-4 text-purple-600" />}
-                    {category.includes('Beverage') && <Package className="h-4 w-4 text-cyan-600" />}
-                    {category.includes('Industrial') && <Factory className="h-4 w-4 text-gray-600" />}
-                    {category.includes('Chemical') && <Beaker className="h-4 w-4 text-orange-600" />}
-                    {category.includes('Medical') && <Award className="h-4 w-4 text-red-600" />}
-                    {category.includes('Electronic') && <Zap className="h-4 w-4 text-yellow-600" />}
-                    {category.includes('Sustainable') && <Leaf className="h-4 w-4 text-green-600" />}
-                    {!category.includes('Food') && !category.includes('Natural') && !category.includes('Health') && 
-                     !category.includes('Packaging') && !category.includes('Beverage') && !category.includes('Industrial') && 
-                     !category.includes('Chemical') && !category.includes('Medical') && !category.includes('Electronic') && 
-                     !category.includes('Sustainable') && <Tag className="h-4 w-4 text-muted-foreground" />}
+                    {safeIncludes(category, 'Food') && <Wheat className="h-4 w-4 text-green-600" />}
+                    {safeIncludes(category, 'Natural') && <Leaf className="h-4 w-4 text-green-600" />}
+                    {safeIncludes(category, 'Health') && <Activity className="h-4 w-4 text-blue-600" />}
+                    {safeIncludes(category, 'Packaging') && <Package2 className="h-4 w-4 text-purple-600" />}
+                    {safeIncludes(category, 'Beverage') && <Package className="h-4 w-4 text-cyan-600" />}
+                    {safeIncludes(category, 'Industrial') && <Factory className="h-4 w-4 text-gray-600" />}
+                    {safeIncludes(category, 'Chemical') && <Beaker className="h-4 w-4 text-orange-600" />}
+                    {safeIncludes(category, 'Medical') && <Award className="h-4 w-4 text-red-600" />}
+                    {safeIncludes(category, 'Electronic') && <Zap className="h-4 w-4 text-yellow-600" />}
+                    {safeIncludes(category, 'Sustainable') && <Leaf className="h-4 w-4 text-green-600" />}
+                    {!safeIncludes(category, 'Food') && !safeIncludes(category, 'Natural') && !safeIncludes(category, 'Health') && 
+                     !safeIncludes(category, 'Packaging') && !safeIncludes(category, 'Beverage') && !safeIncludes(category, 'Industrial') && 
+                     !safeIncludes(category, 'Chemical') && !safeIncludes(category, 'Medical') && !safeIncludes(category, 'Electronic') && 
+                     !safeIncludes(category, 'Sustainable') && <Tag className="h-4 w-4 text-muted-foreground" />}
                     <span>{category}</span>
                   </div>
                 </SelectItem>

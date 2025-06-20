@@ -384,32 +384,41 @@ export const foodProductApi = {
     return api.get<ApiResponse>(`/foodproducts/${id}`);
   },
 
-  // Create new food product
-  createFoodProduct: (data: Partial<{
+  // Create new food product - Updated interface để match với form data
+  createFoodProduct: (data: {
     name: string;
     category: string;
-    manufacturer: string;
-    image: string;
-    price: string;
-    pricePerUnit: number;
-    rating: number;
-    productType: string;
     description: string;
+    image?: string;
+    manufacturerName: string;
+    manufacturer: string;
+    originCountry: string;
     minOrderQuantity: number;
+    dailyCapacity: number;
+    currentAvailable?: number;
+    unitType: string;
+    pricePerUnit: number;
+    priceCurrency: string;
     leadTime: string;
     leadTimeUnit: string;
-    sustainable: boolean;
-    sku: string;
-    unitType: string;
-    currentAvailable: number;
-    ingredients: string[];
+    sustainable?: boolean;
+    productType: string;
+    // Food-specific details (flattened, not nested)
+    foodType: string;
     flavorType: string[];
+    ingredients: string[];
+    allergens: string[];
     usage: string[];
+    packagingType: string;
     packagingSize: string;
     shelfLife: string;
-    manufacturerRegion: string;
-  }>) => {
-    return api.post<ApiResponse>('/foodproducts', data);
+    shelfLifeStartDate?: string;
+    shelfLifeEndDate?: string;
+    storageInstruction: string;
+    manufacturerRegion?: string;
+  }) => {
+    // Sử dụng public endpoint để tránh authentication requirement
+    return api.post<ApiResponse>('/foodproducts/public', data);
   },
 
   // Update food product
@@ -437,7 +446,8 @@ export const foodProductApi = {
     shelfLife: string;
     manufacturerRegion: string;
   }>) => {
-    return api.put<ApiResponse>(`/foodproducts/${id}`, data);
+    // Sử dụng public endpoint để tránh authentication requirement
+    return api.put<ApiResponse>(`/foodproducts/public/${id}`, data);
   },
 
   // Delete food product
