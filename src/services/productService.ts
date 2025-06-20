@@ -144,7 +144,7 @@ export interface ApiResponse<T> {
 }
 
 class ProductService {
-  private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  private baseUrl = import.meta.env.VITE_API_BASE_URL || '';
 
   // Helper function to get auth header
   private getAuthHeaders() {

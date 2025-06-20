@@ -27,8 +27,7 @@ import { ProductFormPackaging } from '@/components/form/ProductFormPackaging';
 import { ProductFormOther } from '@/components/form/ProductFormOther';
 import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
-import { productApi, foodProductApi } from "@/lib/api";
-import { productService } from "@/services/productService";
+import { productService, type Product as ApiProduct } from "@/services/productService";
 import ManufacturerLayout from "@/components/layouts/ManufacturerLayout";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
@@ -442,26 +441,65 @@ interface ProductData {
 
 // Product interface
 interface Product {
-  id?: number;
+  _id?: string; // MongoDB ObjectId
+  id?: number; // For backwards compatibility with existing UI code
+  user?: string; // User ObjectId
+  
+  // Basic Product fields (matches backend FoodProduct model)
   name: string;
+  brand?: string; // From manufacturerName
   category: string;
-  sku?: string;
+  description: string;
+  price: number; // From pricePerUnit
+  countInStock?: number; // From currentAvailable
+  image: string;
+  rating?: number;
+  numReviews?: number;
+  
+  // Product type identification
+  productType: string;
+  
+  // Extended fields for production (from FoodProduct.ts)
+  manufacturer?: string; // Same as manufacturerName
+  originCountry?: string;
+  manufacturerRegion?: string;
+  
   minOrderQuantity: number;
   dailyCapacity: number;
-  unitType: string;
   currentAvailable: number;
+  unitType: string;
+  
   pricePerUnit: number;
-  productType: string;
-  image: string;
-  createdAt?: string;
-  description: string;
-  updatedAt?: string;
-  lastProduced?: string;
+  priceCurrency?: string;
+  
   leadTime: string;
   leadTimeUnit: string;
-  reorderPoint?: number;
-  rating?: number;
+  
   sustainable: boolean;
+  sku?: string;
+  
+  // Food-specific fields (flattened from foodProductData)
+  foodType?: string;
+  flavorType?: string[];
+  ingredients?: string[];
+  allergens?: string[];
+  usage?: string[];
+  packagingType?: string;
+  packagingSize?: string;
+  shelfLife?: string;
+  shelfLifeStartDate?: Date;
+  shelfLifeEndDate?: Date;
+  storageInstruction?: string;
+  
+  // Production specific fields
+  reorderPoint?: number;
+  lastProduced?: string;
+  
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
+  
+  // Nested product type specific data for backwards compatibility
   foodProductData?: FoodProductData;
   naturalProductData?: NaturalProductData;
   healthyProductData?: HealthyProductData;
@@ -473,11 +511,11 @@ interface Product {
 // Empty products array to be filled from the database
 const initialProducts: Product[] = [];
 
-// Define sort options
+// Define sort options with better typing
 type SortOption = {
   label: string;
   value: string;
-  key: keyof Product | ((product: Product) => any);
+  key: keyof Product | ((product: Product) => string | number);
   direction?: 'asc' | 'desc';
 };
 
@@ -619,7 +657,7 @@ export const Production = () => {
   const [animateCards, setAnimateCards] = useState(false);
   const [sortBy, setSortBy] = useState<string>('name-asc');
   const [isReverseSorted, setIsReverseSorted] = useState(false);
-  const [newlyCreatedProductId, setNewlyCreatedProductId] = useState<number | null>(null);
+  const [newlyCreatedProductId, setNewlyCreatedProductId] = useState<string | null>(null);
 
   // Production line state
   const [productionLines, setProductionLines] = useState<ProductionLine[]>([]);
@@ -711,67 +749,211 @@ export const Production = () => {
   // Fetch products on component mount
   useEffect(() => {
     const fetchProducts = async () => {
+      if (!isAuthenticated || role !== "manufacturer") {
+        return;
+      }
+
       setIsLoading(true);
       try {
-        // Use the product service to fetch products
-        const response = await productService.getProducts();
+        console.log('Fetching products from backend...');
         
-        if (response.success) {
-          setProducts(response.data);
-          console.log('Products loaded successfully:', response.data.length);
+        // Fetch products using the backend API structure
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products?limit=100`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Backend response:', data);
+        
+        // Backend returns { products, page, pages, total }
+        const basicProducts = data.products || [];
+        
+        if (basicProducts.length > 0) {
+          // For each product, fetch detailed information from respective collection
+          const productsWithDetails = await Promise.all(
+            basicProducts.map(async (basicProduct: { _id: string; productName: string; manufacturerName: string; type: string }) => {
+              try {
+                // Get detailed product info using the details endpoint
+                const detailsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
+                  headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+                    'Content-Type': 'application/json',
+                  },
+                });
+                
+                if (detailsResponse.ok) {
+                  const detailsData = await detailsResponse.json();
+                  const productDetails = detailsData.productDetails;
+                  const productRef = detailsData.productReference;
+                  
+                  // Transform combined data to match UI expectations
+                  const transformedProduct: Product = {
+                    // Use reference data for basic info
+                    id: parseInt(basicProduct._id.slice(-8), 16),
+                    _id: basicProduct._id,
+                    name: basicProduct.productName || productRef.productName,
+                    brand: basicProduct.manufacturerName || productRef.manufacturerName,
+                    
+                    // Use details data for specific product info
+                    category: productDetails.category || 'Food Products',
+                    description: productDetails.description || '',
+                    price: productDetails.pricePerUnit || productDetails.price || 0,
+                                         image: productDetails.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+                    productType: productRef.type === 'food' ? 'Food Product' : productRef.type,
+                    
+                    // Production fields from FoodProduct
+                    minOrderQuantity: productDetails.minOrderQuantity || 1000,
+                    dailyCapacity: productDetails.dailyCapacity || 5000,
+                    currentAvailable: productDetails.currentAvailable || 0,
+                    unitType: productDetails.unitType || 'units',
+                    pricePerUnit: productDetails.pricePerUnit || 0,
+                    leadTime: productDetails.leadTime || '1-2',
+                    leadTimeUnit: productDetails.leadTimeUnit || 'weeks',
+                    sustainable: productDetails.sustainable || false,
+                    sku: productDetails.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+                    
+                    // Manufacturing info
+                    manufacturer: productDetails.manufacturer || productRef.manufacturerName,
+                    originCountry: productDetails.originCountry || '',
+                    manufacturerRegion: productDetails.manufacturerRegion || '',
+                    priceCurrency: productDetails.priceCurrency || 'USD',
+                    
+                    // Food-specific fields (if available)
+                    ...(productRef.type === 'food' && {
+                      foodType: productDetails.foodType,
+                      flavorType: productDetails.flavorType || [],
+                      ingredients: productDetails.ingredients || [],
+                      allergens: productDetails.allergens || [],
+                      usage: productDetails.usage || [],
+                      packagingType: productDetails.packagingType,
+                      packagingSize: productDetails.packagingSize,
+                      shelfLife: productDetails.shelfLife,
+                      storageInstruction: productDetails.storageInstruction,
+                      
+                      // Create nested structure for backwards compatibility
+                      foodProductData: {
+                        flavorType: productDetails.flavorType || [],
+                        ingredients: productDetails.ingredients || [],
+                        usage: productDetails.usage || [],
+                        packagingSize: productDetails.packagingSize || '',
+                        shelfLife: productDetails.shelfLife || '',
+                        manufacturerRegion: productDetails.manufacturerRegion || '',
+                        foodType: productDetails.foodType || '',
+                        allergens: productDetails.allergens || [],
+                      }
+                    }),
+                    
+                    // Calculated fields
+                    reorderPoint: Math.floor((productDetails.minOrderQuantity || 1000) * 0.5),
+                    lastProduced: new Date().toISOString(),
+                    
+                    // Timestamps
+                    createdAt: productDetails.createdAt || new Date().toISOString(),
+                    updatedAt: productDetails.updatedAt || new Date().toISOString(),
+                  };
+                  
+                  return transformedProduct;
         } else {
-          throw new Error(response.error || 'Failed to fetch products');
+                  // Fallback to basic product info if details fetch fails
+                  console.warn(`Failed to fetch details for product ${basicProduct._id}`);
+                  return {
+                    id: parseInt(basicProduct._id.slice(-8), 16),
+                    _id: basicProduct._id,
+                    name: basicProduct.productName,
+                    brand: basicProduct.manufacturerName,
+                    category: 'Uncategorized',
+                    description: '',
+                    price: 0,
+                    image: '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+                    productType: basicProduct.type === 'food' ? 'Food Product' : basicProduct.type,
+                    minOrderQuantity: 1000,
+                    dailyCapacity: 5000,
+                    currentAvailable: 0,
+                    unitType: 'units',
+                    pricePerUnit: 0,
+                    leadTime: '1-2',
+                    leadTimeUnit: 'weeks',
+                    sustainable: false,
+                    sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+                    manufacturer: basicProduct.manufacturerName,
+                    reorderPoint: 500,
+                    lastProduced: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                  } as Product;
+                }
+              } catch (error) {
+                console.error(`Error fetching details for product ${basicProduct._id}:`, error);
+                // Return basic product info as fallback
+                return {
+                  id: parseInt(basicProduct._id.slice(-8), 16),
+                  _id: basicProduct._id,
+                  name: basicProduct.productName,
+                  brand: basicProduct.manufacturerName,
+                  category: 'Uncategorized',
+                  description: '',
+                  price: 0,
+                  image: '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+                  productType: basicProduct.type === 'food' ? 'Food Product' : basicProduct.type,
+                  minOrderQuantity: 1000,
+                  dailyCapacity: 5000,
+                  currentAvailable: 0,
+                  unitType: 'units',
+                  pricePerUnit: 0,
+                  leadTime: '1-2',
+                  leadTimeUnit: 'weeks',
+                  sustainable: false,
+                  sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+                  manufacturer: basicProduct.manufacturerName,
+                  reorderPoint: 500,
+                  lastProduced: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                } as Product;
+              }
+            })
+          );
+          
+          setProducts(productsWithDetails);
+          console.log('Products with details loaded successfully:', productsWithDetails.length);
+        } else {
+          setProducts([]);
+          console.log('No products found');
         }
       } catch (error) {
         console.error('Error fetching products:', error);
+        
+        // Check if it's a connection error
+        if (error instanceof Error && error.message.includes('Failed to fetch')) {
+          toast({
+            title: "Backend Server Unavailable",
+            description: "Please ensure the backend server is running on port 3000. Run 'cd BE && npm run dev' in a terminal.",
+            variant: "destructive",
+          });
+        } else {
         toast({
           title: "Error",
           description: "Failed to fetch products. Please try again later.",
           variant: "destructive",
         });
+        }
+        
+        // Set empty array on error
+        setProducts([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    if (isAuthenticated && role === "manufacturer") {
       fetchProducts();
-    }
   }, [isAuthenticated, role, toast]);
-
-  useEffect(() => {
-    document.title = "Product Management - CPG Matchmaker";
-
-    // If not authenticated or not a manufacturer, redirect
-    if (!isAuthenticated) {
-      navigate("/auth?type=signin");
-    } else if (role !== "manufacturer") {
-      navigate("/dashboard");
-    }
-  }, [isAuthenticated, navigate, role]);
-
-  useEffect(() => {
-    // Create style element for hiding scrollbars
-    const styleElement = document.createElement("style");
-    styleElement.innerHTML = styles;
-    document.head.appendChild(styleElement);
-
-    // Cleanup on component unmount
-    return () => {
-      document.head.removeChild(styleElement);
-    };
-  }, []);
-
-  if (!isAuthenticated || role !== "manufacturer") {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p>Loading...</p>
-        </div>
-      </div>
-    );
-  }
 
   // Enhanced search logic - searches multiple fields
   const searchProducts = (products: Product[], query: string): Product[] => {
@@ -788,6 +970,8 @@ export const Production = () => {
         product.category,
         product.productType,
         product.unitType,
+        product.manufacturer,
+        product.brand,
       ].some(field => field?.toLowerCase().includes(searchTerm));
 
       // Price and numeric fields
@@ -798,11 +982,24 @@ export const Production = () => {
         product.minOrderQuantity?.toString(),
       ].some(field => field?.includes(searchTerm));
 
-      // Product type specific data search
+      // Food-specific search
       let specificMatch = false;
-      
-      if (product.foodProductData) {
+      if (product.foodType || product.flavorType || product.ingredients) {
         specificMatch = [
+          product.foodType,
+          ...(product.flavorType || []),
+          ...(product.ingredients || []),
+          ...(product.allergens || []),
+          ...(product.usage || []),
+          product.packagingSize,
+          product.shelfLife,
+          product.manufacturerRegion,
+        ].some(field => field?.toLowerCase().includes(searchTerm));
+      }
+      
+      // Backwards compatibility - search in nested structures
+      if (product.foodProductData) {
+        specificMatch = specificMatch || [
           ...(product.foodProductData.flavorType || []),
           ...(product.foodProductData.ingredients || []),
           ...(product.foodProductData.usage || []),
@@ -812,99 +1009,26 @@ export const Production = () => {
           product.foodProductData.foodType,
         ].some(field => field?.toLowerCase().includes(searchTerm));
       }
-      
-      if (product.naturalProductData) {
-        specificMatch = [
-          ...(product.naturalProductData.naturalType || []),
-          ...(product.naturalProductData.certifications || []),
-          ...(product.naturalProductData.sustainabilityFeatures || []),
-          product.naturalProductData.origin,
-          product.naturalProductData.extractionMethod,
-          product.naturalProductData.purityLevel,
-          product.naturalProductData.environmentalImpact,
-        ].some(field => field?.toLowerCase().includes(searchTerm));
-      }
-
-      if (product.healthyProductData) {
-        specificMatch = [
-          ...(product.healthyProductData.healthBenefits || []),
-          ...(product.healthyProductData.dietaryRestrictions || []),
-          ...(product.healthyProductData.healthCertifications || []),
-          ...(product.healthyProductData.targetHealthGoals || []),
-          ...(product.healthyProductData.allergenInfo || []),
-          product.healthyProductData.supplementFacts,
-          product.healthyProductData.clinicalStudies,
-        ].some(field => field?.toLowerCase().includes(searchTerm));
-      }
-
-      if (product.beverageProductData) {
-        specificMatch = [
-          ...(product.beverageProductData.beverageType || []),
-          ...(product.beverageProductData.flavorProfile || []),
-          ...(product.beverageProductData.ingredients || []),
-          ...(product.beverageProductData.packagingType || []),
-          ...(product.beverageProductData.volumeOptions || []),
-          ...(product.beverageProductData.certifications || []),
-          ...(product.beverageProductData.targetMarket || []),
-          product.beverageProductData.alcoholContent,
-          product.beverageProductData.carbonationLevel,
-          product.beverageProductData.servingTemperature,
-          product.beverageProductData.seasonality,
-          product.beverageProductData.storageConditions,
-        ].some(field => field?.toLowerCase().includes(searchTerm));
-      }
-
-      if (product.packagingProductData) {
-        specificMatch = [
-          ...(product.packagingProductData.packagingType || []),
-          ...(product.packagingProductData.material || []),
-          ...(product.packagingProductData.sustainability || []),
-          ...(product.packagingProductData.barrierProperties || []),
-          ...(product.packagingProductData.printingOptions || []),
-          ...(product.packagingProductData.closureType || []),
-          ...(product.packagingProductData.certifications || []),
-          ...(product.packagingProductData.targetIndustries || []),
-          product.packagingProductData.durability,
-          product.packagingProductData.recyclability,
-          product.packagingProductData.biodegradability,
-        ].some(field => field?.toLowerCase().includes(searchTerm));
-      }
-
-      if (product.otherProductData) {
-        specificMatch = [
-          ...(product.otherProductData.productCategory || []),
-          ...(product.otherProductData.features || []),
-          ...(product.otherProductData.applications || []),
-          ...(product.otherProductData.compatibility || []),
-          ...(product.otherProductData.certifications || []),
-          ...(product.otherProductData.qualityStandards || []),
-          ...(product.otherProductData.targetMarkets || []),
-          product.otherProductData.specifications?.model,
-          product.otherProductData.specifications?.version,
-          product.otherProductData.technicalSpecs?.material,
-          product.otherProductData.technicalSpecs?.color,
-        ].some(field => field?.toLowerCase().includes(searchTerm));
-      }
 
       return basicMatch || numericMatch || specificMatch;
     });
   };
 
-  // Enhanced sorting logic
+  // Enhanced sorting logic with better typing
   const sortProducts = (products: Product[], sortOption: string): Product[] => {
     const option = SORT_OPTIONS.find(opt => opt.value === sortOption);
     if (!option) return products;
 
     const sorted = [...products].sort((a, b) => {
-      let aValue: any;
-      let bValue: any;
+      let aValue: string | number;
+      let bValue: string | number;
 
       if (typeof option.key === 'function') {
         aValue = option.key(a);
         bValue = option.key(b);
       } else {
-        aValue = a[option.key];
-        bValue = b[option.key];
+        aValue = a[option.key] as string | number;
+        bValue = b[option.key] as string | number;
       }
 
       // Handle null/undefined values
@@ -925,9 +1049,9 @@ export const Production = () => {
       }
 
       // Handle date comparison
-      if (aValue instanceof Date || bValue instanceof Date) {
-        const dateA = new Date(aValue).getTime();
-        const dateB = new Date(bValue).getTime();
+      const dateA = new Date(aValue as string | number | Date).getTime();
+      const dateB = new Date(bValue as string | number | Date).getTime();
+      if (!isNaN(dateA) && !isNaN(dateB)) {
         return option.direction === 'asc' ? dateA - dateB : dateB - dateA;
       }
 
@@ -986,80 +1110,156 @@ export const Production = () => {
     return combinedStatuses;
   }, [products]);
 
+  useEffect(() => {
+    document.title = "Product Management - CPG Matchmaker";
+
+    // If not authenticated or not a manufacturer, redirect
+    if (!isAuthenticated) {
+      navigate("/auth?type=signin");
+    } else if (role !== "manufacturer") {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, navigate, role]);
+
+  useEffect(() => {
+    // Create style element for hiding scrollbars
+    const styleElement = document.createElement("style");
+    styleElement.innerHTML = styles;
+    document.head.appendChild(styleElement);
+
+    // Cleanup on component unmount
+    return () => {
+      document.head.removeChild(styleElement);
+    };
+  }, []);
+
+  // Early return with loading state - must be after all hooks
+  if (!isAuthenticated || role !== "manufacturer") {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p>Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Create a new product
   const handleCreateProduct = async (
     newProduct: Omit<
       Product,
-      "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku"
+      "_id" | "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku"
     >
   ) => {
     setIsLoading(true);
     
     try {
-      // Generate SKU
-    const randomSKU = `SKU-${Math.floor(Math.random() * 90000) + 10000}`;
-
-    const productToAdd = {
-      ...newProduct,
-      id: products.length > 0 ? Math.max(...products.map((p) => p.id)) + 1 : 1,
-      sku: randomSKU,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastProduced: new Date().toISOString(),
-        reorderPoint: Math.floor(newProduct.minOrderQuantity * 0.5), // Default to 50% of MOQ
-      };
-  
-      // Prepare data for API (when backend is ready)
-      const apiData: ProductData = {
-        name: productToAdd.name,
-        description: productToAdd.description,
-        category: productToAdd.category,
-        price: Number(productToAdd.pricePerUnit),
-        brand: user?.companyName || 'Unknown',
-        minimumOrderQuantity: productToAdd.minOrderQuantity,
-        dailyCapacity: productToAdd.dailyCapacity,
-        unitType: productToAdd.unitType,
-        currentAvailableStock: productToAdd.currentAvailable,
-        leadTime: productToAdd.leadTime,
-        leadTimeUnit: productToAdd.leadTimeUnit,
-        sustainable: productToAdd.sustainable,
-        productType: productToAdd.productType,
-        image: productToAdd.image || '/placeholder.svg',
-      };
-      
-      // Add food product specific data if it exists
-      if (productToAdd.productType === 'Food Product' && productToAdd.foodProductData) {
-        Object.assign(apiData, {
-          flavorType: productToAdd.foodProductData.flavorType,
-          ingredients: productToAdd.foodProductData.ingredients,
-          usage: productToAdd.foodProductData.usage,
-          packagingSize: productToAdd.foodProductData.packagingSize,
-          shelfLife: productToAdd.foodProductData.shelfLife,
+      // Prepare data for API
+      const productData = {
+        // Basic product info
+        name: newProduct.name,
+        brand: user?.companyName || newProduct.brand || 'Unknown',
+        category: newProduct.category,
+        description: newProduct.description,
+        price: Number(newProduct.pricePerUnit),
+        image: newProduct.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+        productType: newProduct.productType,
+        
+        // Manufacturing details
+        manufacturer: user?.companyName || 'Unknown',
+        originCountry: newProduct.originCountry || 'Unknown',
+        manufacturerRegion: newProduct.manufacturerRegion,
+        
+        // Production details
+        minOrderQuantity: newProduct.minOrderQuantity,
+        dailyCapacity: newProduct.dailyCapacity,
+        currentAvailable: newProduct.currentAvailable,
+        unitType: newProduct.unitType,
+        pricePerUnit: Number(newProduct.pricePerUnit),
+        priceCurrency: newProduct.priceCurrency || 'USD',
+        leadTime: newProduct.leadTime,
+        leadTimeUnit: newProduct.leadTimeUnit,
+        sustainable: newProduct.sustainable,
+        
+        // Food-specific data
+        ...(newProduct.productType === 'food' && {
+          foodType: newProduct.foodType || newProduct.foodProductData?.foodType,
+          flavorType: newProduct.flavorType || newProduct.foodProductData?.flavorType || [],
+          ingredients: newProduct.ingredients || newProduct.foodProductData?.ingredients || [],
+          allergens: newProduct.allergens || newProduct.foodProductData?.allergens || [],
+          usage: newProduct.usage || newProduct.foodProductData?.usage || [],
+          packagingType: newProduct.packagingType,
+          packagingSize: newProduct.packagingSize || newProduct.foodProductData?.packagingSize,
+          shelfLife: newProduct.shelfLife || newProduct.foodProductData?.shelfLife,
+          storageInstruction: newProduct.storageInstruction,
+        }),
+        
+        // Set type for backend
+        type: newProduct.productType === 'Food Product' ? 'food' : 
+              newProduct.productType === 'Beverage Product' ? 'beverage' :
+              newProduct.productType === 'Healthy Product' ? 'health' : 'other',
+              
+        // Backend expects these fields
           manufacturerName: user?.companyName || 'Unknown',
-          manufacturerRegion: productToAdd.foodProductData.manufacturerRegion,
-        });
-      }
+        productName: newProduct.name,
+      };
       
       // Use the product service to create product
-      const response = await productService.createProduct(apiData);
+      const response = await productService.createProduct(productData);
       
       if (response.success) {
-        // Use the response data from API
-        setProducts([...products, response.data]);
+        // Transform response to match UI expectations
+        const newApiProduct = response.data;
+        const transformedProduct: Product = {
+          id: parseInt(newApiProduct._id.slice(-8), 16),
+          _id: newApiProduct._id,
+          name: newApiProduct.name,
+          brand: newApiProduct.brand,
+          category: newApiProduct.category,
+          description: newApiProduct.description,
+          price: newApiProduct.price,
+          image: newApiProduct.image,
+          productType: newApiProduct.productType,
+          minOrderQuantity: newApiProduct.minOrderQuantity || 1000,
+          dailyCapacity: newApiProduct.dailyCapacity || 5000,
+          currentAvailable: newApiProduct.currentAvailable || 0,
+          unitType: newApiProduct.unitType || 'units',
+          pricePerUnit: newApiProduct.pricePerUnit || newApiProduct.price,
+          leadTime: newApiProduct.leadTime || '1-2',
+          leadTimeUnit: newApiProduct.leadTimeUnit || 'weeks',
+          sustainable: newApiProduct.sustainable || false,
+          sku: newApiProduct.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+          reorderPoint: Math.floor((newApiProduct.minOrderQuantity || 1000) * 0.5),
+          lastProduced: new Date().toISOString(),
+          createdAt: newApiProduct.createdAt,
+          updatedAt: newApiProduct.updatedAt,
+          // Add other fields as needed
+          manufacturer: newApiProduct.manufacturer,
+          originCountry: newApiProduct.originCountry,
+          // Food-specific fields
+          foodType: newApiProduct.foodType,
+          flavorType: newApiProduct.flavorType,
+          ingredients: newApiProduct.ingredients,
+          allergens: newApiProduct.allergens,
+          usage: newApiProduct.usage,
+          packagingSize: newApiProduct.packagingSize,
+          shelfLife: newApiProduct.shelfLife,
+        };
+        
+        setProducts([...products, transformedProduct]);
+        setNewlyCreatedProductId(newApiProduct._id);
         console.log('Product created successfully via API');
       } else {
-        // Fallback to UI state update if API fails
-        setProducts([...products, productToAdd]);
-        console.warn('API failed, updating UI state directly:', response.error);
+        throw new Error(response.error || 'Failed to create product');
       }
       
     toast({
       title: t('production-product-created', "Product created"),
-      description: t('production-product-added', "{{name}} has been added to your product list.", { name: productToAdd.name }),
+        description: t('production-product-added', "{{name}} has been added to your product list.", { name: newProduct.name }),
     });
       
     setIsAddDialogOpen(false);
-    setNewlyCreatedProductId(productToAdd.id);
     } catch (error) {
       console.error('Error creating product:', error);
       toast({
@@ -1077,48 +1277,50 @@ export const Production = () => {
     setIsLoading(true);
 
     try {
+      if (!updatedProduct._id) {
+        throw new Error('Product ID is required for update');
+      }
+
       // Prepare data for API
-      const apiData: ProductData = {
+      const productData = {
         name: updatedProduct.name,
-        description: updatedProduct.description,
+        brand: updatedProduct.brand,
         category: updatedProduct.category,
+        description: updatedProduct.description,
         price: Number(updatedProduct.pricePerUnit),
-        brand: user?.companyName || 'Unknown',
-        minimumOrderQuantity: updatedProduct.minOrderQuantity,
+        image: updatedProduct.image,
+        productType: updatedProduct.productType,
+        minOrderQuantity: updatedProduct.minOrderQuantity,
         dailyCapacity: updatedProduct.dailyCapacity,
+        currentAvailable: updatedProduct.currentAvailable,
         unitType: updatedProduct.unitType,
-        currentAvailableStock: updatedProduct.currentAvailable,
+        pricePerUnit: Number(updatedProduct.pricePerUnit),
         leadTime: updatedProduct.leadTime,
         leadTimeUnit: updatedProduct.leadTimeUnit,
         sustainable: updatedProduct.sustainable,
-        productType: updatedProduct.productType,
-        image: updatedProduct.image || '/placeholder.svg',
+        // Food-specific fields
+        ...(updatedProduct.productType === 'food' && {
+          foodType: updatedProduct.foodType,
+          flavorType: updatedProduct.flavorType || [],
+          ingredients: updatedProduct.ingredients || [],
+          allergens: updatedProduct.allergens || [],
+          usage: updatedProduct.usage || [],
+          packagingSize: updatedProduct.packagingSize,
+          shelfLife: updatedProduct.shelfLife,
+        }),
       };
       
-      // Add food product specific data if it exists
-      if (updatedProduct.productType === 'Food Product' && updatedProduct.foodProductData) {
-        Object.assign(apiData, {
-          flavorType: updatedProduct.foodProductData.flavorType,
-          ingredients: updatedProduct.foodProductData.ingredients,
-          usage: updatedProduct.foodProductData.usage,
-          packagingSize: updatedProduct.foodProductData.packagingSize,
-          shelfLife: updatedProduct.foodProductData.shelfLife,
-          manufacturerName: user?.companyName || 'Unknown',
-          manufacturerRegion: updatedProduct.foodProductData.manufacturerRegion,
-        });
-      }
-      
       // Use the product service to update product
-      const response = await productService.updateProduct(String(updatedProduct.id), apiData);
+      const response = await productService.updateProduct(updatedProduct._id, productData);
       
       if (response.success) {
-        // Use the response data from API (when available)
-        setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+        // Update local state
+        setProducts(products.map((p) => 
+          p._id === updatedProduct._id ? updatedProduct : p
+        ));
         console.log('Product updated successfully via API');
       } else {
-        // Fallback to UI state update if API fails
-        setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
-        console.warn('API failed, updating UI state directly:', response.error);
+        throw new Error(response.error || 'Failed to update product');
       }
 
       toast({
@@ -1141,41 +1343,30 @@ export const Production = () => {
   };
 
   // Delete a product
-    const handleDeleteProduct = async (id: number) => {
+  const handleDeleteProduct = async (productId: string | number) => {
     setIsLoading(true);
 
     try {
-      const productToDelete = products.find((p) => p.id === id);
-      if (!productToDelete) {
+      const product = products.find((p) => p._id === String(productId) || p.id === productId);
+      if (!product) {
         throw new Error("Product not found");
       }
+
+      const deleteId = product._id || String(productId);
       
       // Use the product service to delete product
-      const response = await productService.deleteProduct(String(id));
+      const response = await productService.deleteProduct(deleteId);
       
       if (response.success) {
-        setProducts(products.filter((p) => p.id !== id));
+        setProducts(products.filter((p) => p._id !== deleteId && p.id !== productId));
         console.log('Product deleted successfully via API');
       } else {
-        // Fallback to UI state update if API fails
-        setProducts(products.filter((p) => p.id !== id));
-        console.warn('API failed, updating UI state directly:', response.error);
-      }
-      
-      // For food products, also delete from food product API
-      if (productToDelete.productType === 'Food Product') {
-        try {
-          // TODO: Call food product API when backend is ready
-          // await foodProductApi.deleteFoodProduct(String(id));
-          console.log('Food product delete API call (placeholder)');
-        } catch (foodError) {
-          console.error('Error deleting food product:', foodError);
-        }
+        throw new Error(response.error || 'Failed to delete product');
       }
 
       toast({
         title: t('production-product-deleted', "Product deleted"),
-        description: t('production-product-removed', "{{name}} has been removed.", { name: productToDelete.name }),
+        description: t('production-product-removed', "{{name}} has been removed.", { name: product.name }),
         variant: "default",
       });
       
@@ -1216,7 +1407,7 @@ export const Production = () => {
       case "Scheduled":
         return <StatusBadge status="Scheduled" />;
       default:
-        return <StatusBadge status={status as any} />;
+        return <StatusBadge status={status as "Active" | "Inactive" | "pending"} />;
     }
   };
 
@@ -1253,22 +1444,7 @@ export const Production = () => {
     setIsProductDetailsOpen(true);
   };
 
-  // Trigger animation when component mounts or products change
-  useEffect(() => {
-    setAnimateCards(false);
-    const timer = setTimeout(() => setAnimateCards(true), 100);
-    return () => clearTimeout(timer);
-  }, [products.length]);
 
-  // Clear newly created product highlight after 5 seconds
-  useEffect(() => {
-    if (newlyCreatedProductId) {
-      const timer = setTimeout(() => {
-        setNewlyCreatedProductId(null);
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [newlyCreatedProductId]);
 
   return (
     <ManufacturerLayout>
@@ -1368,14 +1544,14 @@ export const Production = () => {
                 {/* Conditionally render appropriate form component based on product type */}
                 {selectedProduct?.productType === "Food Product" ? (
                   <ProductFormFoodBeverage
-                    product={selectedProduct as any}
+                    product={selectedProduct}
                     onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
                     isLoading={isLoading}
                     parentCategory="Food & Beverage"
                   />
                 ) : (
                   <ProductForm
-                    product={selectedProduct as any}
+                    product={selectedProduct}
                     onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
                     isLoading={isLoading}
                   />
@@ -1425,7 +1601,7 @@ export const Production = () => {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => selectedProduct && handleDeleteProduct(selectedProduct.id)}
+                  onClick={() => selectedProduct && handleDeleteProduct(selectedProduct._id || selectedProduct.id)}
                   disabled={isLoading}
                   className="flex items-center bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                 >
@@ -1517,11 +1693,11 @@ interface ProductsTabProps {
   viewProductDetails: (product: Product) => void;
   getProductTypeBadge: (productType: string) => JSX.Element;
   getProductStatus: (product: Product) => string;
-  newlyCreatedProductId?: number | null;
+  newlyCreatedProductId?: string | null;
 }
 
 // Helper function để kiểm tra category an toàn
-const safeIncludes = (str: any, searchString: string): boolean => {
+const safeIncludes = (str: string | undefined | null, searchString: string): boolean => {
   return typeof str === 'string' && str.includes(searchString);
 };
 
@@ -1797,7 +1973,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
           >
             {products.map((product, index) => (
               <motion.div
-                key={product.id}
+                key={product._id || product.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={
                   animateCards
@@ -1816,14 +1992,14 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
               >
                 <Card className={cn(
                   "overflow-hidden card-hover-effect border border-muted-foreground/20 bg-background/60 backdrop-blur-sm",
-                  newlyCreatedProductId === product.id && "ring-2 ring-primary ring-opacity-50 shadow-lg border-primary/50 bg-primary/5"
+                  newlyCreatedProductId === product._id && "ring-2 ring-primary ring-opacity-50 shadow-lg border-primary/50 bg-primary/5"
                 )}>
                   <CardHeader className="p-0">
                     <div
                       className="aspect-video w-full bg-muted relative group cursor-pointer overflow-hidden"
                       onClick={() => viewProductDetails(product)}
                     >
-                      {newlyCreatedProductId === product.id && (
+                      {newlyCreatedProductId === product._id && (
                         <motion.div
                           initial={{ opacity: 0, scale: 0.8 }}
                           animate={{ opacity: 1, scale: 1 }}
@@ -2421,9 +2597,7 @@ const ProductionTab: React.FC<ProductionTabProps> = ({
                               className="h-8 w-8 hover-scale-subtle"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                line.status === "Active"
-                                  ? handleToggleLineStatus(line)
-                                  : handleToggleLineStatus(line);
+                                handleToggleLineStatus(line);
                               }}
                             >
                               {line.status === "Active" ? (
@@ -2773,6 +2947,7 @@ interface ProductFormProps {
       | Product
       | Omit<
           Product,
+          | "_id"
           | "id"
           | "createdAt"
           | "updatedAt"
@@ -3031,7 +3206,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           leadTimeUnit: formData.leadTimeUnit,
           sustainable: formData.sustainable,
           productType: selectedProductType,
-          image: formData.image || '/placeholder.svg',
+          image: formData.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
         };
         
         // Save to Food Product database if applicable
@@ -3124,6 +3299,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
         onSubmit(
             finalProductData as Omit<
             Product,
+            | "_id"
             | "id"
             | "createdAt"
             | "updatedAt"
@@ -4079,13 +4255,13 @@ const AssignProductForm: React.FC<AssignProductFormProps> = ({
               }}
             >
               {availableProducts.map((product) => (
-                <div key={product.id} className="flex items-center space-x-2">
+                <div key={product._id || product.id} className="flex items-center space-x-2">
                   <RadioGroupItem
-                    value={product.id.toString()}
-                    id={`product-${product.id}`}
+                    value={product._id?.toString() || product.id.toString()}
+                    id={`product-${product._id || product.id}`}
                   />
                   <Label
-                    htmlFor={`product-${product.id}`}
+                    htmlFor={`product-${product._id || product.id}`}
                     className="flex flex-1 items-center p-2 cursor-pointer hover:bg-muted/50 rounded-md"
                   >
                     <div className="w-10 h-10 rounded overflow-hidden mr-3 bg-muted flex items-center justify-center">
