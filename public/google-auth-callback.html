@@ -40,9 +40,9 @@
 </head>
 <body>
   <div class="container">
-    <h2>Login Google</h2>
+    <h2>Login with Google</h2>
     <div class="loader"></div>
-    <p class="message">Login successful. Redirecting...</p>
+    <p class="message">Authentication successful. Redirecting...</p>
   </div>
 
   <script>
@@ -83,13 +83,15 @@
             window.close();
           }, 1000);
         } else {
-          document.querySelector('.message').textContent = 'Login failed. Please try again.';
+          document.querySelector('.message').textContent = 'Authentication failed. Please try again.';
+          // Đóng popup sau khi hiển thị thông báo lỗi
           setTimeout(() => {
             window.close();
           }, 2000);
         }
       } catch (error) {
         console.error('Error in callback:', error);
+        document.querySelector('.message').textContent = 'An error occurred during authentication.';
         document.querySelector('.message').textContent = 'An error occurred during authentication.';
         // Đóng popup
         setTimeout(() => {

@@ -48,8 +48,12 @@ interface FoodProductData {
   ingredients: string[];
   usage: string[];
   allergens: string[];
+  packagingType: string;
   packagingSize: string;
   shelfLife: string;
+  shelfLifeStartDate?: string;
+  shelfLifeEndDate?: string;
+  storageInstruction: string;
   manufacturerRegion: string;
   foodType: string;
 }
@@ -58,12 +62,15 @@ interface Product {
   id?: number;
   name: string;
   category: string;
+  manufacturerName: string;
+  originCountry: string;
   sku?: string;
   minOrderQuantity: number;
   dailyCapacity: number;
   unitType: string;
   currentAvailable: number;
   pricePerUnit: number;
+  priceCurrency: string;
   productType: string;
   image: string;
   createdAt?: string;
@@ -110,6 +117,56 @@ const FOOD_BEVERAGE_SUBCATEGORIES = [
   { value: "Bakery", label: "Bakery Items", icon: "🍞" },
   { value: "Snacks", label: "Snacks & Confectionery", icon: "🍿" },
   { value: "Preserved Foods", label: "Preserved & Fermented Foods", icon: "🥒" }
+];
+
+const ORIGIN_COUNTRIES = [
+  { value: "Japan", label: "Japan", icon: "🇯🇵" },
+  { value: "China", label: "China", icon: "🇨🇳" },
+  { value: "South Korea", label: "South Korea", icon: "🇰🇷" },
+  { value: "Thailand", label: "Thailand", icon: "🇹🇭" },
+  { value: "Vietnam", label: "Vietnam", icon: "🇻🇳" },
+  { value: "USA", label: "United States", icon: "🇺🇸" },
+  { value: "Italy", label: "Italy", icon: "🇮🇹" },
+  { value: "France", label: "France", icon: "🇫🇷" },
+  { value: "Germany", label: "Germany", icon: "🇩🇪" },
+  { value: "Australia", label: "Australia", icon: "🇦🇺" },
+  { value: "Canada", label: "Canada", icon: "🇨🇦" },
+  { value: "Mexico", label: "Mexico", icon: "🇲🇽" },
+  { value: "India", label: "India", icon: "🇮🇳" },
+  { value: "Other", label: "Other Country", icon: "🌍" }
+];
+
+const PACKAGING_TYPES = [
+  { value: "Bottle", label: "Glass/Plastic Bottle", description: "Liquid products, sauces" },
+  { value: "Can", label: "Metal Can", description: "Preserved foods, beverages" },
+  { value: "Jar", label: "Glass Jar", description: "Pickles, jams, preserves" },
+  { value: "Pouch", label: "Flexible Pouch", description: "Snacks, instant foods" },
+  { value: "Box", label: "Cardboard Box", description: "Dry goods, cereals" },
+  { value: "Bag", label: "Sealed Bag", description: "Rice, flour, snacks" },
+  { value: "Vacuum Pack", label: "Vacuum Sealed", description: "Meat, fish, cheese" },
+  { value: "Tube", label: "Squeeze Tube", description: "Paste, cream, sauce" },
+  { value: "Tray", label: "Plastic Tray", description: "Fresh produce, ready meals" },
+  { value: "Sachet", label: "Single-use Sachet", description: "Condiments, seasonings" }
+];
+
+const CURRENCIES = [
+  { value: "USD", label: "US Dollar ($)", symbol: "$" },
+  { value: "JPY", label: "Japanese Yen (¥)", symbol: "¥" },
+  { value: "EUR", label: "Euro (€)", symbol: "€" },
+  { value: "CNY", label: "Chinese Yuan (¥)", symbol: "¥" }
+];
+
+const UNIT_TYPES = [
+  { value: "units", label: "Units (pieces)" },
+  { value: "kg", label: "Kilograms" },
+  { value: "g", label: "Grams" },
+  { value: "liters", label: "Liters" },
+  { value: "ml", label: "Milliliters" },
+  { value: "packs", label: "Packs" },
+  { value: "bottles", label: "Bottles" },
+  { value: "boxes", label: "Boxes" },
+  { value: "bags", label: "Bags" },
+  { value: "cans", label: "Cans" }
 ];
 
 const FOOD_TYPES = [
@@ -235,11 +292,14 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       : {
           name: "",
           category: "",
+          manufacturerName: "",
+          originCountry: "",
           minOrderQuantity: 1000,
           dailyCapacity: 5000,
           unitType: "units",
           currentAvailable: 0,
           pricePerUnit: 0,
+          priceCurrency: "USD",
           productType: "Food Product",
           image: "",
           description: "",
@@ -255,8 +315,12 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     ingredients: product?.foodProductData?.ingredients || [],
     usage: product?.foodProductData?.usage || [],
     allergens: product?.foodProductData?.allergens || [],
+    packagingType: product?.foodProductData?.packagingType || "",
     packagingSize: product?.foodProductData?.packagingSize || "",
     shelfLife: product?.foodProductData?.shelfLife || "",
+    shelfLifeStartDate: product?.foodProductData?.shelfLifeStartDate || "",
+    shelfLifeEndDate: product?.foodProductData?.shelfLifeEndDate || "",
+    storageInstruction: product?.foodProductData?.storageInstruction || "",
     manufacturerRegion: product?.foodProductData?.manufacturerRegion || "",
     foodType: product?.foodProductData?.foodType || "",
   });
@@ -269,6 +333,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const [customIngredient, setCustomIngredient] = useState("");
   const [customUsage, setCustomUsage] = useState("");
   const [selectedAllergen, setSelectedAllergen] = useState("");
+  const [useAdvancedShelfLife, setUseAdvancedShelfLife] = useState(false);
 
   // Multi-select handlers
   const handleFlavorChange = (value: string) => {
@@ -356,8 +421,8 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const handleFiles = (files: File[]) => {
     if (files.length === 0) return;
     
-    // Limit to 5 images maximum
-    const maxImages = 5;
+    // Limit to 6 images maximum
+    const maxImages = 6;
     const remainingSlots = maxImages - images.length;
     const filesToProcess = files.slice(0, remainingSlots);
     
@@ -413,14 +478,41 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
+    // Basic Information
     if (!formData.name?.trim()) {
       newErrors.name = "Product name is required";
     }
 
     if (!formData.category?.trim()) {
-      newErrors.category = "Sub-category is required";
+      newErrors.category = "Category is required";
     }
 
+    if (!formData.manufacturerName?.trim()) {
+      newErrors.manufacturerName = "Manufacturer name is required";
+    }
+
+    if (!formData.originCountry?.trim()) {
+      newErrors.originCountry = "Origin country is required";
+    }
+
+    // Packaging and Storage
+    if (!foodProductData.packagingType?.trim()) {
+      newErrors.packagingType = "Packaging type is required";
+    }
+
+    if (!foodProductData.packagingSize?.trim()) {
+      newErrors.packagingSize = "Packaging size is required";
+    }
+
+    if (!foodProductData.shelfLife?.trim() && (!useAdvancedShelfLife || (!foodProductData.shelfLifeStartDate?.trim() || !foodProductData.shelfLifeEndDate?.trim()))) {
+      newErrors.shelfLife = "Shelf life is required";
+    }
+
+    if (!foodProductData.storageInstruction?.trim()) {
+      newErrors.storageInstruction = "Storage instruction is required";
+    }
+
+    // Production Details
     if (!formData.minOrderQuantity || formData.minOrderQuantity <= 0) {
       newErrors.minOrderQuantity = "Minimum order quantity must be greater than zero";
     }
@@ -433,12 +525,13 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       newErrors.pricePerUnit = "Price per unit must be greater than zero";
     }
 
-    if (!formData.description?.trim()) {
-      newErrors.description = "Description is required";
-    }
-
     if (!formData.unitType?.trim()) {
       newErrors.unitType = "Unit type is required";
+    }
+
+    // Description & Media
+    if (!formData.description?.trim()) {
+      newErrors.description = "Description is required";
     }
 
     // Food-specific validation
@@ -456,14 +549,6 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
 
     if (foodProductData.allergens.length === 0) {
       newErrors.allergens = "At least one allergen is required";
-    }
-
-    if (!foodProductData.packagingSize?.trim()) {
-      newErrors.packagingSize = "Packaging size is required";
-    }
-
-    if (!foodProductData.shelfLife?.trim()) {
-      newErrors.shelfLife = "Shelf life is required";
     }
 
     setErrors(newErrors);
@@ -538,7 +623,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Basic Information */}
+        {/* A. Basic Information */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -582,7 +667,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
 
                 <div className="space-y-2">
                   <Label htmlFor="category" className="text-base font-medium">
-                    Sub-Category *
+                    Category *
                   </Label>
                   <Select
                     name="category"
@@ -593,7 +678,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                       "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
                       errors.category && "border-red-500"
                     )}>
-                      <SelectValue placeholder="Select a sub-category" />
+                      <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
                       {FOOD_BEVERAGE_SUBCATEGORIES.map((subcat) => (
@@ -616,16 +701,622 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                     </motion.p>
                   )}
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="manufacturerName" className="text-base font-medium">
+                    Manufacturer Name *
+                  </Label>
+                  <Input
+                    id="manufacturerName"
+                    name="manufacturerName"
+                    value={formData.manufacturerName || ""}
+                    onChange={handleChange}
+                    placeholder="Enter manufacturer name"
+                    className={cn(
+                      "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
+                      errors.manufacturerName && "border-red-500 focus:ring-red-200"
+                    )}
+                  />
+                  {errors.manufacturerName && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.manufacturerName}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="originCountry" className="text-base font-medium">
+                    Origin Country *
+                  </Label>
+                  <Select
+                    name="originCountry"
+                    value={formData.originCountry || ""}
+                    onValueChange={(value) => setFormData({ ...formData, originCountry: value })}
+                  >
+                    <SelectTrigger className={cn(
+                      "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
+                      errors.originCountry && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select origin country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ORIGIN_COUNTRIES.map((country) => (
+                        <SelectItem key={country.value} value={country.value}>
+                          <div className="flex items-center gap-2">
+                            <span>{country.icon}</span>
+                            <span>{country.label}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.originCountry && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.originCountry}
+                    </motion.p>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Food-Specific Properties */}
+        {/* B. Packaging and Storage */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
+        >
+          <Card className="border-l-4 border-l-green-500">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <div className="bg-green-500/10 p-2 rounded-lg">
+                  <Package className="h-5 w-5 text-green-500" />
+                </div>
+                Packaging and Storage
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Packaging Type */}
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">
+                    Packaging Type *
+                  </Label>
+                  <Select
+                    value={foodProductData.packagingType}
+                    onValueChange={(value) => setFoodProductData({ ...foodProductData, packagingType: value })}
+                  >
+                    <SelectTrigger className={cn(
+                      "transition-all duration-300",
+                      errors.packagingType && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select packaging type" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {PACKAGING_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>
+                          <div className="flex flex-col py-1">
+                            <span className="font-medium">{type.label}</span>
+                            <span className="text-xs text-muted-foreground">{type.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.packagingType && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.packagingType}
+                    </motion.p>
+                  )}
+                </div>
+
+                {/* Packaging Size */}
+                <div className="space-y-3">
+                  <Label className="text-base font-medium">
+                    Packaging Size *
+                  </Label>
+                  <Select
+                    value={foodProductData.packagingSize}
+                    onValueChange={(value) => setFoodProductData({ ...foodProductData, packagingSize: value })}
+                  >
+                    <SelectTrigger className={cn(
+                      "transition-all duration-300",
+                      errors.packagingSize && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select packaging size" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {Object.entries(
+                        PACKAGING_SIZES.reduce((acc, size) => {
+                          if (!acc[size.category]) acc[size.category] = [];
+                          acc[size.category].push(size);
+                          return acc;
+                        }, {} as Record<string, typeof PACKAGING_SIZES>)
+                      ).map(([category, sizes]) => (
+                        <div key={category}>
+                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            {category}
+                          </div>
+                          {sizes.map((size) => (
+                            <SelectItem key={size.value} value={size.value}>
+                              <div className="flex flex-col py-1">
+                                <span className="font-medium">{size.value}</span>
+                                <span className="text-xs text-muted-foreground">{size.label.split(' - ')[1]}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.packagingSize && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.packagingSize}
+                    </motion.p>
+                  )}
+                </div>
+              </div>
+
+              {/* Shelf Life Section */}
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">
+                    Shelf Life *
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setUseAdvancedShelfLife(!useAdvancedShelfLife)}
+                  >
+                    {useAdvancedShelfLife ? 'Use Quick Select' : 'Use Date Range'}
+                  </Button>
+                </div>
+
+                {!useAdvancedShelfLife ? (
+                  <Select
+                    value={foodProductData.shelfLife}
+                    onValueChange={(value) => setFoodProductData({ ...foodProductData, shelfLife: value })}
+                  >
+                    <SelectTrigger className={cn(
+                      "transition-all duration-300",
+                      errors.shelfLife && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select shelf life" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {Object.entries(
+                        SHELF_LIFE_OPTIONS.reduce((acc, option) => {
+                          if (!acc[option.category]) acc[option.category] = [];
+                          acc[option.category].push(option);
+                          return acc;
+                        }, {} as Record<string, typeof SHELF_LIFE_OPTIONS>)
+                      ).map(([category, options]) => (
+                        <div key={category}>
+                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                            {category} Term
+                          </div>
+                          {options.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="h-4 w-4" />
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{option.value}</span>
+                                  <span className="text-xs text-muted-foreground">{option.label.split(' - ')[1]}</span>
+                                </div>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </div>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">
+                        Production Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={foodProductData.shelfLifeStartDate || ""}
+                        onChange={(e) => setFoodProductData({ ...foodProductData, shelfLifeStartDate: e.target.value })}
+                        className="transition-all duration-300"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">
+                        Expiry Date
+                      </Label>
+                      <Input
+                        type="date"
+                        value={foodProductData.shelfLifeEndDate || ""}
+                        onChange={(e) => setFoodProductData({ ...foodProductData, shelfLifeEndDate: e.target.value })}
+                        className="transition-all duration-300"
+                      />
+                    </div>
+                  </div>
+                )}
+                {errors.shelfLife && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-sm text-red-500"
+                  >
+                    {errors.shelfLife}
+                  </motion.p>
+                )}
+              </div>
+
+              {/* Storage Instruction */}
+              <div className="mt-6 space-y-2">
+                <Label className="text-base font-medium">
+                  Storage Instructions *
+                </Label>
+                <Textarea
+                  value={foodProductData.storageInstruction || ""}
+                  onChange={(e) => setFoodProductData({ ...foodProductData, storageInstruction: e.target.value })}
+                  placeholder="e.g., Store in a cool, dry place. Refrigerate after opening. Keep away from direct sunlight."
+                  className={cn(
+                    "h-[100px] transition-all duration-300",
+                    errors.storageInstruction && "border-red-500"
+                  )}
+                />
+                {errors.storageInstruction && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-sm text-red-500"
+                  >
+                    {errors.storageInstruction}
+                  </motion.p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* C. Production Details */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+        >
+          <Card className="border-l-4 border-l-blue-500">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <div className="bg-blue-500/10 p-2 rounded-lg">
+                  <Package className="h-5 w-5 text-blue-500" />
+                </div>
+                Production Details
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="minOrderQuantity" className="text-base font-medium">
+                    Minimum Order Quantity *
+                  </Label>
+                  <Input
+                    id="minOrderQuantity"
+                    name="minOrderQuantity"
+                    type="number"
+                    value={formData.minOrderQuantity || ""}
+                    onChange={handleChange}
+                    className={cn(
+                      "transition-all duration-300",
+                      errors.minOrderQuantity && "border-red-500"
+                    )}
+                  />
+                  {errors.minOrderQuantity && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.minOrderQuantity}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="dailyCapacity" className="text-base font-medium">
+                    Daily Capacity *
+                  </Label>
+                  <Input
+                    id="dailyCapacity"
+                    name="dailyCapacity"
+                    type="number"
+                    value={formData.dailyCapacity || ""}
+                    onChange={handleChange}
+                    className={cn(
+                      "transition-all duration-300",
+                      errors.dailyCapacity && "border-red-500"
+                    )}
+                  />
+                  {errors.dailyCapacity && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.dailyCapacity}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-base font-medium">
+                    Price per Unit *
+                  </Label>
+                  <div className="flex gap-2">
+                    <Select
+                      value={formData.priceCurrency || "USD"}
+                      onValueChange={(value) => setFormData({ ...formData, priceCurrency: value })}
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map((currency) => (
+                          <SelectItem key={currency.value} value={currency.value}>
+                            <div className="flex items-center gap-2">
+                              <span>{currency.symbol}</span>
+                              <span>{currency.value}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      name="pricePerUnit"
+                      type="number"
+                      step="0.01"
+                      value={formData.pricePerUnit || ""}
+                      onChange={handleChange}
+                      placeholder="0.00"
+                      className={cn(
+                        "flex-1 transition-all duration-300",
+                        errors.pricePerUnit && "border-red-500"
+                      )}
+                    />
+                  </div>
+                  {errors.pricePerUnit && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.pricePerUnit}
+                    </motion.p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="space-y-2">
+                  <Label htmlFor="unitType" className="text-base font-medium">
+                    Unit Type *
+                  </Label>
+                  <Select
+                    name="unitType"
+                    value={formData.unitType || ""}
+                    onValueChange={(value) => setFormData({ ...formData, unitType: value })}
+                  >
+                    <SelectTrigger className={cn(
+                      "transition-all duration-300",
+                      errors.unitType && "border-red-500"
+                    )}>
+                      <SelectValue placeholder="Select unit type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {UNIT_TYPES.map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.unitType && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.unitType}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currentAvailable" className="text-base font-medium">
+                    Current Available Stock
+                  </Label>
+                  <Input
+                    id="currentAvailable"
+                    name="currentAvailable"
+                    type="number"
+                    value={formData.currentAvailable || ""}
+                    onChange={handleChange}
+                    className="transition-all duration-300"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* D. Description & Media - Updated for 6 images */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+        >
+          <Card className="border-l-4 border-l-purple-500">
+            <CardContent className="p-6">
+              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                <div className="bg-purple-500/10 p-2 rounded-lg">
+                  <FileText className="h-5 w-5 text-purple-500" />
+                </div>
+                Description & Media
+              </h2>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-base font-medium">
+                    Product Description *
+                  </Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    value={formData.description || ""}
+                    onChange={handleChange}
+                    placeholder="Describe your product, its unique qualities, and benefits..."
+                    className={cn(
+                      "h-[150px] transition-all duration-300",
+                      errors.description && "border-red-500"
+                    )}
+                  />
+                  {errors.description && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="text-sm text-red-500"
+                    >
+                      {errors.description}
+                    </motion.p>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  <Label className="text-base font-medium">
+                    Product Images ({images.length}/6)
+                  </Label>
+                  
+                  {/* Upload Area */}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileChange}
+                    ref={fileInputRef}
+                    className="hidden"
+                  />
+
+                  <motion.div
+                    className={cn(
+                      "w-full h-[160px] border-2 border-dashed rounded-lg overflow-hidden relative cursor-pointer transition-all duration-300",
+                      isDragging
+                        ? "border-primary bg-primary/5"
+                        : images.length > 0
+                        ? "border-primary/50 bg-muted/20"
+                        : "border-muted-foreground/25 hover:border-primary/30 hover:bg-primary/5",
+                      images.length >= 6 && "opacity-50 cursor-not-allowed"
+                    )}
+                    onDragEnter={handleDrag}
+                    onDragLeave={handleDrag}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                    onClick={() => images.length < 6 && fileInputRef.current?.click()}
+                    whileHover={images.length < 6 ? { scale: 1.02 } : {}}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                  >
+                    {images.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full w-full">
+                        <UploadCloud className="h-6 w-6 text-primary/60 mb-2" />
+                        <p className="text-sm font-medium text-muted-foreground text-center">
+                          {images.length >= 6 ? "Maximum 6 images reached" : "Click to upload or drag & drop"}
+                        </p>
+                        <p className="text-xs text-muted-foreground/70">PNG, JPG, GIF up to 10MB each</p>
+                      </div>
+                    ) : (
+                      <>
+                        <img src={images[0]} alt="Main preview" className="h-full w-full object-cover" />
+                        {images.length < 6 && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
+                            <UploadCloud className="h-6 w-6 text-white mb-1" />
+                            <span className="text-xs text-white">Click or drag to add more</span>
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
+                          Main
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+
+                  {/* Image Preview Grid */}
+                  <AnimatePresence>
+                    {images.length > 1 && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="grid grid-cols-3 gap-2"
+                      >
+                        {images.slice(1).map((image, index) => (
+                          <motion.div
+                            key={index + 1}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            className="relative group"
+                          >
+                            <div className="aspect-square rounded-lg overflow-hidden border-2 border-muted">
+                              <img
+                                src={image}
+                                alt={`Product ${index + 2}`}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all flex items-center justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeImage(index + 1);
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="absolute -top-2 -right-2 bg-secondary text-secondary-foreground text-xs px-2 py-1 rounded-full">
+                              {index + 2}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* E. Food Details */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
         >
           <Card className="border-l-4 border-l-orange-500">
             <CardContent className="p-6">
@@ -633,7 +1324,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                 <div className="bg-orange-500/10 p-2 rounded-lg">
                   <Sparkles className="h-5 w-5 text-orange-500" />
                 </div>
-                Product Characteristics
+                Food Details
               </h2>
 
               {/* Food Type - New Field */}
@@ -921,429 +1612,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
               </div>
             </CardContent>
           </Card>
-        </motion.div>
 
-        {/* Packaging & Storage */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-        >
-          <Card className="border-l-4 border-l-green-500">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <div className="bg-green-500/10 p-2 rounded-lg">
-                  <Package className="h-5 w-5 text-green-500" />
-                </div>
-                Packaging & Storage
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Packaging Size - Enhanced Dropdown */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">
-                    Packaging Size *
-                  </Label>
-                  <Select
-                    value={foodProductData.packagingSize}
-                    onValueChange={(value) => setFoodProductData({ ...foodProductData, packagingSize: value })}
-                  >
-                    <SelectTrigger className={cn(
-                      "transition-all duration-300",
-                      errors.packagingSize && "border-red-500"
-                    )}>
-                      <SelectValue placeholder="Select packaging size" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {Object.entries(
-                        PACKAGING_SIZES.reduce((acc, size) => {
-                          if (!acc[size.category]) acc[size.category] = [];
-                          acc[size.category].push(size);
-                          return acc;
-                        }, {} as Record<string, typeof PACKAGING_SIZES>)
-                      ).map(([category, sizes]) => (
-                        <div key={category}>
-                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            {category}
-                          </div>
-                          {sizes.map((size) => (
-                            <SelectItem key={size.value} value={size.value}>
-                              <div className="flex flex-col py-1">
-                                <span className="font-medium">{size.value}</span>
-                                <span className="text-xs text-muted-foreground">{size.label.split(' - ')[1]}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.packagingSize && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.packagingSize}
-                    </motion.p>
-                  )}
-                </div>
-
-                {/* Shelf Life - Enhanced Dropdown */}
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">
-                    Shelf Life *
-                  </Label>
-                  <Select
-                    value={foodProductData.shelfLife}
-                    onValueChange={(value) => setFoodProductData({ ...foodProductData, shelfLife: value })}
-                  >
-                    <SelectTrigger className={cn(
-                      "transition-all duration-300",
-                      errors.shelfLife && "border-red-500"
-                    )}>
-                      <SelectValue placeholder="Select shelf life" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-60">
-                      {Object.entries(
-                        SHELF_LIFE_OPTIONS.reduce((acc, option) => {
-                          if (!acc[option.category]) acc[option.category] = [];
-                          acc[option.category].push(option);
-                          return acc;
-                        }, {} as Record<string, typeof SHELF_LIFE_OPTIONS>)
-                      ).map(([category, options]) => (
-                        <div key={category}>
-                          <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                            {category} Term
-                          </div>
-                          {options.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              <div className="flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
-                                <div className="flex flex-col">
-                                  <span className="font-medium">{option.value}</span>
-                                  <span className="text-xs text-muted-foreground">{option.label.split(' - ')[1]}</span>
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.shelfLife && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.shelfLife}
-                    </motion.p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Production Details */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.4, delay: 0.4 }}
-        >
-          <Card className="border-l-4 border-l-blue-500">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <div className="bg-blue-500/10 p-2 rounded-lg">
-                  <Package className="h-5 w-5 text-blue-500" />
-                </div>
-                Production Details
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="minOrderQuantity" className="text-base font-medium">
-                    Minimum Order Quantity *
-                  </Label>
-                  <Input
-                    id="minOrderQuantity"
-                    name="minOrderQuantity"
-                    type="number"
-                    value={formData.minOrderQuantity || ""}
-                    onChange={handleChange}
-                    className={cn(
-                      "transition-all duration-300",
-                      errors.minOrderQuantity && "border-red-500"
-                    )}
-                  />
-                  {errors.minOrderQuantity && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.minOrderQuantity}
-                    </motion.p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="dailyCapacity" className="text-base font-medium">
-                    Daily Capacity *
-                  </Label>
-                  <Input
-                    id="dailyCapacity"
-                    name="dailyCapacity"
-                    type="number"
-                    value={formData.dailyCapacity || ""}
-                    onChange={handleChange}
-                    className={cn(
-                      "transition-all duration-300",
-                      errors.dailyCapacity && "border-red-500"
-                    )}
-                  />
-                  {errors.dailyCapacity && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.dailyCapacity}
-                    </motion.p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="pricePerUnit" className="text-base font-medium">
-                    Price per Unit *
-                  </Label>
-                  <Input
-                    id="pricePerUnit"
-                    name="pricePerUnit"
-                    type="number"
-                    step="0.01"
-                    value={formData.pricePerUnit || ""}
-                    onChange={handleChange}
-                    className={cn(
-                      "transition-all duration-300",
-                      errors.pricePerUnit && "border-red-500"
-                    )}
-                  />
-                  {errors.pricePerUnit && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.pricePerUnit}
-                    </motion.p>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                <div className="space-y-2">
-                  <Label htmlFor="unitType" className="text-base font-medium">
-                    Unit Type *
-                  </Label>
-                  <Select
-                    name="unitType"
-                    value={formData.unitType || ""}
-                    onValueChange={(value) => setFormData({ ...formData, unitType: value })}
-                  >
-                    <SelectTrigger className={cn(
-                      "transition-all duration-300",
-                      errors.unitType && "border-red-500"
-                    )}>
-                      <SelectValue placeholder="Select unit type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="units">Units</SelectItem>
-                      <SelectItem value="kg">Kilograms</SelectItem>
-                      <SelectItem value="liters">Liters</SelectItem>
-                      <SelectItem value="packs">Packs</SelectItem>
-                      <SelectItem value="bottles">Bottles</SelectItem>
-                      <SelectItem value="boxes">Boxes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.unitType && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.unitType}
-                    </motion.p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="currentAvailable" className="text-base font-medium">
-                    Current Available Stock
-                  </Label>
-                  <Input
-                    id="currentAvailable"
-                    name="currentAvailable"
-                    type="number"
-                    value={formData.currentAvailable || ""}
-                    onChange={handleChange}
-                    className="transition-all duration-300"
-                  />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Description & Media - Updated for multiple images */}
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.4, delay: 0.5 }}
-        >
-          <Card>
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                <div className="bg-purple-500/10 p-2 rounded-lg">
-                  <FileText className="h-5 w-5 text-purple-500" />
-                </div>
-                Description & Media
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-base font-medium">
-                    Product Description *
-                  </Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    value={formData.description || ""}
-                    onChange={handleChange}
-                    placeholder="Describe your product, its unique qualities, and benefits..."
-                    className={cn(
-                      "h-[150px] transition-all duration-300",
-                      errors.description && "border-red-500"
-                    )}
-                  />
-                  {errors.description && (
-                    <motion.p
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="text-sm text-red-500"
-                    >
-                      {errors.description}
-                    </motion.p>
-                  )}
-                </div>
-
-                <div className="space-y-4">
-                  <Label className="text-base font-medium">
-                    Product Images ({images.length}/5)
-                  </Label>
-                  
-                  {/* Upload Area */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                    className="hidden"
-                  />
-
-                  <motion.div
-                    className={cn(
-                      "w-full h-[160px] border-2 border-dashed rounded-lg overflow-hidden relative cursor-pointer transition-all duration-300",
-                      isDragging
-                        ? "border-primary bg-primary/5"
-                        : images.length > 0
-                        ? "border-primary/50 bg-muted/20"
-                        : "border-muted-foreground/25 hover:border-primary/30 hover:bg-primary/5",
-                      images.length >= 5 && "opacity-50 cursor-not-allowed"
-                    )}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() => images.length < 5 && fileInputRef.current?.click()}
-                    whileHover={images.length < 5 ? { scale: 1.02 } : {}}
-                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  >
-                    {images.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full w-full">
-                        <UploadCloud className="h-6 w-6 text-primary/60 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground text-center">
-                          {images.length >= 5 ? "Maximum 5 images reached" : "Click to upload or drag & drop"}
-                        </p>
-                        <p className="text-xs text-muted-foreground/70">PNG, JPG, GIF up to 10MB each</p>
-                      </div>
-                    ) : (
-                      <>
-                        <img src={images[0]} alt="Main preview" className="h-full w-full object-cover" />
-                        {images.length < 5 && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
-                            <UploadCloud className="h-6 w-6 text-white mb-1" />
-                            <span className="text-xs text-white">Click or drag to add more</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </motion.div>
-
-                  {/* Image Preview Grid */}
-                  <AnimatePresence>
-                    {images.length > 1 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="grid grid-cols-3 gap-2"
-                      >
-                        {images.slice(1).map((image, index) => (
-                          <motion.div
-                            key={index + 1}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            className="relative group"
-                          >
-                            <div className="aspect-square rounded-lg overflow-hidden border-2 border-muted">
-                              <img
-                                src={image}
-                                alt={`Product ${index + 2}`}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all flex items-center justify-center">
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeImage(index + 1);
-                                  }}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            {index === 0 && (
-                              <div className="absolute -top-2 -right-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
-                                Main
-                              </div>
-                            )}
-                          </motion.div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </motion.div>
 
         {/* Action Buttons */}

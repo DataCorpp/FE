@@ -28,6 +28,7 @@ import { ProductFormOther } from '@/components/form/ProductFormOther';
 import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
 import { productApi, foodProductApi } from "@/lib/api";
+import { productService } from "@/services/productService";
 import ManufacturerLayout from "@/components/layouts/ManufacturerLayout";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
@@ -712,104 +713,15 @@ export const Production = () => {
     const fetchProducts = async () => {
       setIsLoading(true);
       try {
-        // Try to get products from local storage first (for development)
-        const localProducts = localStorage.getItem('products');
-        const localFoodProducts = localStorage.getItem('foodProducts');
-        let mappedProducts = [];
-
-        if (localProducts) {
-          const parsedProducts = JSON.parse(localProducts);
-          // Map the data to match our Product interface
-          mappedProducts = parsedProducts.map((product: ProductData, index: number) => ({
-            id: index + 1,
-            name: product.name,
-            category: product.category,
-            sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
-            minOrderQuantity: product.minimumOrderQuantity,
-            dailyCapacity: product.dailyCapacity,
-            unitType: product.unitType,
-            currentAvailable: product.currentAvailableStock,
-            pricePerUnit: product.price,
-            productType: product.productType,
-            image: product.image,
-            createdAt: new Date().toISOString(),
-            description: product.description,
-            updatedAt: new Date().toISOString(),
-            lastProduced: new Date().toISOString(),
-            leadTime: product.leadTime,
-            leadTimeUnit: product.leadTimeUnit,
-            reorderPoint: Math.floor(product.minimumOrderQuantity * 0.5),
-            sustainable: product.sustainable,
-            // If it's a food product, include the food product data
-            ...(product.flavorType && {
-              foodProductData: {
-                flavorType: product.flavorType,
-                ingredients: product.ingredients,
-                usage: product.usage,
-                packagingSize: product.packagingSize,
-                shelfLife: product.shelfLife,
-                manufacturerRegion: product.manufacturerRegion,
-                foodType: product.foodType,
-                allergens: product.allergens,
-              }
-            })
-          }));
-        }
+        // Use the product service to fetch products
+        const response = await productService.getProducts();
         
-        // Load food products from separate localStorage if they exist
-        if (localFoodProducts) {
-          try {
-            const parsedFoodProducts = JSON.parse(localFoodProducts);
-            
-            // Check if any food products already exist in the main product list
-            const foodProductNames = new Set(mappedProducts
-              .filter(p => p.productType === 'Food Product')
-              .map(p => p.name));
-            
-            // Map food products to Product interface
-            const foodProducts = parsedFoodProducts
-              .filter((fp: any) => !foodProductNames.has(fp.productName)) // Skip duplicates
-              .map((foodProduct: any, index: number) => ({
-                id: mappedProducts.length + index + 1,
-                name: foodProduct.productName,
-                category: foodProduct.category,
-                sku: `SKU-FOOD-${Math.floor(Math.random() * 90000) + 10000}`,
-                minOrderQuantity: 1000,
-                dailyCapacity: 5000,
-                unitType: 'units',
-                currentAvailable: 1000,
-                pricePerUnit: 0,
-                productType: 'Food Product',
-                image: '/placeholder.svg',
-                createdAt: foodProduct.createdAt || new Date().toISOString(),
-                description: `${foodProduct.productName} - Food product`,
-                updatedAt: new Date().toISOString(),
-                lastProduced: new Date().toISOString(),
-                leadTime: '1-2',
-                leadTimeUnit: 'weeks',
-                reorderPoint: 500,
-                sustainable: true,
-                foodProductData: {
-                  flavorType: foodProduct.flavorType || [],
-                  ingredients: foodProduct.ingredients || [],
-                  usage: foodProduct.usage || [],
-                  packagingSize: foodProduct.packagingSize || '',
-                  shelfLife: foodProduct.shelfLife || '',
-                  manufacturerRegion: foodProduct.manufacturerRegion || '',
-                  foodType: foodProduct.foodType || '',
-                  allergens: foodProduct.allergens,
-                }
-              }));
-              
-            // Combine regular products with food products
-            mappedProducts = [...mappedProducts, ...foodProducts];
-            console.log('Loaded food products:', foodProducts.length);
-          } catch (error) {
-            console.error('Error processing food products from localStorage:', error);
-          }
+        if (response.success) {
+          setProducts(response.data);
+          console.log('Products loaded successfully:', response.data.length);
+        } else {
+          throw new Error(response.error || 'Failed to fetch products');
         }
-        
-        setProducts(mappedProducts);
       } catch (error) {
         console.error('Error fetching products:', error);
         toast({
@@ -1128,16 +1040,18 @@ export const Production = () => {
         });
       }
       
-      // Save to API (uncomment when backend is ready)
-      // const response = await productApi.createProduct(apiData);
-      // console.log('Product created:', response.data);
+      // Use the product service to create product
+      const response = await productService.createProduct(apiData);
       
-      // Save to localStorage for demonstration
-      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-      localStorage.setItem('products', JSON.stringify([...existingProducts, apiData]));
-      
-      // Update UI
-    setProducts([...products, productToAdd]);
+      if (response.success) {
+        // Use the response data from API
+        setProducts([...products, response.data]);
+        console.log('Product created successfully via API');
+      } else {
+        // Fallback to UI state update if API fails
+        setProducts([...products, productToAdd]);
+        console.warn('API failed, updating UI state directly:', response.error);
+      }
       
     toast({
       title: t('production-product-created', "Product created"),
@@ -1194,21 +1108,18 @@ export const Production = () => {
         });
       }
       
-      // Call API (uncomment when backend is ready)
-      // const response = await productApi.updateProduct(String(updatedProduct.id), apiData);
-      // console.log('Product updated:', response.data);
+      // Use the product service to update product
+      const response = await productService.updateProduct(String(updatedProduct.id), apiData);
       
-      // Update localStorage
-      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-      const updatedProducts = existingProducts.map((p: ProductData) => 
-        p.name === updatedProduct.name ? apiData : p
-      );
-      localStorage.setItem('products', JSON.stringify(updatedProducts));
-      
-      // Update UI
-      setProducts(
-        products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p))
-      );
+      if (response.success) {
+        // Use the response data from API (when available)
+        setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+        console.log('Product updated successfully via API');
+      } else {
+        // Fallback to UI state update if API fails
+        setProducts(products.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+        console.warn('API failed, updating UI state directly:', response.error);
+      }
 
       toast({
         title: t('production-product-updated', "Product updated"),
@@ -1239,50 +1150,28 @@ export const Production = () => {
         throw new Error("Product not found");
       }
       
-      // Call API (uncomment when backend is ready)
-      // await productApi.deleteProduct(String(id));
+      // Use the product service to delete product
+      const response = await productService.deleteProduct(String(id));
       
-      // Update localStorage for regular products
-      const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-      const updatedProducts = existingProducts.filter((p: { name: string }) => 
-        p.name !== productToDelete.name
-      );
-      localStorage.setItem('products', JSON.stringify(updatedProducts));
-      
-             // If it's a food product, remove from both localStorage and MongoDB
-      if (productToDelete.productType === 'Food Product') {
-        try {
-          // Xóa khỏi localStorage
-          const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
-          const updatedFoodProducts = existingFoodProducts.filter((p: { productName: string }) => 
-            p.productName !== productToDelete.name
-          );
-          localStorage.setItem('foodProducts', JSON.stringify(updatedFoodProducts));
-          
-          // Xóa khỏi MongoDB
-          try {
-                         await foodProductApi.deleteFoodProduct(String(id));
-             console.log('Food product has been deleted from MongoDB');
-             toast({
-               title: "Success",
-               description: "Food product has been deleted from MongoDB",
-               variant: "default",
-             });
-           } catch (foodError) {
-             console.error('Error deleting food product from MongoDB:', foodError);
-             toast({
-               title: "MongoDB Error",
-               description: "Unable to delete from MongoDB. Deleted from localStorage instead.",
-               variant: "destructive",
-             });
-          }
-        } catch (localStorageError) {
-          console.error('Error removing food product from localStorage:', localStorageError);
-        }
+      if (response.success) {
+        setProducts(products.filter((p) => p.id !== id));
+        console.log('Product deleted successfully via API');
+      } else {
+        // Fallback to UI state update if API fails
+        setProducts(products.filter((p) => p.id !== id));
+        console.warn('API failed, updating UI state directly:', response.error);
       }
       
-      // Update UI
-      setProducts(products.filter((p) => p.id !== id));
+      // For food products, also delete from food product API
+      if (productToDelete.productType === 'Food Product') {
+        try {
+          // TODO: Call food product API when backend is ready
+          // await foodProductApi.deleteFoodProduct(String(id));
+          console.log('Food product delete API call (placeholder)');
+        } catch (foodError) {
+          console.error('Error deleting food product:', foodError);
+        }
+      }
 
       toast({
         title: t('production-product-deleted', "Product deleted"),
@@ -3167,38 +3056,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
             manufacturerRegion: foodProductData.manufacturerRegion,
           };
           
-          // Lưu food product vào MongoDB thông qua API
+          // TODO: Save food product to database when API is ready
           try {
-            // Cập nhật lưu trữ localStorage (để duy trì tương thích)
-            const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
-            const newFoodProduct = {
-              ...foodProductDataForApi,
-              id: existingFoodProducts.length + 1,
-              createdAt: new Date().toISOString(),
-            };
-            localStorage.setItem('foodProducts', JSON.stringify([...existingFoodProducts, newFoodProduct]));
-            
-            // Gửi dữ liệu đến MongoDB thông qua API 
-            try {
-              console.log('Sending food product to API:', foodProductDataForApi);
-              const foodProductResponse = await foodProductApi.createFoodProduct(foodProductDataForApi);
-              console.log('Food product has been saved to MongoDB:', foodProductResponse.data);
-              
-              toast({
-                title: "Success",
-                description: "Food product has been saved to MongoDB database",
-                variant: "default",
-              });
-            } catch (foodError) {
-              console.error('Error saving food product to MongoDB:', foodError);
-              toast({
-                title: "MongoDB Error",
-                description: "Unable to save to MongoDB. Saved to localStorage instead.",
-                variant: "destructive",
-              });
-            }
-          } catch (localStorageError) {
-            console.error('Error saving to localStorage:', localStorageError);
+            // const foodProductResponse = await foodProductApi.createFoodProduct(foodProductDataForApi);
+            // console.log('Food product saved to database:', foodProductResponse.data);
+            console.log('Food product data prepared for API:', foodProductDataForApi);
+          } catch (foodError) {
+            console.error('Error saving food product:', foodError);
           }
         }
 
@@ -3217,7 +3081,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
             ...finalProductData,
         } as Product);
           
-          // When backend API is ready:
+          // TODO: When backend API is ready, call update API
           // if (product.id) {
           //   await productApi.updateProduct(product.id.toString(), productData);
           // }
@@ -3237,35 +3101,10 @@ const ProductForm: React.FC<ProductFormProps> = ({
                 manufacturerRegion: foodProductData.manufacturerRegion,
               };
               
-              // Cập nhật trong cả localStorage và MongoDB
-              try {
-                // Cập nhật localStorage
-                const existingFoodProducts = JSON.parse(localStorage.getItem('foodProducts') || '[]');
-                const updatedProducts = existingFoodProducts.map((fp: any) => 
-                  fp.productName === formData.name ? {...fp, ...foodProductUpdateData} : fp
-                );
-                localStorage.setItem('foodProducts', JSON.stringify(updatedProducts));
-                
-                // Cập nhật MongoDB qua API
-                try {
-                  const foodProductResponse = await foodProductApi.updateFoodProduct(String(product.id), foodProductUpdateData);
-                  console.log('Food product has been updated in MongoDB:', foodProductResponse.data);
-                  toast({
-                    title: "Success",
-                    description: "Food product has been updated in MongoDB",
-                    variant: "default",
-                  });
-                } catch (foodError) {
-                  console.error('Error updating food product in MongoDB:', foodError);
-                  toast({
-                    title: "MongoDB Error",
-                    description: "Unable to update MongoDB. Updated in localStorage instead.",
-                    variant: "destructive",
-                  });
-                }
-              } catch (localStorageError) {
-                console.error('Error updating localStorage:', localStorageError);
-              }
+              // TODO: Update food product via API when backend is ready
+              // const foodProductResponse = await foodProductApi.updateFoodProduct(String(product.id), foodProductUpdateData);
+              // console.log('Food product updated:', foodProductResponse.data);
+              console.log('Food product update data prepared:', foodProductUpdateData);
             } catch (foodError) {
               console.error('Error updating food product:', foodError);
             }
@@ -3289,17 +3128,13 @@ const ProductForm: React.FC<ProductFormProps> = ({
           >
         );
           
-          // When backend API is ready:
+          // TODO: When backend API is ready, call create API
           // const response = await productApi.createProduct(productData);
           // console.log('Product created:', response.data);
           
-          // Save product data to localStorage for demonstration
-          const existingProducts = JSON.parse(localStorage.getItem('products') || '[]');
-          localStorage.setItem('products', JSON.stringify([...existingProducts, productData]));
-          
           toast({
             title: "Product Created",
-            description: "Your product has been saved to the database.",
+            description: "Your product has been prepared for database save.",
             variant: "default",
           });
         }

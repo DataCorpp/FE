@@ -100,4 +100,62 @@ body::-webkit-scrollbar {
 
 .element-with-overflow-y::-webkit-scrollbar {
   display: none;
+}
+
+/* Blur filter utilities - prevent negative blur values */
+:root {
+  --blur-none: 0px;
+  --blur-sm: 2px;
+  --blur-md: 4px;
+  --blur-lg: 8px;
+}
+
+.blur-safe {
+  --blur-value: var(--blur-none);
+  filter: blur(var(--blur-value));
+}
+
+.blur-safe[data-blur="sm"] {
+  --blur-value: var(--blur-sm);
+}
+
+.blur-safe[data-blur="md"] {
+  --blur-value: var(--blur-md);
+}
+
+.blur-safe[data-blur="lg"] {
+  --blur-value: var(--blur-lg);
+}
+
+/* Motion safe blur - ensures no negative values during animation */
+@supports (filter: blur(max(0px, 4px))) {
+  .motion-blur-safe {
+    filter: blur(max(0px, var(--blur-value, 0px)));
+  }
+}
+
+@supports not (filter: blur(max(0px, 4px))) {
+  .motion-blur-safe {
+    filter: blur(var(--blur-value, 0px));
+  }
+}
+
+/* Animation keyframes with safe blur values */
+@keyframes safeBlurIn {
+  from { filter: blur(max(0px, 4px)); opacity: 0; }
+  to { filter: blur(0px); opacity: 1; }
+}
+
+@keyframes safeBlurOut {
+  from { filter: blur(0px); opacity: 1; }
+  to { filter: blur(max(0px, 4px)); opacity: 0; }
+}
+
+/* CSS property to prevent negative blur */
+* {
+  --safe-blur: max(0px, var(--blur-input, 0px));
+}
+
+.no-negative-blur {
+  filter: blur(var(--safe-blur));
 } 
