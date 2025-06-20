@@ -1,21 +1,20 @@
 // Product Service - API calls for product management
-// This file contains all product-related API calls
-// TODO: Replace placeholder functions with actual API endpoints when backend is ready
+// This file contains all product-related API calls and interfaces that match backend models
 
 // Define specific product data interfaces for different product types
 export interface FoodProductData {
+  foodType: string;
   flavorType: string[];
   ingredients: string[];
-  usage: string[];
   allergens: string[];
+  usage: string[];
   packagingType: string;
   packagingSize: string;
   shelfLife: string;
   shelfLifeStartDate?: string;
   shelfLifeEndDate?: string;
   storageInstruction: string;
-  manufacturerRegion: string;
-  foodType: string;
+  manufacturerRegion?: string;
 }
 
 export interface NaturalProductData {
@@ -53,65 +52,88 @@ export interface OtherProductData {
   applications?: string[];
 }
 
-export interface ProductData {
+// Interface for creating/updating products (matches form structure)
+export interface ProductFormData {
+  // Base Product fields
   name: string;
   description: string;
   category: string;
-  manufacturerName: string;
+  manufacturerName: string; // Will be mapped to 'manufacturer' and 'brand' in backend
   originCountry: string;
-  price: number;
+  pricePerUnit: number; // Will be mapped to 'price' and 'pricePerUnit' in backend
   priceCurrency: string;
-  brand?: string;
-  minimumOrderQuantity: number;
-  dailyCapacity: number;
-  unitType: string;
-  currentAvailableStock: number;
-  leadTime: string;
-  leadTimeUnit: string;
-  sustainable: boolean;
-  productType: string;
-  image: string;
-  // Food-specific data
-  flavorType?: string[];
-  ingredients?: string[];
-  usage?: string[];
-  packagingSize?: string;
-  shelfLife?: string;
-  manufacturerRegion?: string;
-  foodType?: string;
-  allergens?: string[];
-}
-
-export interface Product {
-  id: number;
-  name: string;
-  category: string;
-  manufacturerName: string;
-  originCountry: string;
-  sku: string;
   minOrderQuantity: number;
   dailyCapacity: number;
   unitType: string;
-  currentAvailable: number;
-  pricePerUnit: number;
-  priceCurrency: string;
-  productType: string;
-  image: string;
-  createdAt: string;
-  description: string;
-  updatedAt: string;
-  lastProduced: string;
+  currentAvailable: number; // Will be mapped to 'countInStock' and 'currentAvailable' in backend
   leadTime: string;
   leadTimeUnit: string;
-  reorderPoint: number;
-  rating?: number;
   sustainable: boolean;
+  productType: string;
+  image: string;
+  sku?: string;
+  
+  // Food-specific data (will be flattened in backend)
   foodProductData?: FoodProductData;
   naturalProductData?: NaturalProductData;
   healthyProductData?: HealthyProductData;
   beverageProductData?: BeverageProductData;
   packagingProductData?: PackagingProductData;
   otherProductData?: OtherProductData;
+}
+
+// Interface for API responses (matches backend model structure)
+export interface Product {
+  _id: string; // MongoDB ObjectId
+  user: string; // User ObjectId
+  
+  // Base Product fields (from Product.ts)
+  name: string;
+  brand: string; // From manufacturerName
+  category: string;
+  description: string;
+  price: number; // From pricePerUnit
+  countInStock: number; // From currentAvailable
+  image: string;
+  rating: number;
+  numReviews: number;
+  productType: 'food' | 'beverage' | 'health' | 'other';
+  
+  // Extended fields for Food Products (from FoodProduct.ts)
+  manufacturer?: string; // Same as manufacturerName
+  originCountry?: string;
+  manufacturerRegion?: string;
+  
+  minOrderQuantity?: number;
+  dailyCapacity?: number;
+  currentAvailable?: number;
+  unitType?: string;
+  
+  pricePerUnit?: number;
+  priceCurrency?: string;
+  
+  leadTime?: string;
+  leadTimeUnit?: string;
+  
+  sustainable?: boolean;
+  sku?: string;
+  
+  // Food-specific fields (flattened from foodProductData)
+  foodType?: string;
+  flavorType?: string[];
+  ingredients?: string[];
+  allergens?: string[];
+  usage?: string[];
+  packagingType?: string;
+  packagingSize?: string;
+  shelfLife?: string;
+  shelfLifeStartDate?: Date;
+  shelfLifeEndDate?: Date;
+  storageInstruction?: string;
+  
+  // Timestamps
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiResponse<T> {
@@ -124,112 +146,126 @@ export interface ApiResponse<T> {
 class ProductService {
   private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-  // Get all products for the authenticated manufacturer
-  async getProducts(): Promise<ApiResponse<Product[]>> {
-    try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`${this.baseUrl}/products`, {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      // });
-      // const data = await response.json();
-      // return { success: true, data: data.products };
+  // Helper function to get auth header
+  private getAuthHeaders() {
+    const token = localStorage.getItem('auth_token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+  }
 
-      // Placeholder return for now
-      console.log('ProductService.getProducts() - API placeholder called');
+  // Get all products for the authenticated manufacturer
+  async getProducts(productType?: string): Promise<ApiResponse<Product[]>> {
+    try {
+      const queryParam = productType ? `?productType=${productType}` : '';
+      const response = await fetch(`${this.baseUrl}/products${queryParam}`, {
+        headers: this.getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
       return { 
         success: true, 
-        data: [],
-        message: 'Products fetched successfully (placeholder)'
+        data: Array.isArray(data) ? data : [],
+        message: 'Products fetched successfully'
       };
     } catch (error) {
       console.error('Error fetching products:', error);
       return { 
         success: false, 
         data: [],
-        error: 'Failed to fetch products'
+        error: error instanceof Error ? error.message : 'Failed to fetch products'
+      };
+    }
+  }
+
+  // Get products by type
+  async getProductsByType(productType: string): Promise<ApiResponse<Product[]>> {
+    try {
+      const response = await fetch(`${this.baseUrl}/products/type/${productType}`, {
+        headers: this.getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      return { 
+        success: true, 
+        data: Array.isArray(data) ? data : [],
+        message: 'Products fetched successfully'
+      };
+    } catch (error) {
+      console.error('Error fetching products by type:', error);
+      return { 
+        success: false, 
+        data: [],
+        error: error instanceof Error ? error.message : 'Failed to fetch products'
       };
     }
   }
 
   // Create a new product
-  async createProduct(productData: ProductData): Promise<ApiResponse<Product>> {
+  async createProduct(productData: ProductFormData): Promise<ApiResponse<Product>> {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`${this.baseUrl}/products`, {
-      //   method: 'POST',
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify(productData),
-      // });
-      // const data = await response.json();
-      // return { success: true, data: data.product };
-
-      // Placeholder return for now
-      console.log('ProductService.createProduct() - API placeholder called', productData);
-      const mockProduct: Product = {
-        id: Date.now(),
-        sku: `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastProduced: new Date().toISOString(),
-        reorderPoint: Math.floor(productData.minimumOrderQuantity * 0.5),
-        currentAvailable: productData.currentAvailableStock,
-        pricePerUnit: productData.price,
-        priceCurrency: productData.priceCurrency,
-        minOrderQuantity: productData.minimumOrderQuantity,
-        manufacturerName: productData.manufacturerName,
-        originCountry: productData.originCountry,
-        ...productData,
-      };
+      const response = await fetch(`${this.baseUrl}/products`, {
+        method: 'POST',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(productData),
+      });
       
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
       return { 
         success: true, 
-        data: mockProduct,
-        message: 'Product created successfully (placeholder)'
+        data,
+        message: 'Product created successfully'
       };
     } catch (error) {
       console.error('Error creating product:', error);
       return { 
         success: false, 
         data: {} as Product,
-        error: 'Failed to create product'
+        error: error instanceof Error ? error.message : 'Failed to create product'
       };
     }
   }
 
   // Update an existing product
-  async updateProduct(id: string, productData: Partial<ProductData>): Promise<ApiResponse<Product>> {
+  async updateProduct(id: string, productData: Partial<ProductFormData>): Promise<ApiResponse<Product>> {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`${this.baseUrl}/products/${id}`, {
-      //   method: 'PUT',
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify(productData),
-      // });
-      // const data = await response.json();
-      // return { success: true, data: data.product };
-
-      // Placeholder return for now
-      console.log(`ProductService.updateProduct(${id}) - API placeholder called`, productData);
+      const response = await fetch(`${this.baseUrl}/products/${id}`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(productData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
       return { 
         success: true, 
-        data: {} as Product,
-        message: 'Product updated successfully (placeholder)'
+        data,
+        message: 'Product updated successfully'
       };
     } catch (error) {
       console.error('Error updating product:', error);
       return { 
         success: false, 
         data: {} as Product,
-        error: 'Failed to update product'
+        error: error instanceof Error ? error.message : 'Failed to update product'
       };
     }
   }
@@ -237,28 +273,27 @@ class ProductService {
   // Delete a product
   async deleteProduct(id: string): Promise<ApiResponse<void>> {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`${this.baseUrl}/products/${id}`, {
-      //   method: 'DELETE',
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-      //   },
-      // });
-      // return { success: response.ok };
-
-      // Placeholder return for now
-      console.log(`ProductService.deleteProduct(${id}) - API placeholder called`);
+      const response = await fetch(`${this.baseUrl}/products/${id}`, {
+        method: 'DELETE',
+        headers: this.getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+      
       return { 
         success: true, 
         data: undefined,
-        message: 'Product deleted successfully (placeholder)'
+        message: 'Product deleted successfully'
       };
     } catch (error) {
       console.error('Error deleting product:', error);
       return { 
         success: false, 
         data: undefined,
-        error: 'Failed to delete product'
+        error: error instanceof Error ? error.message : 'Failed to delete product'
       };
     }
   }
@@ -266,29 +301,29 @@ class ProductService {
   // Get a single product by ID
   async getProduct(id: string): Promise<ApiResponse<Product>> {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`${this.baseUrl}/products/${id}`, {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-      //     'Content-Type': 'application/json',
-      //   },
-      // });
-      // const data = await response.json();
-      // return { success: true, data: data.product };
-
-      // Placeholder return for now
-      console.log(`ProductService.getProduct(${id}) - API placeholder called`);
+      const response = await fetch(`${this.baseUrl}/products/${id}`, {
+        headers: this.getAuthHeaders(),
+      });
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('Product not found');
+        }
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
       return { 
         success: true, 
-        data: {} as Product,
-        message: 'Product fetched successfully (placeholder)'
+        data,
+        message: 'Product fetched successfully'
       };
     } catch (error) {
       console.error('Error fetching product:', error);
       return { 
         success: false, 
         data: {} as Product,
-        error: 'Failed to fetch product'
+        error: error instanceof Error ? error.message : 'Failed to fetch product'
       };
     }
   }
