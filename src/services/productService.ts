@@ -2,11 +2,65 @@
 // This file contains all product-related API calls
 // TODO: Replace placeholder functions with actual API endpoints when backend is ready
 
+// Define specific product data interfaces for different product types
+export interface FoodProductData {
+  flavorType: string[];
+  ingredients: string[];
+  usage: string[];
+  allergens: string[];
+  packagingType: string;
+  packagingSize: string;
+  shelfLife: string;
+  shelfLifeStartDate?: string;
+  shelfLifeEndDate?: string;
+  storageInstruction: string;
+  manufacturerRegion: string;
+  foodType: string;
+}
+
+export interface NaturalProductData {
+  organicCertification?: boolean;
+  certificationBody?: string;
+  activeIngredients?: string[];
+  extractionMethod?: string;
+  purity?: number;
+}
+
+export interface HealthyProductData {
+  nutritionalInfo?: Record<string, string | number>;
+  healthBenefits?: string[];
+  targetAudience?: string[];
+  dietaryRestrictions?: string[];
+}
+
+export interface BeverageProductData {
+  alcoholContent?: number;
+  carbonation?: boolean;
+  servingTemperature?: string;
+  flavorProfile?: string[];
+}
+
+export interface PackagingProductData {
+  material?: string;
+  recyclable?: boolean;
+  dimensions?: string;
+  weight?: number;
+}
+
+export interface OtherProductData {
+  customFields?: Record<string, string | number | boolean>;
+  specifications?: string[];
+  applications?: string[];
+}
+
 export interface ProductData {
   name: string;
   description: string;
   category: string;
+  manufacturerName: string;
+  originCountry: string;
   price: number;
+  priceCurrency: string;
   brand?: string;
   minimumOrderQuantity: number;
   dailyCapacity: number;
@@ -17,12 +71,12 @@ export interface ProductData {
   sustainable: boolean;
   productType: string;
   image: string;
+  // Food-specific data
   flavorType?: string[];
   ingredients?: string[];
   usage?: string[];
   packagingSize?: string;
   shelfLife?: string;
-  manufacturerName?: string;
   manufacturerRegion?: string;
   foodType?: string;
   allergens?: string[];
@@ -32,12 +86,15 @@ export interface Product {
   id: number;
   name: string;
   category: string;
+  manufacturerName: string;
+  originCountry: string;
   sku: string;
   minOrderQuantity: number;
   dailyCapacity: number;
   unitType: string;
   currentAvailable: number;
   pricePerUnit: number;
+  priceCurrency: string;
   productType: string;
   image: string;
   createdAt: string;
@@ -49,12 +106,12 @@ export interface Product {
   reorderPoint: number;
   rating?: number;
   sustainable: boolean;
-  foodProductData?: any;
-  naturalProductData?: any;
-  healthyProductData?: any;
-  beverageProductData?: any;
-  packagingProductData?: any;
-  otherProductData?: any;
+  foodProductData?: FoodProductData;
+  naturalProductData?: NaturalProductData;
+  healthyProductData?: HealthyProductData;
+  beverageProductData?: BeverageProductData;
+  packagingProductData?: PackagingProductData;
+  otherProductData?: OtherProductData;
 }
 
 export interface ApiResponse<T> {
@@ -65,7 +122,7 @@ export interface ApiResponse<T> {
 }
 
 class ProductService {
-  private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+  private baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
   // Get all products for the authenticated manufacturer
   async getProducts(): Promise<ApiResponse<Product[]>> {
@@ -123,7 +180,10 @@ class ProductService {
         reorderPoint: Math.floor(productData.minimumOrderQuantity * 0.5),
         currentAvailable: productData.currentAvailableStock,
         pricePerUnit: productData.price,
+        priceCurrency: productData.priceCurrency,
         minOrderQuantity: productData.minimumOrderQuantity,
+        manufacturerName: productData.manufacturerName,
+        originCountry: productData.originCountry,
         ...productData,
       };
       
