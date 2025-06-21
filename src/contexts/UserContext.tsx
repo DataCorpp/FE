@@ -95,13 +95,87 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
 
   // Check if user is already logged in from localStorage
   useEffect(() => {
+    console.log('=== USER CONTEXT INITIALIZATION ===');
+    
     const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      setRole(userData.role);
-      setIsAuthenticated(true);
+    const storedToken = localStorage.getItem("auth_token");
+    
+    console.log('Checking stored authentication:');
+    console.log('- Stored user exists:', !!storedUser);
+    console.log('- Stored token exists:', !!storedToken);
+    
+    if (storedUser && storedToken) {
+      try {
+        const userData = JSON.parse(storedUser);
+        console.log('Restoring user session:');
+        console.log('- User ID:', userData.id);
+        console.log('- User email:', userData.email);
+        console.log('- User role:', userData.role);
+        
+        // Check if JWT token is expired
+        try {
+          const tokenPayload = JSON.parse(atob(storedToken.split('.')[1]));
+          const currentTime = Math.floor(Date.now() / 1000);
+          const isExpired = tokenPayload.exp < currentTime;
+          
+          console.log('JWT Token Check:');
+          console.log('- Token expires at:', new Date(tokenPayload.exp * 1000));
+          console.log('- Current time:', new Date());
+          console.log('- Is expired:', isExpired);
+          
+          if (isExpired) {
+            console.error('🚨 JWT TOKEN EXPIRED - Clearing authentication');
+            localStorage.removeItem("user");
+            localStorage.removeItem("auth_token");
+            setUser(null);
+            setRole("manufacturer");
+            setIsAuthenticated(false);
+            return;
+          }
+        } catch (jwtError) {
+          console.warn('Could not parse JWT token, but continuing with stored user');
+        }
+        
+        setUser(userData);
+        setRole(userData.role);
+        setIsAuthenticated(true);
+        
+        console.log('✅ User session restored successfully');
+        console.log('- isAuthenticated set to:', true);
+        console.log('- Current role set to:', userData.role);
+      } catch (error) {
+        console.error('❌ Error parsing stored user data:', error);
+        console.log('Clearing corrupted authentication data');
+        localStorage.removeItem("user");
+        localStorage.removeItem("auth_token");
+        setUser(null);
+        setRole("manufacturer");
+        setIsAuthenticated(false);
+      }
+    } else if (storedUser && !storedToken) {
+      // User data exists but token is missing - this is the problematic case
+      console.warn('🚨 AUTHENTICATION INCONSISTENCY DETECTED');
+      console.log('- User data exists but auth token is missing');
+      console.log('- This indicates a partial logout or token expiry');
+      console.log('- Clearing all authentication data to ensure consistency');
+      
+      // Clear everything to ensure clean state
+      localStorage.removeItem("user");
+      localStorage.removeItem("auth_token");
+      setUser(null);
+      setRole("manufacturer");
+      setIsAuthenticated(false);
+      
+      console.log('✅ Authentication state cleaned - user needs to login again');
+    } else {
+      console.log('No stored authentication found');
+      if (!storedUser) console.log('- Missing user data');
+      if (!storedToken) console.log('- Missing auth token');
+      
+      setIsAuthenticated(false);
     }
+    
+    console.log('=== USER CONTEXT INITIALIZATION COMPLETE ===');
   }, []);
 
   const login = async (email: string, password: string, selectedRole?: UserRole, useSession: boolean = false): Promise<void> => {
@@ -182,9 +256,10 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         ...roleSpecificSettings
       };
       
-      // Store the token in localStorage only if not using session
-      if (responseData.token && !useSession) {
+      // Always store the token in localStorage for dual authentication support
+      if (responseData.token) {
         localStorage.setItem("auth_token", responseData.token as string);
+        console.log("JWT token stored in localStorage for dual authentication");
       }
       
       // Save to localStorage for persistence
@@ -194,6 +269,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       setUser(userData);
       setRole(roleFromApi);
       setIsAuthenticated(true);
+      
+      console.log(`Login successful - Authentication mode: ${useSession ? 'Session + JWT' : 'JWT Primary'}`);
     } catch (error) {
       console.error("Login error:", error);
       throw error;

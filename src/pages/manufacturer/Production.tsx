@@ -1,5 +1,25 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Search, Plus, Filter, Eye, Edit, Trash2, MoreHorizontal, AlertTriangle, Calendar, Target, TrendingUp, Settings, Users, Zap, Clock, Wrench, RotateCcw, Play, Pause, CheckCircle, AlertCircle, Loader2, Activity, Award, Package, Building, Beaker, Wheat, Package2, PlusCircle, X, FileText, BarChart, Pencil, RefreshCw, Factory, PauseCircle, MoreVertical, Info, DollarSign, PackageCheck, Box, ArrowLeft, Star, CalendarCheck, InfoIcon, Layers, LinkIcon, Save, Tag, UploadCloud, User, ExternalLink, ArrowRight, ArrowUpDown, ArrowUp, ArrowDown, Leaf } from "lucide-react";
+import { 
+  BaseProduct, 
+  CreateProductData, 
+  UpdateProductData, 
+  ProductFormData,
+  ProductionProduct,
+  ProductApiData,
+  ProductionLine,
+  BatchInfo,
+  FoodProductData,
+  NaturalProductData,
+  HealthyProductData,
+  BeverageProductData,
+  PackagingProductData,
+  OtherProductData,
+  ProductFormSubmitHandler,
+  ProductUpdateHandler,
+  ProductCreateHandler,
+  ProductDeleteHandler
+} from "@/types/product";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
@@ -244,269 +264,9 @@ const styles = `
   }
 `;
 
-// Food product specific data interface
-interface FoodProductData {
-  flavorType: string[];
-  ingredients: string[];
-  usage: string[];
-  packagingSize: string;
-  shelfLife: string;
-  manufacturerRegion: string;
-  foodType: string;
-  allergens?: string[];
-}
-
-interface NaturalProductData {
-  naturalType: string[];
-  certifications: string[];
-  sustainabilityFeatures: string[];
-  origin: string;
-  extractionMethod: string;
-  purityLevel: string;
-  organicCertified: boolean;
-  environmentalImpact: string;
-}
-
-// Add HealthyProductData interface
-interface HealthyProductData {
-  healthBenefits: string[];
-  nutritionalInfo: {
-    calories: string;
-    protein: string;
-    carbs: string;
-    fat: string;
-    fiber: string;
-    sugar: string;
-  };
-  dietaryRestrictions: string[];
-  healthCertifications: string[];
-  targetHealthGoals: string[];
-  allergenInfo: string[];
-  supplementFacts?: string;
-  clinicalStudies?: string;
-}
-
-// Beverage product specific data interface
-interface BeverageProductData {
-  beverageType: string[];
-  flavorProfile: string[];
-  ingredients: string[];
-  alcoholContent?: string;
-  carbonationLevel: string;
-  servingTemperature: string;
-  shelfLife: string;
-  packagingType: string[];
-  volumeOptions: string[];
-  nutritionalInfo: {
-    calories: string;
-    sugar: string;
-    caffeine?: string;
-    sodium: string;
-    carbs: string;
-    protein: string;
-  };
-  certifications: string[];
-  targetMarket: string[];
-  seasonality: string;
-  mixingInstructions?: string;
-  storageConditions: string;
-  allergenInfo: string[];
-  preservatives: string[];
-  coloringAgents: string[];
-  healthBenefits: string[];
-}
-
-// Packaging product specific data interface
-interface PackagingProductData {
-  packagingType: string[];
-  material: string[];
-  dimensions: {
-    length: string;
-    width: string;
-    height: string;
-    weight: string;
-  };
-  capacity: {
-    volume: string;
-    maxWeight: string;
-  };
-  durability: string;
-  sustainability: string[];
-  barrierProperties: string[];
-  printingOptions: string[];
-  closureType: string[];
-  certifications: string[];
-  targetIndustries: string[];
-  storageConditions: string;
-  shelfLife: string;
-  customization: {
-    colorOptions: string[];
-    logoPlacement: string[];
-    finishOptions: string[];
-  };
-  compliance: string[];
-  recyclability: string;
-  biodegradability: string;
-  temperatureResistance: {
-    minTemp: string;
-    maxTemp: string;
-  };
-  moistureResistance: string;
-  lightProtection: string;
-  gasBarrier: string;
-  costFactors: string[];
-  minimumOrderQuantity: string;
-  leadTimeProduction: string;
-  qualityStandards: string[];
-}
-
-// Other product specific data interface
-interface OtherProductData {
-  productCategory: string[];
-  specifications: {
-    model: string;
-    version: string;
-    serialNumber: string;
-    partNumber: string;
-  };
-  technicalSpecs: {
-    dimensions: string;
-    weight: string;
-    material: string;
-    color: string;
-  };
-  features: string[];
-  applications: string[];
-  compatibility: string[];
-  certifications: string[];
-  qualityStandards: string[];
-  targetMarkets: string[];
-  usageInstructions: string;
-  maintenanceRequirements: string;
-  warrantyInfo: {
-    duration: string;
-    coverage: string;
-    terms: string;
-  };
-  safetyInformation: string[];
-  storageConditions: string;
-  shelfLife: string;
-  customization: {
-    availableOptions: string[];
-    customColors: string[];
-    customSizes: string[];
-    brandingOptions: string[];
-  };
-  compliance: string[];
-  environmentalImpact: string;
-  sustainability: string[];
-  packaging: {
-    type: string;
-    material: string;
-    recyclable: boolean;
-  };
-  accessories: string[];
-  relatedProducts: string[];
-  priceFactors: string[];
-  distributionChannels: string[];
-  marketingFeatures: string[];
-}
-
-// ProductData interface for API
-interface ProductData {
-  name: string;
-  description: string;
-  category: string;
-  price: number;
-  brand?: string;
-  minimumOrderQuantity: number;
-  dailyCapacity: number;
-  unitType: string;
-  currentAvailableStock: number;
-  leadTime: string;
-  leadTimeUnit: string;
-  sustainable: boolean;
-  productType: string;
-  image: string;
-  flavorType?: string[];
-  ingredients?: string[];
-  usage?: string[];
-  packagingSize?: string;
-  shelfLife?: string;
-  manufacturerName?: string;
-  manufacturerRegion?: string;
-  foodType?: string;
-  allergens?: string[];
-}
-
-// Product interface
-interface Product {
-  _id?: string; // MongoDB ObjectId
-  id?: number; // For backwards compatibility with existing UI code
-  user?: string; // User ObjectId
-  
-  // Basic Product fields (matches backend FoodProduct model)
-  name: string;
-  brand?: string; // From manufacturerName
-  category: string;
-  description: string;
-  price: number; // From pricePerUnit
-  countInStock?: number; // From currentAvailable
-  image: string;
-  rating?: number;
-  numReviews?: number;
-  
-  // Product type identification
-  productType: string;
-  
-  // Extended fields for production (from FoodProduct.ts)
-  manufacturer?: string; // Same as manufacturerName
-  originCountry?: string;
-  manufacturerRegion?: string;
-  
-  minOrderQuantity: number;
-  dailyCapacity: number;
-  currentAvailable: number;
-  unitType: string;
-  
-  pricePerUnit: number;
-  priceCurrency?: string;
-  
-  leadTime: string;
-  leadTimeUnit: string;
-  
-  sustainable: boolean;
-  sku?: string;
-  
-  // Food-specific fields (flattened from foodProductData)
-  foodType?: string;
-  flavorType?: string[];
-  ingredients?: string[];
-  allergens?: string[];
-  usage?: string[];
-  packagingType?: string;
-  packagingSize?: string;
-  shelfLife?: string;
-  shelfLifeStartDate?: Date;
-  shelfLifeEndDate?: Date;
-  storageInstruction?: string;
-  
-  // Production specific fields
-  reorderPoint?: number;
-  lastProduced?: string;
-  
-  // Timestamps
-  createdAt: string;
-  updatedAt: string;
-  
-  // Nested product type specific data for backwards compatibility
-  foodProductData?: FoodProductData;
-  naturalProductData?: NaturalProductData;
-  healthyProductData?: HealthyProductData;
-  beverageProductData?: BeverageProductData;
-  packagingProductData?: PackagingProductData;
-  otherProductData?: OtherProductData;
-}
+// Use shared types from @/types/product
+type Product = BaseProduct;
+type ProductData = ProductApiData;
 
 // Empty products array to be filled from the database
 const initialProducts: Product[] = [];
@@ -642,8 +402,22 @@ export const Production = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  // Products state
-  const [products, setProducts] = useState<Product[]>([]);
+  // Authentication debugging
+  React.useEffect(() => {
+    console.log('=== PRODUCTION COMPONENT AUTH CHECK ===');
+    console.log('isAuthenticated from context:', isAuthenticated);
+    console.log('user from context:', user);
+    console.log('localStorage auth_token:', !!localStorage.getItem('auth_token'));
+    console.log('localStorage user:', !!localStorage.getItem('user'));
+    
+    if (!isAuthenticated) {
+      console.warn('🚨 User is NOT authenticated in Production component!');
+    } else {
+      console.log('✅ User is authenticated in Production component');
+    }
+  }, [isAuthenticated, user]);
+
+  const [products, setProducts] = useState<BaseProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -1145,12 +919,18 @@ export const Production = () => {
     );
   }
 
-  // Create a new product
+  // Type for creating new products
+type CreateProductData = Omit<
+  Product,
+  "_id" | "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku"
+>;
+
+// Type for updating products
+type UpdateProductData = Product;
+
+// Create a new product
   const handleCreateProduct = async (
-    newProduct: Omit<
-      Product,
-      "_id" | "id" | "createdAt" | "updatedAt" | "lastProduced" | "reorderPoint" | "sku"
-    >
+    newProduct: CreateProductData
   ) => {
     setIsLoading(true);
     
@@ -1278,8 +1058,29 @@ export const Production = () => {
 
     try {
       if (!updatedProduct._id) {
-        throw new Error('Product ID is required for update');
+        toast({
+          title: t('production-error', "Error"),
+          description: "Product ID is required for update",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
       }
+
+      // Check if user is authenticated
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login again to continue.",
+          variant: "destructive",
+        });
+        navigate("/auth?type=signin");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('Attempting to update product:', { id: updatedProduct._id, name: updatedProduct.name });
 
       // Prepare data for API
       const productData = {
@@ -1313,28 +1114,65 @@ export const Production = () => {
       // Use the product service to update product
       const response = await productService.updateProduct(updatedProduct._id, productData);
       
+      console.log('Update response:', response);
+      
       if (response.success) {
         // Update local state
         setProducts(products.map((p) => 
           p._id === updatedProduct._id ? updatedProduct : p
         ));
         console.log('Product updated successfully via API');
+        
+        toast({
+          title: t('production-product-updated', "Product updated"),
+          description: t('production-product-updated-successfully', "{{name}} has been updated successfully.", { name: updatedProduct.name }),
+          variant: "default",
+        });
+        
+        setIsAddDialogOpen(false);
+        setSelectedProduct(null);
       } else {
-        throw new Error(response.error || 'Failed to update product');
+        // Handle specific error cases
+        const errorMessage = response.error || 'Failed to update product';
+        
+        if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please login again.",
+            variant: "destructive",
+          });
+          navigate("/auth?type=signin");
+          return;
+        }
+        
+        // Show specific error message
+        toast({
+          title: t('production-error', "Error"),
+          description: errorMessage,
+          variant: "destructive",
+        });
       }
-
-      toast({
-        title: t('production-product-updated', "Product updated"),
-        description: t('production-product-updated-successfully', "{{name}} has been updated successfully.", { name: updatedProduct.name }),
-        variant: "default",
-      });
-      
-      setIsAddDialogOpen(false);
     } catch (error) {
       console.error('Error updating product:', error);
+      
+      // Handle authentication errors
+      if (error instanceof Error && (
+        error.message.includes('authentication') || 
+        error.message.includes('login') ||
+        error.message.includes('token')
+      )) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login again to continue.",
+          variant: "destructive",
+        });
+        navigate("/auth?type=signin");
+        return;
+      }
+      
       toast({
         title: t('production-error', "Error"),
-        description: t('production-update-error', "Failed to update product. Please try again."),
+        description: error instanceof Error ? error.message : t('production-update-error', "Failed to update product. Please try again."),
         variant: "destructive",
       });
     } finally {
@@ -1347,35 +1185,161 @@ export const Production = () => {
     setIsLoading(true);
 
     try {
+      console.log('=== FRONTEND DELETE PRODUCT DEBUG ===');
+      console.log('Input productId:', productId, 'Type:', typeof productId);
+      
       const product = products.find((p) => p._id === String(productId) || p.id === productId);
       if (!product) {
-        throw new Error("Product not found");
+        console.log('Product not found in local state');
+        toast({
+          title: t('production-error', "Error"),
+          description: "Product not found",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
       }
 
+      console.log('Product found in local state:', {
+        _id: product._id,
+        id: product.id,
+        name: product.name,
+        productType: product.productType
+      });
+
+      // Use MongoDB _id for API call (primary identifier)
       const deleteId = product._id || String(productId);
+      console.log('Using deleteId for API:', deleteId);
+      
+      // Check if user is authenticated (JWT token OR session-based)
+      const token = localStorage.getItem('auth_token');
+      const user = localStorage.getItem('user');
+      
+      let hasValidAuth = false;
+      
+      // Check JWT token validity
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const currentTime = Date.now() / 1000;
+          if (payload.exp && payload.exp > currentTime) {
+            console.log('Using valid JWT token authentication');
+            hasValidAuth = true;
+          } else {
+            console.log('JWT token expired, removing from localStorage');
+            localStorage.removeItem('auth_token');
+          }
+        } catch (error) {
+          console.log('Invalid JWT token, removing from localStorage');
+          localStorage.removeItem('auth_token');
+        }
+      }
+      
+      // Check session-based auth
+      if (!hasValidAuth && user) {
+        try {
+          JSON.parse(user); // Validate user data
+          console.log('Using session-based authentication (cookies)');
+          hasValidAuth = true;
+        } catch (error) {
+          console.log('Invalid user data, removing from localStorage');
+          localStorage.removeItem('user');
+        }
+      }
+      
+      // If no valid authentication found, redirect to login
+      if (!hasValidAuth) {
+        console.log('No valid authentication found');
+        toast({
+          title: "Authentication Required",
+          description: "Please login again to continue.",
+          variant: "destructive",
+        });
+        navigate("/auth?type=signin");
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('Auth token exists, making API call...');
       
       // Use the product service to delete product
       const response = await productService.deleteProduct(deleteId);
       
-      if (response.success) {
-        setProducts(products.filter((p) => p._id !== deleteId && p.id !== productId));
-        console.log('Product deleted successfully via API');
-      } else {
-        throw new Error(response.error || 'Failed to delete product');
-      }
-
-      toast({
-        title: t('production-product-deleted', "Product deleted"),
-        description: t('production-product-removed', "{{name}} has been removed.", { name: product.name }),
-        variant: "default",
-      });
+      console.log('API response:', response);
       
-      setIsDeleteDialogOpen(false);
+      if (response.success) {
+        // Remove product from local state using both possible IDs
+        setProducts(prevProducts => 
+          prevProducts.filter((p) => 
+            p._id !== deleteId && 
+            p._id !== String(productId) && 
+            p.id !== productId
+          )
+        );
+        console.log('Product removed from local state successfully');
+        
+        toast({
+          title: t('production-product-deleted', "Product deleted"),
+          description: t('production-product-removed', "{{name}} has been removed.", { name: product.name }),
+          variant: "default",
+        });
+        
+        setIsDeleteDialogOpen(false);
+        setSelectedProduct(null);
+      } else {
+        // Handle specific error cases
+        const errorMessage = response.error || 'Failed to delete product';
+        console.log('API error:', errorMessage);
+        
+        if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
+          toast({
+            title: "Session Expired",
+            description: "Your session has expired. Please login again.",
+            variant: "destructive",
+          });
+          navigate("/auth?type=signin");
+          return;
+        }
+        
+        // Show specific error message
+        toast({
+          title: t('production-error', "Error"),
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
-      console.error('Error deleting product:', error);
+      console.error('=== FRONTEND DELETE ERROR ===');
+      console.error('Error details:', error);
+      
+      // Handle authentication errors
+      if (error instanceof Error && (
+        error.message.includes('authentication') || 
+        error.message.includes('login') ||
+        error.message.includes('token')
+      )) {
+        toast({
+          title: "Authentication Required",
+          description: "Please login again to continue.",
+          variant: "destructive",
+        });
+        navigate("/auth?type=signin");
+        return;
+      }
+      
+      // Handle network errors
+      if (error instanceof Error && error.message.includes('Failed to fetch')) {
+        toast({
+          title: "Network Error",
+          description: "Cannot connect to server. Please check if backend is running on port 3000.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       toast({
         title: t('production-error', "Error"),
-        description: t('production-delete-error', "Failed to delete product. Please try again."),
+        description: error instanceof Error ? error.message : t('production-delete-error', "Failed to delete product. Please try again."),
         variant: "destructive",
       });
     } finally {
@@ -1543,12 +1507,28 @@ export const Production = () => {
               <div className="px-6 py-6 overflow-y-auto max-h-[calc(95vh-130px)]">
                 {/* Conditionally render appropriate form component based on product type */}
                 {selectedProduct?.productType === "Food Product" ? (
-                  <ProductFormFoodBeverage
-                    product={selectedProduct}
-                    onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
-                    isLoading={isLoading}
-                    parentCategory="Food & Beverage"
-                  />
+                                      <ProductFormFoodBeverage
+                      product={{
+                        ...selectedProduct,
+                        manufacturerName: selectedProduct.manufacturerName || selectedProduct.brand || selectedProduct.manufacturer || 'Unknown',
+                        price: selectedProduct.price || selectedProduct.pricePerUnit || 0,
+                        originCountry: selectedProduct.originCountry || 'Unknown'
+                      }}
+                      onSubmit={(productData: ProductFormData) => {
+                        const convertedData: BaseProduct = {
+                          ...productData,
+                          pricePerUnit: productData.price || productData.pricePerUnit || 0,
+                          originCountry: productData.originCountry || 'Unknown'
+                        };
+                        if (selectedProduct) {
+                          handleUpdateProduct(convertedData);
+                        } else {
+                          handleCreateProduct(convertedData as CreateProductData);
+                        }
+                      }}
+                      isLoading={isLoading}
+                      parentCategory="Food & Beverage"
+                    />
                 ) : (
                   <ProductForm
                     product={selectedProduct}
@@ -2150,35 +2130,7 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
   );
 };
 
-// Define types for production lines and batches and props for ProductionTab
-interface ProductionLine {
-  id: number;
-  name: string;
-  status: string;
-  line_type: string;
-  product: string;
-  efficiency: number;
-  daily_capacity: number | string;
-  next_maintenance: string;
-  last_maintenance?: string;
-  operational_since?: string;
-  operator_assigned: string;
-  total_runtime_hours: number;
-  energy_consumption: number;
-  current_batch?: {
-    id: number;
-    status: string;
-    target_quantity: number;
-    produced_quantity: number;
-  };
-}
-
-interface BatchInfo {
-  id: number;
-  status: string;
-  target_quantity: number;
-  produced_quantity: number;
-}
+// Types for production management are now imported from @/types/product
 
 interface ProductionTabProps {
   productionLines: ProductionLine[];
@@ -3489,13 +3441,38 @@ const ProductForm: React.FC<ProductFormProps> = ({
     );
   }
 
+  // Transform product for form compatibility
+  const transformProductForForm = (prod: Product | null) => {
+    if (!prod) return null;
+    return {
+      ...prod,
+      manufacturerName: prod.manufacturerName || prod.brand || prod.manufacturer || 'Unknown',
+      price: prod.price || prod.pricePerUnit || 0
+    };
+  };
+
+  // Handle form submission with proper type conversion
+  const handleFormSubmit = (productData: any) => {
+    const convertedData = {
+      ...productData,
+      pricePerUnit: productData.price || productData.pricePerUnit || 0,
+      manufacturerName: productData.manufacturerName || productData.brand || 'Unknown'
+    };
+    
+    if (product) {
+      onSubmit(convertedData as Product);
+    } else {
+      onSubmit(convertedData as CreateProductData);
+    }
+  };
+
   // Navigate to ProductFormFoodBeverage for Food Products
   if (currentStep === 'details' && selectedProductType === 'Food Product') {
     return (
       <ProductFormFoodBeverage
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Food & Beverage"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />
@@ -3506,9 +3483,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (currentStep === 'details' && selectedProductType === 'Natural Product') {
     return (
       <ProductFormNaturalProduct
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Natural & Organic"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />
@@ -3519,9 +3496,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (currentStep === 'details' && selectedProductType === 'Healthy Product') {
     return (
       <ProductFormHealthyProduct
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Health & Wellness"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />
@@ -3532,9 +3509,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (currentStep === 'details' && selectedProductType === 'Beverage Product') {
     return (
       <ProductFormBeverage
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Beverages"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />
@@ -3545,9 +3522,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (currentStep === 'details' && selectedProductType === 'Packaging Product') {
     return (
       <ProductFormPackaging
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Packaging"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />
@@ -3558,9 +3535,9 @@ const ProductForm: React.FC<ProductFormProps> = ({
   if (currentStep === 'details' && selectedProductType === 'Other Product') {
     return (
       <ProductFormOther
-        product={product as any}
+        product={transformProductForForm(product)}
         parentCategory="Other Products"
-        onSubmit={onSubmit}
+        onSubmit={handleFormSubmit}
         isLoading={isLoading}
         onBack={() => setCurrentStep('typeSelection')}
       />

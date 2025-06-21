@@ -89,16 +89,34 @@ const createApiInstance = (baseURL: string): AxiosInstance => {
     headers: {
       'Content-Type': 'application/json',
     },
+    withCredentials: true, // Enable cookies for session-based authentication
   });
 
-  // Thêm interceptor để xử lý token
+  // Thêm interceptor để xử lý token và session-based auth
   instance.interceptors.request.use(
     (config) => {
       // Lấy token từ localStorage nếu có
       const token = localStorage.getItem('auth_token');
       if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
+        try {
+          // Validate JWT token before using
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          const currentTime = Date.now() / 1000;
+          if (payload.exp && payload.exp > currentTime) {
+            config.headers.Authorization = `Bearer ${token}`;
+          } else {
+            // Token expired, remove it
+            localStorage.removeItem('auth_token');
+          }
+        } catch (error) {
+          // Invalid token, remove it
+          localStorage.removeItem('auth_token');
+        }
       }
+      
+      // For session-based auth, cookies will be included automatically
+      // due to withCredentials: true in the instance config
+      
       return config;
     },
     (error) => Promise.reject(error)
