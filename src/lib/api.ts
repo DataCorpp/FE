@@ -19,7 +19,6 @@ export interface ApiResponse<T = Record<string, unknown>> {
   email?: string;
   role?: string;
   status?: string;
-  token?: string;
   verificationCode?: string;
   // Add properties for food product responses
   products?: T[];
@@ -82,55 +81,31 @@ export interface CrawlerTaskData {
   aiProvider?: 'default' | 'openai' | 'gemini' | 'claude';
 }
 
-// Tạo một instance axios với cấu hình chung
-const createApiInstance = (baseURL: string): AxiosInstance => {
-  const instance = axios.create({
-    baseURL,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    withCredentials: true, // Enable cookies for session-based authentication
-  });
+// Create simple axios instance for session-based authentication
+export const api = axios.create({
+  baseURL: 'http://localhost:3000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
-  // Thêm interceptor để xử lý token và session-based auth
-  instance.interceptors.request.use(
-    (config) => {
-      // Lấy token từ localStorage nếu có
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        try {
-          // Validate JWT token before using
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          const currentTime = Date.now() / 1000;
-          if (payload.exp && payload.exp > currentTime) {
-            config.headers.Authorization = `Bearer ${token}`;
-          } else {
-            // Token expired, remove it
-            localStorage.removeItem('auth_token');
-          }
-        } catch (error) {
-          // Invalid token, remove it
-          localStorage.removeItem('auth_token');
-        }
-      }
-      
-      // For session-based auth, cookies will be included automatically
-      // due to withCredentials: true in the instance config
-      
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  return instance;
-};
-
-// Khởi tạo các instance API
-const api = createApiInstance(API_BASE_URL);
-const aiApi = createApiInstance(AI_API_BASE_URL);
+const aiApi = axios.create({
+  baseURL: AI_API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 // Tạo instance API riêng cho admin với interceptor riêng
-const adminApiInstance = createApiInstance(API_BASE_URL);
+const adminApiInstance = axios.create({
+  baseURL: 'http://localhost:3000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 adminApiInstance.interceptors.request.use(
   (config) => {
     // Lấy thông tin admin từ localStorage
@@ -489,11 +464,14 @@ export const foodProductApi = {
   }
 };
 
-// API cho xác thực người dùng
+// API cho xác thực người dùng - session-based
 export const authApi = {
-  login: (email: string, password: string, useSession: boolean = false) => {
-    const config = useSession ? { withCredentials: true } : {};
-    return api.post<ApiResponse>('/users/login', { email, password }, config);
+  login: (email: string, password: string) => {
+    return api.post<ApiResponse>('/users/login', { email, password });
+  },
+  
+  googleLogin: (token: string, email: string, name: string, picture?: string) => {
+    return api.post<ApiResponse>('/users/google-login', { token, email, name, picture });
   },
   
   register: (userData: {
@@ -524,19 +502,15 @@ export const authApi = {
   },
   
   getCurrentUser: () => {
-    return api.get<ApiResponse>('/users/me', { withCredentials: true });
+    return api.get<ApiResponse>('/users/me');
   },
   
   updateProfile: (userData: Partial<ProductData>) => {
-    return api.put<ApiResponse>('/users/profile', userData, { withCredentials: true });
+    return api.put<ApiResponse>('/users/profile', userData);
   },
   
   logout: () => {
-    localStorage.removeItem('auth_token');
-    // Also logout from session if used
-    api.post('/users/logout', {}, { withCredentials: true })
-      .catch(err => console.error("Session logout error:", err));
-    return Promise.resolve();
+    return api.post<ApiResponse>('/users/logout');
   }
 };
 

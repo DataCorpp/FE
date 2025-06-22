@@ -31,13 +31,19 @@ const AdminLogin = () => {
       }
     }
     
-    const checkAuth = () => {
-      const adminAuth = localStorage.getItem('adminAuth');
-      const adminUserData = localStorage.getItem('adminUser');
-      
-      if (adminAuth === 'true' && adminUserData) {
-        try {
-          const user = JSON.parse(adminUserData);
+    const checkAuth = async () => {
+      try {
+        // Check admin session via API
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const user = await response.json();
           if (user && user.role === 'admin') {
             // Only redirect automatically if not just logged out
             if (!location.state?.loggedOut) {
@@ -46,19 +52,19 @@ const AdminLogin = () => {
               return true;
             }
           }
-        } catch (error) {
-          console.error('Error parsing admin user data:', error);
-          localStorage.removeItem('adminAuth');
-          localStorage.removeItem('adminUser');
         }
+        
+        return false;
+      } catch (error) {
+        console.error('Error checking admin session:', error);
+        return false;
       }
-      return false;
     };
     
     checkAuth();
   }, [navigate, redirectPath, location.state]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
@@ -71,36 +77,41 @@ const AdminLogin = () => {
       return;
     }
 
-    // Simple admin authentication with security protections
-    setTimeout(() => {
-      // In a real application, this would be a secure API call
-      // For security, avoid hardcoding credentials in the frontend
-      // This is for demonstration only
-      if (email === 'admin@admin.com' && password === 'admin') {
-        // Generate a mock admin token
-        const adminToken = btoa(`admin:${email}:${new Date().getTime()}`);
+    try {
+      // Call admin login API
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/login`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
 
-        // Set admin session with proper token
-        localStorage.setItem('adminAuth', 'true');
-        localStorage.setItem('adminUser', JSON.stringify({ 
-          email, 
-          role: 'admin',
-          name: 'Administrator',
-          loginTime: new Date().toISOString(),
-          token: adminToken,
-          permissions: ['users.manage', 'products.manage', 'settings.manage']
-        }));
+      if (response.ok) {
+        const userData = await response.json();
         
-        console.log("Admin login successful - Token generated");
-        
-        // Redirect to dashboard or intended destination
-        navigate(redirectPath);
+        if (userData && userData.role === 'admin') {
+          console.log("Admin login successful - Session created");
+          
+          // Redirect to dashboard or intended destination
+          navigate(redirectPath);
+        } else {
+          setError('Invalid admin credentials');
+        }
       } else {
-        setError('Invalid email or password');
-        // For security, don't reveal which field was incorrect
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.message || 'Invalid email or password');
       }
+    } catch (error) {
+      console.error('Admin login error:', error);
+      setError('Login failed. Please check your connection and try again.');
+    } finally {
       setIsLoading(false);
-    }, 1000); // Simulate API call
+    }
   };
 
   return (

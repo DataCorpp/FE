@@ -146,161 +146,33 @@ export interface ApiResponse<T> {
 class ProductService {
   private baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/products';
 
-  // Utility method to check authentication state consistency
-  private checkAuthState(): { isValid: boolean; reason?: string } {
-    const token = localStorage.getItem('auth_token');
-    const user = localStorage.getItem('user');
-    
-    if (!token && !user) {
-      return { isValid: false, reason: 'no_auth_data' };
-    }
-    
-    if (user && !token) {
-      return { isValid: false, reason: 'missing_token' };
-    }
-    
-    if (token && !user) {
-      return { isValid: false, reason: 'missing_user' };
-    }
-    
-    try {
-      JSON.parse(user!);
-      return { isValid: true };
-    } catch {
-      return { isValid: false, reason: 'corrupted_user_data' };
-    }
-  }
-
-  // Helper method to clean inconsistent auth state
-  private cleanAuthState(reason: string): void {
-    console.warn(`🧹 Cleaning authentication state. Reason: ${reason}`);
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('user');
-  }
-
-  // Helper function to get auth header
+  // Helper function to get headers for session-based authentication
   private getAuthHeaders() {
-    const headers: Record<string, string> = {
+    return {
       'Content-Type': 'application/json',
     };
-
-    console.log('=== GETTING AUTH HEADERS ===');
-
-    // Try JWT token first (from localStorage)
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      console.log('JWT token found in localStorage');
-      try {
-        // Basic JWT token validation (check if it's not expired)
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const currentTime = Date.now() / 1000;
-        
-        if (payload.exp && payload.exp > currentTime) {
-          headers.Authorization = `Bearer ${token}`;
-          console.log('Valid JWT token added to headers');
-          return headers;
-        } else {
-          console.log('JWT token expired, removing from localStorage');
-          localStorage.removeItem('auth_token');
-        }
-      } catch (error) {
-        console.log('Invalid JWT token format, removing from localStorage');
-        localStorage.removeItem('auth_token');
-      }
-    }
-
-    // Check if we have user info in localStorage (indicates session-based login)
-    const user = localStorage.getItem('user');
-    if (user) {
-      console.log('User found in localStorage (session-based auth)');
-      try {
-        JSON.parse(user); // Validate user data format
-        console.log('Session-based authentication will be used (cookies)');
-        // For session-based auth, we don't need Authorization header
-        // Cookies will be sent automatically with credentials: 'include'
-        return headers;
-      } catch (error) {
-        console.log('Invalid user data format, cleaning up');
-        localStorage.removeItem('user');
-      }
-    }
-
-    console.log('No authentication method available - will attempt request with session cookies');
-    // Don't force logout here - let the backend decide if the session is valid
-    return headers;
   }
 
-  // Helper method to check if user has any form of authentication
-  private hasAnyAuthentication(): boolean {
-    const token = localStorage.getItem('auth_token');
-    const user = localStorage.getItem('user');
-    
-    // Check for valid JWT token
-    if (token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const currentTime = Date.now() / 1000;
-        if (payload.exp && payload.exp > currentTime) {
-          return true;
-        }
-      } catch (error) {
-        // Invalid JWT token
-        localStorage.removeItem('auth_token');
-      }
-    }
-    
-    // Check for session-based auth
-    if (user) {
-      try {
-        JSON.parse(user); // Validate user data
-        return true;
-      } catch (error) {
-        localStorage.removeItem('user');
-      }
-    }
-    
-    return false;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private handleApiError(error: any, operation: string): never {
+  // Helper method to handle API errors, especially 401 authentication failures
+  private handleApiError(error: { status?: number; response?: { status?: number; data?: { message?: string } } }, operation: string): never {
     console.error(`${operation} error:`, error);
     
-    if (error.response?.status === 401) {
-      const errorMessage = error.response?.data?.message || 'Authentication failed';
-      const authType = error.response?.data?.authType;
-      
-      console.error('Authentication error details:', {
-        message: errorMessage,
-        authType: authType,
-        operation: operation
-      });
-      
-      // Check if this is a dual authentication failure (both JWT and session failed)
-      if (authType === 'both_failed' || errorMessage.includes('session expired')) {
-        // Clear both localStorage and redirect
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('user');
-        
-        // Redirect to login page
-        window.location.href = '/auth';
-        
-        throw new Error('Your session has expired. Please login again.');
-      }
-      
-      // For regular auth failures, provide helpful guidance without immediately logging out
-      throw new Error(`Authentication failed: ${errorMessage}. Please try refreshing the page or login again if the issue persists.`);
+    if (error.response?.status === 401 || error.status === 401) {
+      console.error('Authentication failed - redirecting to login');
+      // Redirect to login page for any authentication failure
+      window.location.href = '/auth';
+      throw new Error('Your session has expired. Please login again.');
     }
     
-    if (error.response?.status === 403) {
+    if (error.response?.status === 403 || error.status === 403) {
       throw new Error('You do not have permission to perform this action.');
     }
     
-    if (error.response?.status >= 500) {
+    if (error.response?.status >= 500 || error.status >= 500) {
       throw new Error('Server error. Please try again later.');
     }
     
-    throw new Error(error.response?.data?.message || error.message || `${operation} failed`);
+    throw new Error(error.response?.data?.message || `${operation} failed`);
   }
 
   // Get all products for the authenticated manufacturer
@@ -313,6 +185,9 @@ class ProductService {
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Get products');
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -341,6 +216,9 @@ class ProductService {
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Get products by type');
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
@@ -371,6 +249,9 @@ class ProductService {
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Create product');
+        }
         const errorData = await response.json();
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
@@ -395,27 +276,19 @@ class ProductService {
   async updateProduct(id: string, productData: Partial<ProductFormData>): Promise<ApiResponse<Product>> {
     try {
       console.log(`Updating product ${id}:`, productData);
-      
-      const headers = this.getAuthHeaders();
-      
-      // Check if we have any form of authentication
-      if (!this.hasAnyAuthentication()) {
-        console.log('No authentication available for update request');
-        return {
-          success: false,
-          data: {} as Product,
-          error: 'Authentication required. Please login again.'
-        };
-      }
 
       const response = await fetch(`${this.baseUrl}/${id}`, {
         method: 'PUT',
-        headers,
+        headers: this.getAuthHeaders(),
         body: JSON.stringify(productData),
         credentials: 'include', // Include cookies for session-based auth
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Update product');
+        }
+        
         let errorMessage;
         let errorData;
         
@@ -453,47 +326,23 @@ class ProductService {
   // Delete a product
   async deleteProduct(id: string): Promise<ApiResponse<void>> {
     try {
-      console.log('=== DELETE PRODUCT DEBUG ===');
+      console.log('=== DELETE PRODUCT ===');
       console.log('Product ID:', id);
-      console.log('Base URL:', this.baseUrl);
       console.log('Full URL:', `${this.baseUrl}/${id}`);
       
-      const headers = this.getAuthHeaders();
-      console.log('Request headers:', headers);
-      
-      // Check if we have any form of authentication
-      const hasAuth = this.hasAnyAuthentication();
-      const hasJwtToken = !!headers.Authorization;
-      
-      console.log('Authentication status:', {
-        hasAuth,
-        hasJwtToken,
-        authMethod: hasJwtToken ? 'JWT Token' : 'Session-based (cookies)'
-      });
-      
-      // If no authentication at all, return error
-      if (!hasAuth) {
-        console.log('No authentication available for delete request');
-        return {
-          success: false,
-          data: undefined,
-          error: 'Authentication required. Please login again.'
-        };
-      }
-      
-      console.log('Making DELETE request with authentication...');
       const response = await fetch(`${this.baseUrl}/${id}`, {
         method: 'DELETE',
-        headers,
+        headers: this.getAuthHeaders(),
         credentials: 'include', // Include cookies for session-based auth
       });
       
-      console.log('Response received:');
-      console.log('- Status:', response.status);
-      console.log('- Status Text:', response.statusText);
-      console.log('- Headers:', Object.fromEntries(response.headers.entries()));
+      console.log('Response status:', response.status);
       
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Delete product');
+        }
+        
         let errorMessage;
         let errorData;
         
@@ -539,6 +388,9 @@ class ProductService {
       });
       
       if (!response.ok) {
+        if (response.status === 401) {
+          this.handleApiError({ status: response.status }, 'Get product');
+        }
         if (response.status === 404) {
           throw new Error('Product not found');
         }

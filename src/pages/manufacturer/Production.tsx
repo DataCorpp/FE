@@ -402,20 +402,35 @@ export const Production = () => {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  // Authentication debugging
+  // Authentication check using session API
   React.useEffect(() => {
-    console.log('=== PRODUCTION COMPONENT AUTH CHECK ===');
-    console.log('isAuthenticated from context:', isAuthenticated);
-    console.log('user from context:', user);
-    console.log('localStorage auth_token:', !!localStorage.getItem('auth_token'));
-    console.log('localStorage user:', !!localStorage.getItem('user'));
-    
-    if (!isAuthenticated) {
-      console.warn('🚨 User is NOT authenticated in Production component!');
-    } else {
-      console.log('✅ User is authenticated in Production component');
-    }
-  }, [isAuthenticated, user]);
+    const checkAuthSession = async () => {
+      if (!isAuthenticated) {
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/me`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (!response.ok) {
+            // Session invalid, redirect to login
+            navigate("/auth?type=signin");
+            return;
+          }
+          
+          // Session is valid, user context should handle the rest
+        } catch (error) {
+          console.error('Error checking authentication session:', error);
+          navigate("/auth?type=signin");
+        }
+      }
+    };
+
+    checkAuthSession();
+  }, [isAuthenticated, navigate]);
 
   const [products, setProducts] = useState<BaseProduct[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -529,12 +544,11 @@ export const Production = () => {
 
       setIsLoading(true);
       try {
-        console.log('Fetching products from backend...');
-        
-        // Fetch products using the backend API structure
+        // Fetch products using the backend API structure with session
         const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products?limit=100`, {
+          method: 'GET',
+          credentials: 'include',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
             'Content-Type': 'application/json',
           },
         });
@@ -544,7 +558,6 @@ export const Production = () => {
         }
         
         const data = await response.json();
-        console.log('Backend response:', data);
         
         // Backend returns { products, page, pages, total }
         const basicProducts = data.products || [];
@@ -556,8 +569,9 @@ export const Production = () => {
               try {
                 // Get detailed product info using the details endpoint
                 const detailsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
+                  method: 'GET',
+                  credentials: 'include',
                   headers: {
-                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                     'Content-Type': 'application/json',
                   },
                 });
@@ -696,10 +710,8 @@ export const Production = () => {
           );
           
           setProducts(productsWithDetails);
-          console.log('Products with details loaded successfully:', productsWithDetails.length);
         } else {
           setProducts([]);
-          console.log('No products found');
         }
       } catch (error) {
         console.error('Error fetching products:', error);

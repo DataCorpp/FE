@@ -20,45 +20,63 @@ export const useAdminAuth = (redirectOnFailure = true) => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const checkAdminPermission = () => {
+    const checkAdminPermission = async () => {
       setIsLoading(true);
       
-      // Check localStorage for admin authentication
-      const adminAuth = localStorage.getItem('adminAuth');
-      const adminUserData = localStorage.getItem('adminUser');
-      
-      if (adminAuth === 'true' && adminUserData) {
-        try {
-          const userData = JSON.parse(adminUserData);
+      try {
+        // Check admin session via API
+        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const userData = await response.json();
           if (userData && userData.role === 'admin') {
             setIsAdmin(true);
             setAdminUser(userData);
             setIsLoading(false);
             return true;
           }
-        } catch (error) {
-          console.error('Error parsing admin user data:', error);
-          // Clear invalid data
-          localStorage.removeItem('adminAuth');
-          localStorage.removeItem('adminUser');
         }
+        
+        // Session invalid or not admin
+        setIsAdmin(false);
+        setAdminUser(null);
+        setIsLoading(false);
+        
+        // Redirect to login if needed
+        if (redirectOnFailure) {
+          navigate('/admin/login', { 
+            state: { 
+              from: window.location.pathname,
+              message: 'Please log in to access the admin panel' 
+            } 
+          });
+        }
+        
+        return false;
+      } catch (error) {
+        console.error('Error checking admin session:', error);
+        setIsAdmin(false);
+        setAdminUser(null);
+        setIsLoading(false);
+        
+        // Redirect to login on error
+        if (redirectOnFailure) {
+          navigate('/admin/login', { 
+            state: { 
+              from: window.location.pathname,
+              message: 'Please log in to access the admin panel' 
+            } 
+          });
+        }
+        
+        return false;
       }
-      
-      setIsAdmin(false);
-      setAdminUser(null);
-      setIsLoading(false);
-      
-      // Redirect to login if needed
-      if (redirectOnFailure) {
-        navigate('/admin/login', { 
-          state: { 
-            from: window.location.pathname,
-            message: 'Please log in to access the admin panel' 
-          } 
-        });
-      }
-      
-      return false;
     };
     
     checkAdminPermission();
