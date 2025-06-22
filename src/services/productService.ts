@@ -241,22 +241,91 @@ class ProductService {
   // Create a new product
   async createProduct(productData: ProductFormData): Promise<ApiResponse<Product>> {
     try {
+      // === DEBUG: Kiểm tra dữ liệu đầu vào ===
+      console.log('=== PRODUCT SERVICE CREATE DEBUG ===');
+      console.log('Raw productData received:', productData);
+      console.log('Product Name (raw):', `"${productData.name}"`);
+      console.log('Manufacturer Name (raw):', `"${productData.manufacturerName}"`);
+      console.log('Category:', `"${productData.category}"`);
+      console.log('Description length:', productData.description?.length || 0);
+
+      // === DATA SANITIZATION: Trim và validate dữ liệu ===
+      const sanitizedData: ProductFormData = {
+        ...productData,
+        // Trim string fields to remove whitespace
+        name: productData.name?.toString().trim() || '',
+        manufacturerName: productData.manufacturerName?.toString().trim() || '',
+        category: productData.category?.toString().trim() || '',
+        description: productData.description?.toString().trim() || '',
+        originCountry: productData.originCountry?.toString().trim() || '',
+        priceCurrency: productData.priceCurrency?.toString().trim() || '',
+        unitType: productData.unitType?.toString().trim() || '',
+        leadTime: productData.leadTime?.toString().trim() || '',
+        leadTimeUnit: productData.leadTimeUnit?.toString().trim() || '',
+        productType: productData.productType?.toString().trim() || '',
+        image: productData.image?.toString().trim() || '',
+        sku: productData.sku?.toString().trim() || undefined,
+      };
+
+      // === VALIDATION: Kiểm tra các field bắt buộc ===
+      const validationErrors: string[] = [];
+      
+      if (!sanitizedData.name) {
+        validationErrors.push('Product name is required and cannot be empty');
+      }
+      
+      if (!sanitizedData.manufacturerName) {
+        validationErrors.push('Manufacturer name is required and cannot be empty');
+      }
+      
+      if (!sanitizedData.category) {
+        validationErrors.push('Category is required and cannot be empty');
+      }
+      
+      if (!sanitizedData.description) {
+        validationErrors.push('Description is required and cannot be empty');
+      }
+      
+      if (sanitizedData.pricePerUnit <= 0) {
+        validationErrors.push('Price per unit must be greater than 0');
+      }
+
+      if (validationErrors.length > 0) {
+        console.error('=== VALIDATION ERRORS ===');
+        validationErrors.forEach(error => console.error(`- ${error}`));
+        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      }
+
+      // === DEBUG: Kiểm tra dữ liệu sau khi sanitize ===
+      console.log('=== AFTER SANITIZATION ===');
+      console.log('Product Name (sanitized):', `"${sanitizedData.name}"`);
+      console.log('Manufacturer Name (sanitized):', `"${sanitizedData.manufacturerName}"`);
+      console.log('Category (sanitized):', `"${sanitizedData.category}"`);
+      console.log('Price per unit:', sanitizedData.pricePerUnit);
+      console.log('Current available:', sanitizedData.currentAvailable);
+      
+      // === API CALL ===
+      console.log('Sending payload to API...');
       const response = await fetch(`${this.baseUrl}`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(productData),
+        body: JSON.stringify(sanitizedData),
         credentials: 'include', // Include cookies for session-based auth
       });
+      
+      console.log('API Response status:', response.status);
       
       if (!response.ok) {
         if (response.status === 401) {
           this.handleApiError({ status: response.status }, 'Create product');
         }
         const errorData = await response.json();
+        console.error('API Error response:', errorData);
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('Product created successfully:', data);
       return { 
         success: true, 
         data,
@@ -275,12 +344,83 @@ class ProductService {
   // Update an existing product
   async updateProduct(id: string, productData: Partial<ProductFormData>): Promise<ApiResponse<Product>> {
     try {
+      // === DEBUG: Kiểm tra dữ liệu đầu vào ===
+      console.log('=== PRODUCT SERVICE UPDATE DEBUG ===');
       console.log(`Updating product ${id}:`, productData);
+      console.log('Product Name (raw):', `"${productData.name || 'not provided'}"`);
+      console.log('Manufacturer Name (raw):', `"${productData.manufacturerName || 'not provided'}"`);
+
+      // === DATA SANITIZATION: Trim string fields ===
+      const sanitizedData: Partial<ProductFormData> = { ...productData };
+      
+      // Only sanitize fields that are provided
+      if (productData.name !== undefined) {
+        sanitizedData.name = productData.name?.toString().trim() || '';
+      }
+      if (productData.manufacturerName !== undefined) {
+        sanitizedData.manufacturerName = productData.manufacturerName?.toString().trim() || '';
+      }
+      if (productData.category !== undefined) {
+        sanitizedData.category = productData.category?.toString().trim() || '';
+      }
+      if (productData.description !== undefined) {
+        sanitizedData.description = productData.description?.toString().trim() || '';
+      }
+      if (productData.originCountry !== undefined) {
+        sanitizedData.originCountry = productData.originCountry?.toString().trim() || '';
+      }
+      if (productData.priceCurrency !== undefined) {
+        sanitizedData.priceCurrency = productData.priceCurrency?.toString().trim() || '';
+      }
+      if (productData.unitType !== undefined) {
+        sanitizedData.unitType = productData.unitType?.toString().trim() || '';
+      }
+      if (productData.leadTime !== undefined) {
+        sanitizedData.leadTime = productData.leadTime?.toString().trim() || '';
+      }
+      if (productData.leadTimeUnit !== undefined) {
+        sanitizedData.leadTimeUnit = productData.leadTimeUnit?.toString().trim() || '';
+      }
+      if (productData.productType !== undefined) {
+        sanitizedData.productType = productData.productType?.toString().trim() || '';
+      }
+      if (productData.image !== undefined) {
+        sanitizedData.image = productData.image?.toString().trim() || '';
+      }
+      if (productData.sku !== undefined) {
+        sanitizedData.sku = productData.sku?.toString().trim() || undefined;
+      }
+
+      // === VALIDATION: Kiểm tra các field nếu được cung cấp ===
+      const validationErrors: string[] = [];
+      
+      if (sanitizedData.name !== undefined && !sanitizedData.name) {
+        validationErrors.push('Product name cannot be empty if provided');
+      }
+      
+      if (sanitizedData.manufacturerName !== undefined && !sanitizedData.manufacturerName) {
+        validationErrors.push('Manufacturer name cannot be empty if provided');
+      }
+      
+      if (sanitizedData.pricePerUnit !== undefined && sanitizedData.pricePerUnit <= 0) {
+        validationErrors.push('Price per unit must be greater than 0 if provided');
+      }
+
+      if (validationErrors.length > 0) {
+        console.error('=== UPDATE VALIDATION ERRORS ===');
+        validationErrors.forEach(error => console.error(`- ${error}`));
+        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      }
+
+      // === DEBUG: Kiểm tra dữ liệu sau khi sanitize ===
+      console.log('=== AFTER SANITIZATION ===');
+      console.log('Product Name (sanitized):', `"${sanitizedData.name || 'not provided'}"`);
+      console.log('Manufacturer Name (sanitized):', `"${sanitizedData.manufacturerName || 'not provided'}"`);
 
       const response = await fetch(`${this.baseUrl}/${id}`, {
         method: 'PUT',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(productData),
+        body: JSON.stringify(sanitizedData),
         credentials: 'include', // Include cookies for session-based auth
       });
 
@@ -294,6 +434,7 @@ class ProductService {
         
         try {
           errorData = await response.json();
+          console.error('Update API Error response:', errorData);
           errorMessage = errorData.message || errorData.error || `HTTP error! status: ${response.status}`;
         } catch (parseError) {
           errorMessage = `HTTP error! status: ${response.status} - ${response.statusText}`;

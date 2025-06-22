@@ -335,6 +335,44 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const [selectedAllergen, setSelectedAllergen] = useState("");
   const [useAdvancedShelfLife, setUseAdvancedShelfLife] = useState(false);
 
+  // Real-time validation function
+  const validateField = (fieldName: string, value: string) => {
+    let error = "";
+    
+    switch (fieldName) {
+      case "name":
+        if (!value?.trim()) {
+          error = "Product name is required";
+        } else if (value.trim().length < 2) {
+          error = "Product name must be at least 2 characters long";
+        } else if (value.trim().length > 100) {
+          error = "Product name must not exceed 100 characters";
+        } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(value.trim())) {
+          error = "Product name contains invalid characters";
+        }
+        break;
+        
+      case "manufacturerName":
+        if (!value?.trim()) {
+          error = "Manufacturer name is required";
+        } else if (value.trim().length < 2) {
+          error = "Manufacturer name must be at least 2 characters long";
+        } else if (value.trim().length > 100) {
+          error = "Manufacturer name must not exceed 100 characters";
+        } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(value.trim())) {
+          error = "Manufacturer name contains invalid characters";
+        }
+        break;
+    }
+    
+    setErrors(prev => ({
+      ...prev,
+      [fieldName]: error
+    }));
+    
+    return error === "";
+  };
+
   // Multi-select handlers
   const handleFlavorChange = (value: string) => {
     setFoodProductData(prev => ({
@@ -472,15 +510,29 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     }
 
     setFormData({ ...formData, [name]: value });
+
+    // Real-time validation for critical fields
+    if (name === "name" || name === "manufacturerName") {
+      // Add a small delay to avoid excessive validation calls
+      setTimeout(() => {
+        validateField(name, value);
+      }, 300);
+    }
   };
 
   // Validation
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    // Basic Information
+    // Basic Information - Enhanced validation
     if (!formData.name?.trim()) {
       newErrors.name = "Product name is required";
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = "Product name must be at least 2 characters long";
+    } else if (formData.name.trim().length > 100) {
+      newErrors.name = "Product name must not exceed 100 characters";
+    } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(formData.name.trim())) {
+      newErrors.name = "Product name contains invalid characters";
     }
 
     if (!formData.category?.trim()) {
@@ -489,6 +541,12 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
 
     if (!formData.manufacturerName?.trim()) {
       newErrors.manufacturerName = "Manufacturer name is required";
+    } else if (formData.manufacturerName.trim().length < 2) {
+      newErrors.manufacturerName = "Manufacturer name must be at least 2 characters long";
+    } else if (formData.manufacturerName.trim().length > 100) {
+      newErrors.manufacturerName = "Manufacturer name must not exceed 100 characters";
+    } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(formData.manufacturerName.trim())) {
+      newErrors.manufacturerName = "Manufacturer name contains invalid characters";
     }
 
     if (!formData.originCountry?.trim()) {
@@ -563,7 +621,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
-        // Chuẩn bị dữ liệu để gửi lên API
+        // Chuẩn bị dữ liệu để truyền cho parent component (handleCreateProduct)
         const finalProductData = {
           // Basic product info
           name: formData.name,
@@ -594,9 +652,25 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           sustainable: formData.sustainable || false,
           
           // Product type
-          productType: "food",
+          productType: "Food Product",
           
-          // Food-specific details (flatten from foodProductData)
+          // Food-specific details (nested structure for backwards compatibility)
+          foodProductData: {
+            flavorType: foodProductData.flavorType,
+            ingredients: foodProductData.ingredients,
+            usage: foodProductData.usage,
+            allergens: foodProductData.allergens,
+            packagingType: foodProductData.packagingType,
+            packagingSize: foodProductData.packagingSize,
+            shelfLife: foodProductData.shelfLife,
+            shelfLifeStartDate: foodProductData.shelfLifeStartDate,
+            shelfLifeEndDate: foodProductData.shelfLifeEndDate,
+            storageInstruction: foodProductData.storageInstruction,
+            manufacturerRegion: foodProductData.manufacturerRegion,
+            foodType: foodProductData.foodType,
+          },
+          
+          // Flattened fields for API compatibility
           foodType: foodProductData.foodType,
           flavorType: foodProductData.flavorType,
           ingredients: foodProductData.ingredients,
@@ -611,51 +685,31 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           manufacturerRegion: foodProductData.manufacturerRegion,
         };
 
-        console.log('Submitting product data:', finalProductData);
+        console.log('=== PRODUCT FORM SUBMIT DEBUG ===');
+        console.log('Form data being passed to parent:', finalProductData);
+        console.log('Product Name:', finalProductData.name);
+        console.log('Manufacturer Name:', finalProductData.manufacturerName);
+        console.log('Category:', finalProductData.category);
+        console.log('Product Type:', finalProductData.productType);
+        console.log('Food Type:', finalProductData.foodType);
+        console.log('Price per unit:', finalProductData.pricePerUnit);
+        console.log('=== END DEBUG ===');
 
-        // Gọi API tương ứng
-        let response;
-        if (product) {
-          // Cập nhật sản phẩm hiện có
-          if (product.id) {
-            // Sử dụng foodProductApi
-            const axios = (await import('axios')).default;
-            response = await axios.put(`http://localhost:3000/api/foodproducts/${product.id}`, finalProductData);
-          } else {
-            // Tạo sản phẩm mới - sử dụng public endpoint thực tế
-            const axios = (await import('axios')).default;
-            // Gọi endpoint thực tế để lưu vào database
-            response = await axios.post('http://localhost:3000/api/foodproducts/public', finalProductData);
-          }
-        } else {
-          // Tạo sản phẩm mới - sử dụng public endpoint thực tế
-          const axios = (await import('axios')).default;
-          // Gọi endpoint thực tế để lưu vào database
-          response = await axios.post('http://localhost:3000/api/foodproducts/public', finalProductData);
-        }
+        // Gọi callback để parent component xử lý (handleCreateProduct)
+        onSubmit(finalProductData);
 
-        if (response.data) {
-          toast({
-            title: "Success",
-            description: product ? "Product updated successfully!" : "Product created successfully!",
-            variant: "default",
-          });
-
-          // Gọi callback để parent component biết việc submit thành công
-          onSubmit(response.data as Product);
-        }
+        toast({
+          title: "Success",
+          description: product ? "Product updated successfully!" : "Product created successfully!",
+          variant: "default",
+        });
 
       } catch (error: unknown) {
-        console.error('Error saving product:', error);
+        console.error('Error in form submission:', error);
         
-        let errorMessage = "There was an error saving your product. Please try again.";
+        let errorMessage = "There was an error processing your product. Please try again.";
         
-        if (error && typeof error === 'object' && 'response' in error) {
-          const apiError = error as { response?: { data?: { message?: string } } };
-          if (apiError.response?.data?.message) {
-            errorMessage = apiError.response.data.message;
-          }
-        } else if (error && typeof error === 'object' && 'message' in error) {
+        if (error && typeof error === 'object' && 'message' in error) {
           const genericError = error as { message: string };
           errorMessage = genericError.message;
         }
@@ -730,6 +784,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                     value={formData.name || ""}
                     onChange={handleChange}
                     placeholder="Enter product name"
+                    required
+                    minLength={2}
+                    maxLength={100}
                     className={cn(
                       "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
                       errors.name && "border-red-500 focus:ring-red-200"
@@ -744,6 +801,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                       {errors.name}
                     </motion.p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    {formData.name?.length || 0}/100 characters
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -793,6 +853,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                     value={formData.manufacturerName || ""}
                     onChange={handleChange}
                     placeholder="Enter manufacturer name"
+                    required
+                    minLength={2}
+                    maxLength={100}
                     className={cn(
                       "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
                       errors.manufacturerName && "border-red-500 focus:ring-red-200"
@@ -807,6 +870,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                       {errors.manufacturerName}
                     </motion.p>
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    {formData.manufacturerName?.length || 0}/100 characters
+                  </p>
                 </div>
 
                 <div className="space-y-2">

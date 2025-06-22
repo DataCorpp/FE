@@ -942,105 +942,200 @@ type UpdateProductData = Product;
 
 // Create a new product
   const handleCreateProduct = async (
-    newProduct: CreateProductData
+    formData: CreateProductData,
+    originalFormData?: any // Optional parameter để nhận dữ liệu gốc từ form
   ) => {
     setIsLoading(true);
+    
+    // === DEBUG: Kiểm tra dữ liệu đầu vào ===
+    console.log('=== HANDLE CREATE PRODUCT DEBUG ===');
+    console.log('Form Data:', originalFormData || formData);  // validate từ đây
+    console.log('Product Name:', (originalFormData?.name || formData.name)?.trim());
+    console.log('Manufacturer Name:', (originalFormData?.manufacturerName || formData.manufacturerName)?.trim());
+    console.log('User company name:', user?.companyName);
+    console.log('Product Type:', originalFormData?.productType || formData.productType);
+    console.log('Category:', originalFormData?.category || formData.category);
+    console.log('Price per unit:', originalFormData?.pricePerUnit || formData.pricePerUnit);
+    console.log('Description length:', (originalFormData?.description || formData.description)?.length || 0);
+    console.log('=== END DEBUG ===');
+    
+    // === FRONTEND VALIDATION: Kiểm tra dữ liệu bắt buộc từ form gốc ===
+    const sourceData = originalFormData || formData;
+    const productName = sourceData.name?.trim();
+    const manufacturerName = sourceData.manufacturerName?.trim() || user?.companyName?.trim();
+    
+    console.log('=== FRONTEND VALIDATION ===');
+    console.log('Validating user input (formData):', sourceData);
+    console.log('Trimmed Product Name:', `"${productName}"`);
+    console.log('Trimmed Manufacturer Name:', `"${manufacturerName}"`);
+    
+    // Kiểm tra các field bắt buộc
+    if (!productName || !manufacturerName) {
+      console.error('=== VALIDATION FAILED ===');
+      console.error('Product Name empty:', !productName);
+      console.error('Manufacturer Name empty:', !manufacturerName);
+      
+      toast({
+        title: t('production-error', "Error"),
+        description: "Please enter full product name and manufacturer.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    // Kiểm tra các field quan trọng khác
+    if (!sourceData.category?.trim()) {
+      toast({
+        title: t('production-error', "Error"),
+        description: "Please select a product category.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!sourceData.description?.trim()) {
+      toast({
+        title: t('production-error', "Error"),
+        description: "Please provide a product description.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!sourceData.pricePerUnit || sourceData.pricePerUnit <= 0) {
+      toast({
+        title: t('production-error', "Error"),
+        description: "Please enter a valid price per unit.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    if (!sourceData.productType?.trim()) {
+      toast({
+        title: t('production-error', "Error"),
+        description: "Please select a product type.",
+        variant: "destructive",
+      });
+      setIsLoading(false);
+      return;
+    }
+    
+    console.log('=== FRONTEND VALIDATION PASSED ===');
     
     try {
       // Prepare data for API
       const productData = {
         // Basic product info
-        name: newProduct.name,
-        brand: user?.companyName || newProduct.brand || 'Unknown',
-        category: newProduct.category,
-        description: newProduct.description,
-        price: Number(newProduct.pricePerUnit),
-        image: newProduct.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
-        productType: newProduct.productType,
+        name: formData.name,
+        brand: user?.companyName || formData.brand || 'Unknown',
+        category: formData.category,
+        description: formData.description,
+        price: Number(formData.pricePerUnit),
+        image: formData.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+        productType: formData.productType,
         
         // Manufacturing details
         manufacturer: user?.companyName || 'Unknown',
-        originCountry: newProduct.originCountry || 'Unknown',
-        manufacturerRegion: newProduct.manufacturerRegion,
+        originCountry: formData.originCountry || 'Unknown',
+        manufacturerRegion: formData.manufacturerRegion,
         
         // Production details
-        minOrderQuantity: newProduct.minOrderQuantity,
-        dailyCapacity: newProduct.dailyCapacity,
-        currentAvailable: newProduct.currentAvailable,
-        unitType: newProduct.unitType,
-        pricePerUnit: Number(newProduct.pricePerUnit),
-        priceCurrency: newProduct.priceCurrency || 'USD',
-        leadTime: newProduct.leadTime,
-        leadTimeUnit: newProduct.leadTimeUnit,
-        sustainable: newProduct.sustainable,
+        minOrderQuantity: formData.minOrderQuantity,
+        dailyCapacity: formData.dailyCapacity,
+        currentAvailable: formData.currentAvailable,
+        unitType: formData.unitType,
+        pricePerUnit: Number(formData.pricePerUnit),
+        priceCurrency: formData.priceCurrency || 'USD',
+        leadTime: formData.leadTime,
+        leadTimeUnit: formData.leadTimeUnit,
+        sustainable: formData.sustainable,
         
         // Food-specific data
-        ...(newProduct.productType === 'food' && {
-          foodType: newProduct.foodType || newProduct.foodProductData?.foodType,
-          flavorType: newProduct.flavorType || newProduct.foodProductData?.flavorType || [],
-          ingredients: newProduct.ingredients || newProduct.foodProductData?.ingredients || [],
-          allergens: newProduct.allergens || newProduct.foodProductData?.allergens || [],
-          usage: newProduct.usage || newProduct.foodProductData?.usage || [],
-          packagingType: newProduct.packagingType,
-          packagingSize: newProduct.packagingSize || newProduct.foodProductData?.packagingSize,
-          shelfLife: newProduct.shelfLife || newProduct.foodProductData?.shelfLife,
-          storageInstruction: newProduct.storageInstruction,
+        ...(formData.productType === 'food' && {
+          foodType: formData.foodType || formData.foodProductData?.foodType,
+          flavorType: formData.flavorType || formData.foodProductData?.flavorType || [],
+          ingredients: formData.ingredients || formData.foodProductData?.ingredients || [],
+          allergens: formData.allergens || formData.foodProductData?.allergens || [],
+          usage: formData.usage || formData.foodProductData?.usage || [],
+          packagingType: formData.packagingType,
+          packagingSize: formData.packagingSize || formData.foodProductData?.packagingSize,
+          shelfLife: formData.shelfLife || formData.foodProductData?.shelfLife,
+          storageInstruction: formData.storageInstruction,
         }),
         
         // Set type for backend
-        type: newProduct.productType === 'Food Product' ? 'food' : 
-              newProduct.productType === 'Beverage Product' ? 'beverage' :
-              newProduct.productType === 'Healthy Product' ? 'health' : 'other',
+        type: formData.productType === 'Food Product' ? 'food' : 
+              formData.productType === 'Beverage Product' ? 'beverage' :
+              formData.productType === 'Healthy Product' ? 'health' : 'other',
               
         // Backend expects these fields
           manufacturerName: user?.companyName || 'Unknown',
-        productName: newProduct.name,
+        productName: formData.name,
       };
+      
+      // === DEBUG: Kiểm tra dữ liệu gửi lên API ===
+      console.log('=== API PAYLOAD DEBUG ===');
+      console.log('Product data to send to API:', productData);
+      console.log('API productName:', productData.productName);
+      console.log('API manufacturerName:', productData.manufacturerName);
+      console.log('API name:', productData.name);
+      console.log('API manufacturer:', productData.manufacturer);
+      console.log('=== END API PAYLOAD DEBUG ===');
       
       // Use the product service to create product
       const response = await productService.createProduct(productData);
       
       if (response.success) {
         // Transform response to match UI expectations
-        const newApiProduct = response.data;
+        const responseData = response.data;
+        
+        // Debug response data structure
+        console.log('API response data:', responseData);
+        
+        // Safely handle _id which might be undefined
         const transformedProduct: Product = {
-          id: parseInt(newApiProduct._id.slice(-8), 16),
-          _id: newApiProduct._id,
-          name: newApiProduct.name,
-          brand: newApiProduct.brand,
-          category: newApiProduct.category,
-          description: newApiProduct.description,
-          price: newApiProduct.price,
-          image: newApiProduct.image,
-          productType: newApiProduct.productType,
-          minOrderQuantity: newApiProduct.minOrderQuantity || 1000,
-          dailyCapacity: newApiProduct.dailyCapacity || 5000,
-          currentAvailable: newApiProduct.currentAvailable || 0,
-          unitType: newApiProduct.unitType || 'units',
-          pricePerUnit: newApiProduct.pricePerUnit || newApiProduct.price,
-          leadTime: newApiProduct.leadTime || '1-2',
-          leadTimeUnit: newApiProduct.leadTimeUnit || 'weeks',
-          sustainable: newApiProduct.sustainable || false,
-          sku: newApiProduct.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
-          reorderPoint: Math.floor((newApiProduct.minOrderQuantity || 1000) * 0.5),
+          id: responseData && responseData._id ? parseInt(responseData._id.slice(-8), 16) : Math.floor(Math.random() * 10000),
+          _id: responseData && responseData._id ? responseData._id : `temp_${Date.now()}`,
+          name: responseData?.name || productData.name,
+          brand: responseData?.brand || productData.manufacturerName,
+          category: responseData?.category || productData.category,
+          description: responseData?.description || productData.description,
+          price: responseData?.price || productData.pricePerUnit,
+          image: responseData?.image || productData.image,
+          productType: responseData?.productType || productData.productType,
+          minOrderQuantity: responseData?.minOrderQuantity || productData.minOrderQuantity || 1000,
+          dailyCapacity: responseData?.dailyCapacity || productData.dailyCapacity || 5000,
+          currentAvailable: responseData?.currentAvailable || productData.currentAvailable || 0,
+          unitType: responseData?.unitType || productData.unitType || 'units',
+          pricePerUnit: responseData?.pricePerUnit || productData.pricePerUnit,
+          leadTime: responseData?.leadTime || productData.leadTime || '1-2',
+          leadTimeUnit: responseData?.leadTimeUnit || productData.leadTimeUnit || 'weeks',
+          sustainable: responseData?.sustainable || productData.sustainable || false,
+          sku: responseData?.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
+          reorderPoint: Math.floor((responseData?.minOrderQuantity || productData.minOrderQuantity || 1000) * 0.5),
           lastProduced: new Date().toISOString(),
-          createdAt: newApiProduct.createdAt,
-          updatedAt: newApiProduct.updatedAt,
+          createdAt: responseData?.createdAt || new Date().toISOString(),
+          updatedAt: responseData?.updatedAt || new Date().toISOString(),
           // Add other fields as needed
-          manufacturer: newApiProduct.manufacturer,
-          originCountry: newApiProduct.originCountry,
+          manufacturer: responseData?.manufacturer || productData.manufacturerName,
+          originCountry: responseData?.originCountry || productData.originCountry,
           // Food-specific fields
-          foodType: newApiProduct.foodType,
-          flavorType: newApiProduct.flavorType,
-          ingredients: newApiProduct.ingredients,
-          allergens: newApiProduct.allergens,
-          usage: newApiProduct.usage,
-          packagingSize: newApiProduct.packagingSize,
-          shelfLife: newApiProduct.shelfLife,
+          foodType: responseData?.foodType || productData.foodType,
+          flavorType: responseData?.flavorType || productData.flavorType,
+          ingredients: responseData?.ingredients || productData.ingredients,
+          allergens: responseData?.allergens || productData.allergens,
+          usage: responseData?.usage || productData.usage,
+          packagingSize: responseData?.packagingSize || productData.packagingSize,
+          shelfLife: responseData?.shelfLife || productData.shelfLife,
         };
         
         setProducts([...products, transformedProduct]);
-        setNewlyCreatedProductId(newApiProduct._id);
+        setNewlyCreatedProductId(responseData._id);
         console.log('Product created successfully via API');
       } else {
         throw new Error(response.error || 'Failed to create product');
@@ -1048,7 +1143,7 @@ type UpdateProductData = Product;
       
     toast({
       title: t('production-product-created', "Product created"),
-        description: t('production-product-added', "{{name}} has been added to your product list.", { name: newProduct.name }),
+        description: t('production-product-added', "{{name}} has been added to your product list.", { name: formData.name }),
     });
       
     setIsAddDialogOpen(false);
@@ -1093,6 +1188,62 @@ type UpdateProductData = Product;
       }
 
       console.log('Attempting to update product:', { id: updatedProduct._id, name: updatedProduct.name });
+
+      // === FRONTEND VALIDATION: Kiểm tra dữ liệu bắt buộc ===
+      const productName = updatedProduct.name?.trim();
+      const manufacturerName = updatedProduct.manufacturerName?.trim() || user?.companyName?.trim();
+      
+      console.log('=== UPDATE FRONTEND VALIDATION ===');
+      console.log('Trimmed Product Name:', `"${productName}"`);
+      console.log('Trimmed Manufacturer Name:', `"${manufacturerName}"`);
+      
+      // Kiểm tra các field bắt buộc
+      if (!productName || !manufacturerName) {
+        console.error('=== UPDATE VALIDATION FAILED ===');
+        console.error('Product Name empty:', !productName);
+        console.error('Manufacturer Name empty:', !manufacturerName);
+        
+        toast({
+          title: t('production-error', "Error"),
+          description: "Please enter full product name and manufacturer.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Kiểm tra các field quan trọng khác
+      if (!updatedProduct.category?.trim()) {
+        toast({
+          title: t('production-error', "Error"),
+          description: "Please select a product category.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!updatedProduct.description?.trim()) {
+        toast({
+          title: t('production-error', "Error"),
+          description: "Please provide a product description.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      if (!updatedProduct.pricePerUnit || updatedProduct.pricePerUnit <= 0) {
+        toast({
+          title: t('production-error', "Error"),
+          description: "Please enter a valid price per unit.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
+      console.log('=== UPDATE FRONTEND VALIDATION PASSED ===');
 
       // Prepare data for API
       const productData = {
@@ -1535,7 +1686,8 @@ type UpdateProductData = Product;
                         if (selectedProduct) {
                           handleUpdateProduct(convertedData);
                         } else {
-                          handleCreateProduct(convertedData as CreateProductData);
+                          // Truyền cả convertedData và productData gốc từ form
+                          handleCreateProduct(convertedData as CreateProductData, productData);
                         }
                       }}
                       isLoading={isLoading}
