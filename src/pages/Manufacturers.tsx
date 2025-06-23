@@ -79,6 +79,7 @@ export interface ApiManufacturer {
   industry?: string;
   certificates?: string | string[];
   avatar?: string;
+  establish?: number;
   connectionPreferences?: {
     connectWith: string[];
     industryInterests: string[];
@@ -296,7 +297,7 @@ const Manufacturers = () => {
   const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
   const [selectedCertification, setSelectedCertification] = useState<string>("all");
-  const [establishYearRange, setEstablishYearRange] = useState([1950, new Date().getFullYear()]);
+  const [establishYearRange, setEstablishYearRange] = useState([1500, new Date().getFullYear()]);
   const [sortBy, setSortBy] = useState("name-asc");
   
   // Available filter options from API
@@ -327,13 +328,13 @@ const Manufacturers = () => {
       location: apiManufacturer.address || "Not specified",
       logo: apiManufacturer.avatar || "/placeholder-logo.png",
       industry: apiManufacturer.industry || "Not specified",
-      certification: apiManufacturer.manufacturerSettings?.certifications?.join(", ") || 
+      certification: apiManufacturer.manufacturerSettings?.certifications?.join("; ") || 
                      (apiManufacturer.certificates ? 
                        (Array.isArray(apiManufacturer.certificates) ? 
-                         apiManufacturer.certificates.join(", ") : 
+                         apiManufacturer.certificates.join("; ") : 
                          apiManufacturer.certificates) : 
                        "Not specified"),
-      establishedYear: new Date(apiManufacturer.createdAt).getFullYear(),
+      establishedYear: apiManufacturer.establish || new Date(apiManufacturer.createdAt).getFullYear(),
       contact: {
         email: apiManufacturer.email,
         phone: apiManufacturer.phone,
@@ -403,7 +404,7 @@ const Manufacturers = () => {
     }
 
     // Establishment year range filter
-    if (establishYearRange[0] > 1950 || establishYearRange[1] < new Date().getFullYear()) {
+    if (establishYearRange[0] > 1500 || establishYearRange[1] < new Date().getFullYear()) {
       filtered = filtered.filter(manufacturer => {
         const year = manufacturer.establishedYear;
         return year >= establishYearRange[0] && year <= establishYearRange[1];
@@ -467,10 +468,25 @@ const Manufacturers = () => {
           )] as string[];
           setCertifications(uniqueCertifications);
           
+          // Calculate establishment year range from actual data
+          const establishYears = manufacturersData
+            .map((m: ApiManufacturer) => m.establish || new Date(m.createdAt).getFullYear())
+            .filter((year: number) => year > 0);
+          
+          if (establishYears.length > 0) {
+            const minYear = Math.min(...establishYears);
+            const maxYear = Math.max(...establishYears);
+            // Update the range if we have actual data, otherwise keep default
+            if (minYear < 1500 || maxYear > new Date().getFullYear()) {
+              setEstablishYearRange([Math.max(minYear, 1500), Math.min(maxYear, new Date().getFullYear())]);
+            }
+          }
+          
           // console.log('Filter options loaded:', {
           //   industries: uniqueIndustries.length,
           //   locations: uniqueLocations.length,
-          //   certifications: uniqueCertifications.length
+          //   certifications: uniqueCertifications.length,
+          //   establishYearRange: [minYear, maxYear]
           // });
         }
       }
@@ -618,7 +634,7 @@ const Manufacturers = () => {
     setSelectedLocation("all");
     setSelectedCertification("all");
     setSearchTerm("");
-    setEstablishYearRange([1950, new Date().getFullYear()]);
+    setEstablishYearRange([1500, new Date().getFullYear()]);
     setSortBy("name-asc");
     setShowFavoritesOnly(false);
     setCurrentPage(1);
@@ -656,26 +672,10 @@ const Manufacturers = () => {
   }, [filteredManufacturers, currentPage]);
 
   const hasActiveFilters = selectedIndustry !== "all" || selectedLocation !== "all" || selectedCertification !== "all" || searchTerm || 
-    establishYearRange[0] !== 1950 || establishYearRange[1] !== new Date().getFullYear() || showFavoritesOnly;
+    establishYearRange[0] !== 1500 || establishYearRange[1] !== new Date().getFullYear() || showFavoritesOnly;
 
   const displayedManufacturers = getPaginatedResults();
 
-  // Debug info
-  // console.log('Debug info:', {
-  //   totalManufacturers: manufacturers.length,
-  //   filteredManufacturers: filteredManufacturers.length,
-  //   displayedManufacturers: displayedManufacturers.length,
-  //   currentPage,
-  //   totalPages,
-  //   hasActiveFilters,
-  //   filters: {
-  //     searchTerm,
-  //     selectedIndustry,
-  //     selectedLocation,
-  //     establishYearRange,
-  //     showFavoritesOnly
-  //   }
-  // });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/98 to-muted/10">
@@ -755,7 +755,7 @@ const Manufacturers = () => {
                 </motion.div>
 
                 <Input
-                  type="search"
+                  type="text"
                   placeholder={t('search-manufacturers-placeholder')}
                   className="pl-14 pr-14 h-18 text-base rounded-2xl border-2 border-transparent focus:border-primary/30 bg-card/60 backdrop-blur-sm shadow-lg transition-all duration-300 hover:shadow-xl"
                   value={searchTerm}
@@ -891,83 +891,7 @@ const Manufacturers = () => {
             </motion.div>
           </motion.div>
           
-          {/* Active Filters */}
-          {/* <AnimatePresence>
-            {hasActiveFilters && (
-              <motion.div 
-                className="mb-8 flex flex-wrap items-center gap-3 bg-card/40 backdrop-blur-sm p-6 rounded-2xl border shadow-sm"
-                variants={filterVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-              >
-                <span className="text-sm font-medium text-foreground/70 flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4" />
-                  {t('active-filters')}
-                </span>
-                
-                {showFavoritesOnly && (
-                  <Badge variant="secondary" className="flex items-center gap-1 rounded-lg h-8 px-3">
-                    <Heart className="h-3 w-3" />
-                    {t('favorites-only')}
-                    <Button size="sm" variant="ghost" className="h-auto p-0 ml-1" onClick={() => setShowFavoritesOnly(false)}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-              
-                {selectedIndustry && selectedIndustry !== "all" && (
-                  <Badge variant="secondary" className="flex items-center gap-1 rounded-lg h-8 px-3">
-                    <Building className="h-3 w-3" />
-                    {selectedIndustry}
-                    <Button size="sm" variant="ghost" className="h-auto p-0 ml-1" onClick={() => setSelectedIndustry("all")}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-              
-                {selectedLocation && selectedLocation !== "all" && (
-                  <Badge variant="secondary" className="flex items-center gap-1 rounded-lg h-8 px-3">
-                    <MapPin className="h-3 w-3" />
-                    {selectedLocation}
-                    <Button size="sm" variant="ghost" className="h-auto p-0 ml-1" onClick={() => setSelectedLocation("all")}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-
-                {selectedCertification && selectedCertification !== "all" && (
-                  <Badge variant="secondary" className="flex items-center gap-1 rounded-lg h-8 px-3">
-                    <Award className="h-3 w-3" />
-                    {selectedCertification}
-                    <Button size="sm" variant="ghost" className="h-auto p-0 ml-1" onClick={() => setSelectedCertification("all")}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-                
-                {(establishYearRange[0] !== 1950 || establishYearRange[1] !== new Date().getFullYear()) && (
-                  <Badge variant="secondary" className="flex items-center gap-1 rounded-lg h-8 px-3">
-                    <Calendar className="h-3 w-3" />
-                    {establishYearRange[0]} - {establishYearRange[1]}
-                    <Button size="sm" variant="ghost" className="h-auto p-0 ml-1" onClick={() => setEstablishYearRange([1950, new Date().getFullYear()])}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </Badge>
-                )}
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={clearFilters} 
-                  className="text-xs hover:bg-destructive hover:text-destructive-foreground rounded-lg h-8 px-3"
-                >
-                  {t('clear-all')}
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence> */}
-          
+        
           {/* Main Content */}
           <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
             {/* Enhanced Filter Sidebar */}
@@ -1133,7 +1057,7 @@ const Manufacturers = () => {
                           <Slider
                             value={establishYearRange}
                             onValueChange={setEstablishYearRange}
-                            min={1950}
+                            min={1500}
                             max={new Date().getFullYear()}
                             step={1}
                             className="flex-1"

@@ -43,6 +43,7 @@ interface Manufacturer {
   industry: string;
   certification: string;
   establishedYear: number;
+  establish?: number;
   contact: {
     email: string;
     phone?: string;
@@ -250,12 +251,12 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
 
   // Parse certifications from string to array
   const certifications = manufacturer.certification 
-    ? manufacturer.certification.split(';').map(cert => cert.trim()).filter(cert => cert.length > 0)
+    ? manufacturer.certification.split(/[;,]/).map(cert => cert.trim()).filter(cert => cert.length > 0 && cert !== "Not specified")
     : [];
 
   // Parse industries from string to array if contains multiple values
   const industries = manufacturer.industry 
-    ? manufacturer.industry.split(';').map(ind => ind.trim()).filter(ind => ind.length > 0)
+    ? manufacturer.industry.split(/[;,]/).map(ind => ind.trim()).filter(ind => ind.length > 0)
     : [];
 
   // Calculate years in business
@@ -274,10 +275,10 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="flex flex-col h-full"
+              className="flex flex-col h-full overflow-hidden"
             >
               {/* Header */}
-              <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-card/50 to-card/30 backdrop-blur-sm">
+              <DialogHeader className="p-6 pb-4 border-b bg-gradient-to-r from-card/50 to-card/30 backdrop-blur-sm flex-shrink-0">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex items-center gap-4 min-w-0 flex-1">
                     {/* Logo */}
@@ -298,13 +299,13 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
 
                     {/* Title and Location */}
                     <div className="min-w-0 flex-1">
-                      <DialogTitle className="text-3xl font-bold text-foreground mb-2 line-clamp-2">
+                      <DialogTitle className="text-3xl font-bold text-foreground mb-2 line-clamp-2 break-words">
                         {manufacturer.name}
                       </DialogTitle>
-                      <div className="flex items-center gap-4 text-muted-foreground">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 flex-shrink-0" />
-                          <span className="text-sm">{manufacturer.location}</span>
+                          <span className="text-sm break-words">{manufacturer.location}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 flex-shrink-0" />
@@ -353,251 +354,193 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                 variants={contentVariants}
                 initial="hidden"
                 animate="visible"
-                className="flex-1 overflow-auto"
+                className="flex-1 overflow-y-auto overflow-x-hidden"
               >
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
-                  <TabsList className="grid w-full grid-cols-3 mx-6 mt-4 bg-muted/50">
+                  <TabsList className="grid w-full grid-cols-3 mx-3 mt-2 bg-muted/50">
                     <TabsTrigger value="overview" className="rounded-lg">Overview</TabsTrigger>
                     <TabsTrigger value="products" className="rounded-lg">Products</TabsTrigger>
                     <TabsTrigger value="contact" className="rounded-lg">Contact</TabsTrigger>
                   </TabsList>
 
                   {/* Overview Tab - Comprehensive company information */}
-                  <TabsContent value="overview" className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                    <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                      {/* Key Stats */}
-                      <Card className="bg-gradient-to-br from-primary/5 to-primary/10 border-primary/20">
-                        <CardContent className="p-4 text-center">
-                          <Calendar className="h-8 w-8 text-primary mx-auto mb-2" />
-                          <div className="text-2xl font-bold text-primary">{yearsInBusiness}</div>
-                          <div className="text-sm text-muted-foreground">Years in Business</div>
-                        </CardContent>
-                      </Card>
+                  <TabsContent value="overview" className="p-6 overflow-y-auto overflow-x-hidden">
+                    <motion.div 
+                      variants={contentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="grid grid-cols-1 lg:grid-cols-3 gap-6 w-full"
+                    >
+                      {/* Left Column: Main Information */}
+                      <div className="lg:col-span-2 space-y-6 min-w-0">
+                        {/* About Company */}
+                        {manufacturer.description && (
+                          <motion.div variants={itemVariants}>
+                            <Card className="overflow-hidden">
+                              <CardHeader className="bg-muted/30">
+                                <CardTitle className="flex items-center gap-2">
+                                  <Building2 className="h-5 w-5 text-primary" />
+                                  About {manufacturer.name}
+                                </CardTitle>
+                              </CardHeader>
+                              <CardContent className="p-6 text-sm text-muted-foreground leading-relaxed break-words">
+                                {manufacturer.description}
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        )}
 
-                      <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                        <CardContent className="p-4 text-center">
-                          <Award className="h-8 w-8 text-green-600 mx-auto mb-2" />
-                          <div className="text-lg font-bold text-green-700">Certified</div>
-                          <div className="text-sm text-green-600">{certifications.length} Certifications</div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                        <CardContent className="p-4 text-center">
-                          <Building className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                          <div className="text-lg font-bold text-blue-700">Industries</div>
-                          <div className="text-sm text-blue-600">{industries.length} Sectors</div>
-                        </CardContent>
-                      </Card>
-
-                      <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-                        <CardContent className="p-4 text-center">
-                          <Package className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-                          <div className="text-lg font-bold text-purple-700">Products</div>
-                          <div className="text-sm text-purple-600">{totalProducts} Items</div>
-                        </CardContent>
-                      </Card>
-                    </motion.div>
-
-                    {/* Company Overview */}
-                    <motion.div variants={itemVariants}>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <Building2 className="h-5 w-5 text-primary" />
-                            Company Information
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                          {/* Company Description */}
-                          {manufacturer.description && (
-                            <div>
-                              <h4 className="font-semibold mb-3 flex items-center gap-2">
-                                <FileText className="h-4 w-4" />
-                                About Company
-                              </h4>
-                              <div className="text-sm text-muted-foreground bg-muted/30 rounded-lg p-4 border-l-4 border-primary/30">
-                                <p className="leading-relaxed">{manufacturer.description}</p>
+                        {/* Location Map */}
+                        <motion.div variants={itemVariants}>
+                          <Card className="overflow-hidden">
+                            <CardHeader className="bg-muted/30">
+                              <CardTitle className="flex items-center gap-2">
+                                <MapPin className="h-5 w-5 text-primary" />
+                                Headquarters
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                              <div className="text-lg font-semibold mb-4 break-words">{manufacturer.location}</div>
+                              {/* Map Placeholder */}
+                              <div className="aspect-video bg-gradient-to-br from-muted/50 to-muted/20 rounded-lg flex flex-col items-center justify-center border-2 border-dashed border-border/50">
+                                <MapPin className="h-12 w-12 text-primary/30 mb-2" />
+                                <p className="text-muted-foreground font-medium text-center">Map View Coming Soon</p>
+                                <p className="text-xs text-muted-foreground/80 text-center">Interactive map will be available here</p>
                               </div>
-                            </div>
-                          )}
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      </div>
 
-                          {/* Basic Company Details */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-4">
-                              <div className="bg-muted/30 rounded-lg p-4 border">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Calendar className="h-4 w-4 text-primary" />
-                                  <span className="font-medium text-sm">Establishment</span>
+                      {/* Right Column: Key Details & Certifications */}
+                      <div className="lg:col-span-1 space-y-6 min-w-0">
+                        {/* Key Details Card */}
+                        <motion.div variants={itemVariants}>
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <Zap className="h-5 w-5 text-primary" />
+                                At a Glance
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-5">
+                              <div className="flex items-start gap-4">
+                                <div className="bg-primary/10 text-primary p-3 rounded-lg flex-shrink-0">
+                                  <Calendar className="h-5 w-5" />
                                 </div>
-                                <div className="text-lg font-semibold">{manufacturer.establishedYear}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  {yearsInBusiness} years in business
+                                <div className="min-w-0">
+                                  <p className="font-semibold">Established</p>
+                                  <p className="text-sm text-muted-foreground">{manufacturer.establishedYear} ({yearsInBusiness} years)</p>
                                 </div>
                               </div>
 
-                              <div className="bg-muted/30 rounded-lg p-4 border">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <MapPin className="h-4 w-4 text-primary" />
-                                  <span className="font-medium text-sm">Location</span>
+                              <div className="flex items-start gap-4">
+                                <div className="bg-primary/10 text-primary p-3 rounded-lg flex-shrink-0">
+                                  <Building className="h-5 w-5" />
                                 </div>
-                                <div className="text-lg font-semibold">{manufacturer.location}</div>
-                                <div className="text-sm text-muted-foreground">Headquarters</div>
+                                <div className="min-w-0">
+                                  <p className="font-semibold">Industries</p>
+                                  <div className="flex flex-wrap gap-1 mt-1">
+                                    {industries.length > 0 ? industries.map((industry, index) => (
+                                      <Badge key={index} variant="secondary" className="bg-primary/10 text-primary font-normal text-xs">
+                                        {industry}
+                                      </Badge>
+                                    )) : <p className="text-sm text-muted-foreground">Not specified</p>}
+                                  </div>
+                                </div>
                               </div>
-                            </div>
 
-                            <div className="space-y-4">
-                              <div className="bg-muted/30 rounded-lg p-4 border">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Building className="h-4 w-4 text-primary" />
-                                  <span className="font-medium text-sm">Industries</span>
+                              <div className="flex items-start gap-4">
+                                <div className="bg-primary/10 text-primary p-3 rounded-lg flex-shrink-0">
+                                  <Package className="h-5 w-5" />
                                 </div>
-                                <div className="flex flex-wrap gap-2">
-                                  {industries.map((industry, index) => (
-                                    <Badge 
-                                      key={index} 
-                                      variant="secondary" 
-                                      className="bg-primary/10 text-primary"
-                                    >
-                                      {industry}
-                                    </Badge>
+                                <div className="min-w-0">
+                                  <p className="font-semibold">Product Range</p>
+                                  <p className="text-sm text-muted-foreground">{totalProducts} items in {productCategories.length} categories</p>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                        
+                        {/* Certifications Card */}
+                        <motion.div variants={itemVariants}>
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2">
+                                <Award className="h-5 w-5 text-primary" />
+                                Certifications
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              {certifications.length > 0 ? (
+                                <div className="space-y-3">
+                                  {certifications.map((cert, index) => (
+                                    <div key={index} className="flex items-center gap-3 text-sm bg-muted/30 p-3 rounded-lg">
+                                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                      <span className="text-muted-foreground break-words">{cert}</span>
+                                    </div>
                                   ))}
                                 </div>
-                              </div>
-
-                              <div className="bg-muted/30 rounded-lg p-4 border">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Package className="h-4 w-4 text-primary" />
-                                  <span className="font-medium text-sm">Product Portfolio</span>
+                              ) : (
+                                <div className="text-center py-4 text-muted-foreground text-sm">
+                                  <Award className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                  <p>No certifications listed.</p>
                                 </div>
-                                <div className="text-lg font-semibold">{totalProducts}</div>
-                                <div className="text-sm text-muted-foreground">
-                                  Across {productCategories.length} categories
-                                </div>
-                              </div>
-                            </div>
-                          </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      </div>
 
-                          {/* Certifications */}
-                          <div>
-                            <h4 className="font-semibold mb-4 flex items-center gap-2">
-                              <Award className="h-4 w-4 text-primary" />
-                              Certifications & Standards
-                            </h4>
-                            {certifications.length > 0 ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {certifications.map((cert, index) => (
-                                  <motion.div
-                                    key={index}
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: index * 0.1 }}
-                                    className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-4 flex items-center gap-3"
+                      {/* Quick Actions (Full Width) */}
+                      <motion.div variants={itemVariants} className="lg:col-span-3">
+                        <Card className="bg-gradient-to-r from-card to-muted/20">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Zap className="h-5 w-5 text-primary" />
+                                    Get in Touch
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-wrap gap-3">
+                                  <Button
+                                    onClick={() => handleContactClick('email')}
+                                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
                                   >
-                                    <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
-                                      <CheckCircle className="h-5 w-5 text-white" />
-                                    </div>
-                                    <div>
-                                      <div className="font-medium text-green-800">{cert}</div>
-                                      <div className="text-xs text-green-600">Certified</div>
-                                    </div>
-                                  </motion.div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-center py-8 text-muted-foreground">
-                                <Award className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                                <p>No certifications listed</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Contact Summary */}
-
-                          <div className="bg-gradient-to-br from-muted/30 to-muted/10 rounded-lg p-6 border">
-                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                              <Zap className="h-5 w-5 text-primary" />
-                              Quick Actions
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
-                              <Button
-                                onClick={() => handleContactClick('email')}
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-                              >
-                                <Mail className="h-4 w-4" />
-                                Send Email
-                              </Button>
-                              
-                              {manufacturer.contact.phone && (
-                                <Button
-                                  onClick={() => handleContactClick('phone')}
-                                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl"
-                                >
-                                  <Phone className="h-4 w-4" />
-                                  Call Now
-                                </Button>
-                              )}
-                              
-                              {manufacturer.contact.website && (
-                                <Button
-                                  onClick={() => handleContactClick('website')}
-                                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl"
-                                >
-                                  <Globe className="h-4 w-4" />
-                                  Visit Website
-                                  <ExternalLink className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-                          </div>
-                          {/* <div>
-                            <h4 className="font-semibold mb-4 flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-primary" />
-                              Contact Summary
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Mail className="h-4 w-4 text-blue-600" />
-                                  <span className="font-medium text-blue-800">Email</span>
+                                    <Mail className="h-4 w-4" />
+                                    Send Email
+                                  </Button>
+                                  
+                                  {manufacturer.contact.phone && (
+                                    <Button
+                                      onClick={() => handleContactClick('phone')}
+                                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+                                    >
+                                      <Phone className="h-4 w-4" />
+                                      Call Now
+                                    </Button>
+                                  )}
+                                  
+                                  {manufacturer.contact.website && (
+                                    <Button
+                                      onClick={() => handleContactClick('website')}
+                                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
+                                    >
+                                      <Globe className="h-4 w-4" />
+                                      Visit Website
+                                      <ExternalLink className="h-3 w-3 ml-1" />
+                                    </Button>
+                                  )}
                                 </div>
-                                <div className="text-sm text-blue-600 break-all">
-                                  {manufacturer.contact.email}
-                                </div>
-                              </div>
-
-                              {manufacturer.contact.phone && (
-                                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Phone className="h-4 w-4 text-green-600" />
-                                    <span className="font-medium text-green-800">Phone</span>
-                                  </div>
-                                  <div className="text-sm text-green-600">
-                                    {manufacturer.contact.phone}
-                                  </div>
-                                </div>
-                              )}
-
-                              {manufacturer.contact.website && (
-                                <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Globe className="h-4 w-4 text-purple-600" />
-                                    <span className="font-medium text-purple-800">Website</span>
-                                  </div>
-                                  <div className="text-sm text-purple-600 break-all">
-                                    {manufacturer.contact.website}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div> */}
-                        </CardContent>
-                      </Card>
+                            </CardContent>
+                        </Card>
+                      </motion.div>
                     </motion.div>
                   </TabsContent>
 
                   {/* Products Tab */}
-                  <TabsContent value="products" className="p-6 space-y-6">
+                  <TabsContent value="products" className="p-6 space-y-6 overflow-y-auto overflow-x-hidden">
                     <motion.div variants={itemVariants}>
                       <Card>
                         <CardHeader>
@@ -672,13 +615,13 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                                       {category.products.map((product, idx) => (
                                         <div
                                           key={idx}
-                                          className="text-sm text-muted-foreground bg-background/50 rounded-md p-3 border hover:bg-background/80 transition-colors"
+                                          className="text-sm text-muted-foreground bg-background/50 rounded-md p-3 border hover:bg-background/80 transition-colors break-words"
                                         >
                                           {product}
                                         </div>
                                       ))}
                                       {category.count > category.products.length && (
-                                        <div className="text-sm text-primary bg-primary/5 rounded-md p-3 border border-primary/20 flex items-center justify-center hover:bg-primary/10 transition-colors">
+                                        <div className="text-sm text-primary bg-primary/5 rounded-md p-3 border-primary/20 border flex items-center justify-center hover:bg-primary/10 transition-colors">
                                           +{category.count - category.products.length} more products
                                         </div>
                                       )}
@@ -702,140 +645,193 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                   </TabsContent>
 
                   {/* Contact Tab */}
-                  <TabsContent value="contact" className="p-6 space-y-6">
-                    <motion.div variants={itemVariants}>
-                      <Card>
-                        <CardHeader>
-                          <CardTitle className="flex items-center gap-2">
-                            <Mail className="h-5 w-5 text-primary" />
-                            Contact Information
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                          {/* Contact Methods */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Email */}
-                            <motion.div
-                              whileHover={{ scale: 1.02 }}
-                              className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-6 cursor-pointer"
-                              onClick={() => handleContactClick('email')}
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
-                                  <Mail className="h-6 w-6 text-white" />
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-semibold text-blue-800">Email</div>
-                                  <div className="text-blue-600 text-sm break-all">
-                                    {manufacturer.contact.email}
-                                  </div>
-                                </div>
-                                <ExternalLink className="h-4 w-4 text-blue-600" />
+                  <TabsContent value="contact" className="p-6 space-y-8 overflow-y-auto overflow-x-hidden">
+                    {/* Contact Header */}
+                    <motion.div variants={itemVariants} className="text-center space-y-3">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/20 rounded-full mb-3">
+                        <Mail className="h-8 w-8 text-primary" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-foreground">Get in Touch</h2>
+                      <p className="text-muted-foreground max-w-2xl mx-auto break-words">
+                        Connect with {manufacturer.name} directly. Use the options below for inquiries, quotes, or support.
+                      </p>
+                    </motion.div>
+
+                    {/* Main Grid Layout */}
+                    <motion.div 
+                      variants={contentVariants}
+                      initial="hidden"
+                      animate="visible"
+                      className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start w-full"
+                    >
+                      {/* Left Column: Contact Methods */}
+                      <div className="space-y-6 min-w-0">
+                        <h3 className="text-lg font-semibold flex items-center gap-2">
+                          <Users className="h-5 w-5 text-primary" />
+                          Contact Methods
+                        </h3>
+
+                        {/* Email Card */}
+                        <motion.div variants={itemVariants}>
+                          <Card 
+                            className="group transition-all duration-300 hover:shadow-lg hover:border-primary/30 cursor-pointer"
+                            onClick={() => handleContactClick('email')}
+                          >
+                            <CardContent className="p-6 flex items-start gap-5">
+                              <div className="bg-blue-100 text-blue-600 rounded-lg p-3 group-hover:scale-110 transition-transform flex-shrink-0">
+                                <Mail className="h-6 w-6" />
                               </div>
-                            </motion.div>
-
-                            {/* Phone */}
-                            {manufacturer.contact.phone && (
-                              <motion.div
-                                whileHover={{ scale: 1.02 }}
-                                className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-lg p-6 cursor-pointer"
-                                onClick={() => handleContactClick('phone')}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-                                    <Phone className="h-6 w-6 text-white" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="font-semibold text-green-800">Phone</div>
-                                    <div className="text-green-600 text-sm">
-                                      {manufacturer.contact.phone}
-                                    </div>
-                                  </div>
-                                  <ExternalLink className="h-4 w-4 text-green-600" />
-                                </div>
-                              </motion.div>
-                            )}
-
-                            {/* Website */}
-                            {manufacturer.contact.website && (
-                              <motion.div
-                                whileHover={{ scale: 1.02 }}
-                                className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-6 cursor-pointer"
-                                onClick={() => handleContactClick('website')}
-                              >
-                                <div className="flex items-center gap-4">
-                                  <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center">
-                                    <Globe className="h-6 w-6 text-white" />
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="font-semibold text-purple-800">Website</div>
-                                    <div className="text-purple-600 text-sm break-all">
-                                      {manufacturer.contact.website}
-                                    </div>
-                                  </div>
-                                  <ExternalLink className="h-4 w-4 text-purple-600" />
-                                </div>
-                              </motion.div>
-                            )}
-
-                            {/* Location */}
-                            <motion.div
-                              whileHover={{ scale: 1.02 }}
-                              className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-6"
-                            >
-                              <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center">
-                                  <MapPin className="h-6 w-6 text-white" />
-                                </div>
-                                <div className="flex-1">
-                                  <div className="font-semibold text-orange-800">Location</div>
-                                  <div className="text-orange-600 text-sm">
-                                    {manufacturer.location}
-                                  </div>
-                                </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-lg">Email</h4>
+                                <p className="text-sm text-muted-foreground break-all">{manufacturer.contact.email}</p>
+                                <p className="text-xs text-muted-foreground mt-1">Best for detailed inquiries and quotes.</p>
                               </div>
-                            </motion.div>
-                          </div>
-
-                          {/* Quick Contact Actions */}
-                          {/* <div className="bg-gradient-to-br from-muted/30 to-muted/10 rounded-lg p-6 border">
-                            <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                              <Zap className="h-5 w-5 text-primary" />
-                              Quick Actions
-                            </h3>
-                            <div className="flex flex-wrap gap-3">
-                              <Button
-                                onClick={() => handleContactClick('email')}
-                                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"
-                              >
-                                <Mail className="h-4 w-4" />
-                                Send Email
+                              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 mt-1 flex-shrink-0" onClick={(e) => { e.stopPropagation(); handleContactClick('email'); }}>
+                                Send
+                                <ExternalLink className="h-3 w-3 ml-1.5" />
                               </Button>
-                              
-                              {manufacturer.contact.phone && (
-                                <Button
-                                  onClick={() => handleContactClick('phone')}
-                                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white rounded-xl"
-                                >
-                                  <Phone className="h-4 w-4" />
-                                  Call Now
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+
+                        {/* Phone Card */}
+                        {manufacturer.contact.phone ? (
+                          <motion.div variants={itemVariants}>
+                            <Card 
+                              className="group transition-all duration-300 hover:shadow-lg hover:border-primary/30 cursor-pointer"
+                              onClick={() => handleContactClick('phone')}
+                            >
+                              <CardContent className="p-6 flex items-start gap-5">
+                                <div className="bg-green-100 text-green-600 rounded-lg p-3 group-hover:scale-110 transition-transform flex-shrink-0">
+                                  <Phone className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-lg">Phone</h4>
+                                  <p className="text-sm text-muted-foreground break-words">{manufacturer.contact.phone}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">For immediate assistance during business hours.</p>
+                                </div>
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700 mt-1 flex-shrink-0" onClick={(e) => { e.stopPropagation(); handleContactClick('phone'); }}>
+                                  Call
+                                  <ExternalLink className="h-3 w-3 ml-1.5" />
                                 </Button>
-                              )}
-                              
-                              {manufacturer.contact.website && (
-                                <Button
-                                  onClick={() => handleContactClick('website')}
-                                  className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl"
-                                >
-                                  <Globe className="h-4 w-4" />
-                                  Visit Website
-                                  <ExternalLink className="h-3 w-3" />
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ) : (
+                           <motion.div variants={itemVariants}>
+                            <Card className="bg-muted/50 border-dashed">
+                              <CardContent className="p-6 flex items-start gap-5">
+                                <div className="bg-gray-200 text-gray-500 rounded-lg p-3 flex-shrink-0">
+                                  <Phone className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-lg text-muted-foreground">Phone</h4>
+                                  <p className="text-sm text-muted-foreground">Not provided</p>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        )}
+                        
+                        {/* Website Card */}
+                        {manufacturer.contact.website ? (
+                          <motion.div variants={itemVariants}>
+                            <Card 
+                              className="group transition-all duration-300 hover:shadow-lg hover:border-primary/30 cursor-pointer"
+                              onClick={() => handleContactClick('website')}
+                            >
+                              <CardContent className="p-6 flex items-start gap-5">
+                                <div className="bg-purple-100 text-purple-600 rounded-lg p-3 group-hover:scale-110 transition-transform flex-shrink-0">
+                                  <Globe className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-lg">Website</h4>
+                                  <p className="text-sm text-muted-foreground break-all">{manufacturer.contact.website}</p>
+                                  <p className="text-xs text-muted-foreground mt-1">Explore product catalogs and company info.</p>
+                                </div>
+                                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 mt-1 flex-shrink-0" onClick={(e) => { e.stopPropagation(); handleContactClick('website'); }}>
+                                  Visit
+                                  <ExternalLink className="h-3 w-3 ml-1.5" />
                                 </Button>
-                              )}
-                            </div>
-                          </div> */}
-                        </CardContent>
-                      </Card>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        ) : (
+                          <motion.div variants={itemVariants}>
+                            <Card className="bg-muted/50 border-dashed">
+                              <CardContent className="p-6 flex items-start gap-5">
+                                <div className="bg-gray-200 text-gray-500 rounded-lg p-3 flex-shrink-0">
+                                  <Globe className="h-6 w-6" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-lg text-muted-foreground">Website</h4>
+                                  <p className="text-sm text-muted-foreground">Not available</p>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        )}
+                      </div>
+
+                      {/* Right Column: Guidelines & Location */}
+                      <div className="space-y-6 min-w-0">
+                        {/* Contact Guidelines */}
+                        <motion.div variants={itemVariants}>
+                          <Card className="bg-muted/30">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-lg">
+                                <Shield className="h-5 w-5 text-primary" />
+                                Contact Guidelines
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4 text-sm">
+                              <div>
+                                <h4 className="font-semibold mb-2">Best Practices</h4>
+                                <ul className="space-y-2 text-muted-foreground">
+                                  <li className="flex items-start gap-2">
+                                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words">Be specific about your needs (products, quantity).</span>
+                                  </li>
+                                  <li className="flex items-start gap-2">
+                                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words">Mention your company and project timeline.</span>
+                                  </li>
+                                </ul>
+                              </div>
+                              <Separator />
+                              <div>
+                                <h4 className="font-semibold mb-2">Expected Response Time</h4>
+                                <ul className="space-y-2 text-muted-foreground">
+                                  <li className="flex items-start gap-2">
+                                    <Mail className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words"><strong>Email:</strong> Typically within 24-48 hours.</span>
+                                  </li>
+                                  <li className="flex items-start gap-2">
+                                    <Phone className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                    <span className="break-words"><strong>Phone:</strong> Immediate during business hours.</span>
+                                  </li>
+                                </ul>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                        
+                        {/* Location */}
+                        <motion.div variants={itemVariants}>
+                          <Card className="bg-muted/30">
+                            <CardHeader>
+                              <CardTitle className="flex items-center gap-2 text-lg">
+                                <MapPin className="h-5 w-5 text-primary" />
+                                Location
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <p className="font-semibold break-words">{manufacturer.location}</p>
+                              <p className="text-sm text-muted-foreground">Company Headquarters</p>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      </div>
                     </motion.div>
                   </TabsContent>
                 </Tabs>

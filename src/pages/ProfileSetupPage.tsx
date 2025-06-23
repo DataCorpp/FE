@@ -83,7 +83,7 @@ const ProfileSetupPage = () => {
                 {t('profile-setup-description', 'Tell us more about your business to get started')}
               </p>
               
-              {process.env.NODE_ENV === 'development' && (
+              {/* {process.env.NODE_ENV === 'development' && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -93,7 +93,7 @@ const ProfileSetupPage = () => {
                 >
                   {isLoading ? t("processing", "Processing...") : t("dev-skip-setup", "Dev: Skip Setup")}
                 </Button>
-              )}
+              )} */}
             </div>
             
             <ProfileSetup />

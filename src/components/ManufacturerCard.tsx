@@ -18,6 +18,7 @@ interface Manufacturer {
   industry: string;
   certification: string;
   establishedYear: number;
+  establish?: number; // Added establish field from backend
   contact: {
     email: string;
     phone?: string;
@@ -218,12 +219,12 @@ const ManufacturerCard: React.FC<ManufacturerCardProps> = ({
 
   // Parse certifications from string to array
   const certifications = manufacturer.certification 
-    ? manufacturer.certification.split(';').map(cert => cert.trim()).filter(cert => cert.length > 0)
+    ? manufacturer.certification.split(/[;,]/).map(cert => cert.trim()).filter(cert => cert.length > 0 && cert !== "Not specified")
     : [];
 
   // Parse industries from string to array if contains multiple values
   const industries = manufacturer.industry 
-    ? manufacturer.industry.split(';').map(ind => ind.trim()).filter(ind => ind.length > 0)
+    ? manufacturer.industry.split(/[;,]/).map(ind => ind.trim()).filter(ind => ind.length > 0)
     : [];
 
   // Grid view (default)
