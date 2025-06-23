@@ -713,7 +713,7 @@ const Products = () => {
   // Page navigation
   const goToPage = (page: number) => {
     setPagination(prev => {
-      let newPage = Math.max(1, Math.min(page, prev.pages));
+      const newPage = Math.max(1, Math.min(page, prev.pages));
       return { ...prev, page: newPage };
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });

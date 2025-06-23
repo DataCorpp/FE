@@ -9,6 +9,7 @@ interface Manufacturer {
   industry: string;
   certification: string;
   establishedYear: number;
+  establish?: number;
   contact: {
     email: string;
     phone?: string;
