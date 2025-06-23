@@ -53,6 +53,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
 import { RadioGroup } from "@radix-ui/react-dropdown-menu";
 import { RadioGroupItem } from "@radix-ui/react-radio-group";
+import { toBaseProduct, toFormData } from "@/utils/productAdapters";
 
 // Global style to hide scrollbars
 const styles = `
@@ -592,7 +593,7 @@ export const Production = () => {
                     // Use details data for specific product info
                     category: productDetails.category || 'Food Products',
                     description: productDetails.description || '',
-                    price: productDetails.pricePerUnit || productDetails.price || 0,
+                    pricePerUnit: productDetails.pricePerUnit || 0,
                                          image: productDetails.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
                     productType: productRef.type === 'food' ? 'Food Product' : productRef.type,
                     
@@ -601,7 +602,6 @@ export const Production = () => {
                     dailyCapacity: productDetails.dailyCapacity || 5000,
                     currentAvailable: productDetails.currentAvailable || 0,
                     unitType: productDetails.unitType || 'units',
-                    pricePerUnit: productDetails.pricePerUnit || 0,
                     leadTime: productDetails.leadTime || '1-2',
                     leadTimeUnit: productDetails.leadTimeUnit || 'weeks',
                     sustainable: productDetails.sustainable || false,
@@ -943,7 +943,7 @@ type UpdateProductData = Product;
 // Create a new product
   const handleCreateProduct = async (
     formData: CreateProductData,
-    originalFormData?: any // Optional parameter để nhận dữ liệu gốc từ form
+    originalFormData?: ProductFormData // Optional parameter để nhận dữ liệu gốc từ form
   ) => {
     setIsLoading(true);
     
@@ -1087,7 +1087,8 @@ type UpdateProductData = Product;
       console.log('API manufacturer:', productData.manufacturer);
       console.log('=== END API PAYLOAD DEBUG ===');
       
-      // Use the product service to create product
+                // Use the product service to create product - đảm bảo sử dụng pricePerUnit
+      productData.price = productData.pricePerUnit; // Tương thích ngược với API cũ
       const response = await productService.createProduct(productData);
       
       if (response.success) {
@@ -1671,18 +1672,9 @@ type UpdateProductData = Product;
                 {/* Conditionally render appropriate form component based on product type */}
                 {selectedProduct?.productType === "Food Product" ? (
                                       <ProductFormFoodBeverage
-                      product={{
-                        ...selectedProduct,
-                        manufacturerName: selectedProduct.manufacturerName || selectedProduct.brand || selectedProduct.manufacturer || 'Unknown',
-                        price: selectedProduct.price || selectedProduct.pricePerUnit || 0,
-                        originCountry: selectedProduct.originCountry || 'Unknown'
-                      }}
+                      product={toFormData(selectedProduct)}
                       onSubmit={(productData: ProductFormData) => {
-                        const convertedData: BaseProduct = {
-                          ...productData,
-                          pricePerUnit: productData.price || productData.pricePerUnit || 0,
-                          originCountry: productData.originCountry || 'Unknown'
-                        };
+                        const convertedData = toBaseProduct(productData);
                         if (selectedProduct) {
                           handleUpdateProduct(convertedData);
                         } else {
@@ -3312,7 +3304,7 @@ const ProductForm: React.FC<ProductFormProps> = ({
           name: formData.name,
           description: formData.description,
           category: formData.category,
-          price: Number(formData.pricePerUnit),
+          pricePerUnit: Number(formData.pricePerUnit),
           brand: user?.companyName || 'Unknown',
           minimumOrderQuantity: formData.minOrderQuantity,
           dailyCapacity: formData.dailyCapacity,
@@ -3611,22 +3603,22 @@ const ProductForm: React.FC<ProductFormProps> = ({
     return {
       ...prod,
       manufacturerName: prod.manufacturerName || prod.brand || prod.manufacturer || 'Unknown',
-      price: prod.price || prod.pricePerUnit || 0
-    };
+      pricePerUnit: prod.pricePerUnit || 0,
+      originCountry: prod.originCountry || 'Unknown'
+    } as ProductFormData; // Ép kiểu rõ ràng thành ProductFormData
   };
 
   // Handle form submission with proper type conversion
-  const handleFormSubmit = (productData: any) => {
-    const convertedData = {
-      ...productData,
-      pricePerUnit: productData.price || productData.pricePerUnit || 0,
-      manufacturerName: productData.manufacturerName || productData.brand || 'Unknown'
-    };
+  const handleFormSubmit = (productData: ProductFormData) => {
+    // Chuyển đổi từ ProductFormData sang BaseProduct sử dụng adapter
+    const convertedData = toBaseProduct(productData);
     
     if (product) {
       onSubmit(convertedData as Product);
     } else {
-      onSubmit(convertedData as CreateProductData);
+      // Loại bỏ các trường không cần thiết cho CreateProductData
+      const { _id, id, createdAt, updatedAt, lastProduced, reorderPoint, sku, ...createData } = convertedData;
+      onSubmit(createData as CreateProductData);
     }
   };
 

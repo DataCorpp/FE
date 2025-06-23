@@ -41,58 +41,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { BaseProduct, ProductFormData, FoodProductData } from "@/types/product";
+import { toBaseProduct } from "@/utils/productAdapters";
 
-// Interfaces
-interface FoodProductData {
-  flavorType: string[];
-  ingredients: string[];
-  usage: string[];
-  allergens: string[];
+// Interfaces - Extended local interface với các trường bổ sung
+interface ExtendedFoodProductData extends FoodProductData {
   packagingType: string;
-  packagingSize: string;
-  shelfLife: string;
+  storageInstruction: string;
   shelfLifeStartDate?: string;
   shelfLifeEndDate?: string;
-  storageInstruction: string;
-  manufacturerRegion: string;
-  foodType: string;
 }
 
-interface Product {
-  id?: number;
-  name: string;
-  category: string;
-  manufacturerName: string;
-  originCountry: string;
-  sku?: string;
-  minOrderQuantity: number;
-  dailyCapacity: number;
-  unitType: string;
-  currentAvailable: number;
-  pricePerUnit: number;
-  priceCurrency: string;
-  productType: string;
-  image: string;
-  createdAt?: string;
-  description: string;
-  updatedAt?: string;
-  lastProduced?: string;
-  leadTime: string;
-  leadTimeUnit: string;
-  reorderPoint?: number;
-  rating?: number;
-  sustainable: boolean;
-  foodProductData?: FoodProductData;
-}
-
+// Interface for component props
 interface ProductFormFoodBeverageProps {
-  product: Product | null;
+  product: ProductFormData | null;
   parentCategory: string; // "Food & Beverage"
   onSubmit: (
     product:
-      | Product
+      | BaseProduct
       | Omit<
-          Product,
+          BaseProduct,
           | "id"
           | "createdAt"
           | "updatedAt"
@@ -286,7 +254,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
-  const [formData, setFormData] = useState<Partial<Product>>(
+  const [formData, setFormData] = useState<Partial<ProductFormData>>(
     product
       ? { ...product }
       : {
@@ -309,18 +277,18 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         }
   );
 
-  // Food-specific state
-  const [foodProductData, setFoodProductData] = useState<FoodProductData>({
+  // Food-specific state với ExtendedFoodProductData
+  const [foodProductData, setFoodProductData] = useState<ExtendedFoodProductData>({
     flavorType: product?.foodProductData?.flavorType || [],
     ingredients: product?.foodProductData?.ingredients || [],
     usage: product?.foodProductData?.usage || [],
     allergens: product?.foodProductData?.allergens || [],
-    packagingType: product?.foodProductData?.packagingType || "",
+    packagingType: product?.packagingType || "",
     packagingSize: product?.foodProductData?.packagingSize || "",
     shelfLife: product?.foodProductData?.shelfLife || "",
-    shelfLifeStartDate: product?.foodProductData?.shelfLifeStartDate || "",
-    shelfLifeEndDate: product?.foodProductData?.shelfLifeEndDate || "",
-    storageInstruction: product?.foodProductData?.storageInstruction || "",
+    shelfLifeStartDate: product?.shelfLifeStartDate ? product.shelfLifeStartDate.toString() : "",
+    shelfLifeEndDate: product?.shelfLifeEndDate ? product.shelfLifeEndDate.toString() : "",
+    storageInstruction: product?.storageInstruction || "",
     manufacturerRegion: product?.foodProductData?.manufacturerRegion || "",
     foodType: product?.foodProductData?.foodType || "",
   });
@@ -621,32 +589,31 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
-        // Chuẩn bị dữ liệu để truyền cho parent component (handleCreateProduct)
-        const finalProductData = {
+        // Chuẩn bị dữ liệu để truyền cho parent component
+        const finalProductData: ProductFormData = {
           // Basic product info
-          name: formData.name,
-          category: formData.category,
-          description: formData.description,
+          name: formData.name!,
+          category: formData.category!,
+          description: formData.description!,
           image: formData.image || (images.length > 0 ? images[0] : ""),
           
           // Manufacturer info
-          manufacturerName: formData.manufacturerName,
-          manufacturer: formData.manufacturerName, // Map to backend field
-          originCountry: formData.originCountry,
+          manufacturerName: formData.manufacturerName!,
+          originCountry: formData.originCountry!,
           
           // Production details
           minOrderQuantity: Number(formData.minOrderQuantity),
           dailyCapacity: Number(formData.dailyCapacity),
           currentAvailable: Number(formData.currentAvailable || 0),
-          unitType: formData.unitType,
+          unitType: formData.unitType!,
           
-          // Pricing
+          // Pricing - Chỉ sử dụng pricePerUnit
           pricePerUnit: Number(formData.pricePerUnit),
-          priceCurrency: formData.priceCurrency,
+          priceCurrency: formData.priceCurrency!,
           
           // Lead time
-          leadTime: formData.leadTime,
-          leadTimeUnit: formData.leadTimeUnit,
+          leadTime: formData.leadTime!,
+          leadTimeUnit: formData.leadTimeUnit!,
           
           // Sustainability
           sustainable: formData.sustainable || false,
@@ -654,23 +621,19 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           // Product type
           productType: "Food Product",
           
-          // Food-specific details (nested structure for backwards compatibility)
+          // Food-specific details - chỉ giữ các trường chuẩn trong FoodProductData
           foodProductData: {
             flavorType: foodProductData.flavorType,
             ingredients: foodProductData.ingredients,
             usage: foodProductData.usage,
-            allergens: foodProductData.allergens,
-            packagingType: foodProductData.packagingType,
+            allergens: foodProductData.allergens || [],
             packagingSize: foodProductData.packagingSize,
             shelfLife: foodProductData.shelfLife,
-            shelfLifeStartDate: foodProductData.shelfLifeStartDate,
-            shelfLifeEndDate: foodProductData.shelfLifeEndDate,
-            storageInstruction: foodProductData.storageInstruction,
             manufacturerRegion: foodProductData.manufacturerRegion,
             foodType: foodProductData.foodType,
           },
           
-          // Flattened fields for API compatibility
+          // Các trường mở rộng từ ExtendedFoodProductData được đưa vào cấp cao nhất
           foodType: foodProductData.foodType,
           flavorType: foodProductData.flavorType,
           ingredients: foodProductData.ingredients,
@@ -679,8 +642,6 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           packagingType: foodProductData.packagingType,
           packagingSize: foodProductData.packagingSize,
           shelfLife: foodProductData.shelfLife,
-          shelfLifeStartDate: foodProductData.shelfLifeStartDate,
-          shelfLifeEndDate: foodProductData.shelfLifeEndDate,
           storageInstruction: foodProductData.storageInstruction,
           manufacturerRegion: foodProductData.manufacturerRegion,
         };
@@ -695,8 +656,11 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         console.log('Price per unit:', finalProductData.pricePerUnit);
         console.log('=== END DEBUG ===');
 
-        // Gọi callback để parent component xử lý (handleCreateProduct)
-        onSubmit(finalProductData);
+        // Chuyển đổi ProductFormData sang BaseProduct trước khi gọi onSubmit
+        const productData = toBaseProduct(finalProductData);
+        
+        // Gọi callback để parent component xử lý
+        onSubmit(productData);
 
         toast({
           title: "Success",

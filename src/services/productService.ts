@@ -1,6 +1,9 @@
 // Product Service - API calls for product management
 // This file contains all product-related API calls and interfaces that match backend models
 
+import { toBaseProduct } from "@/utils/productAdapters";
+import { ProductFormData as TypedProductFormData, BaseProduct } from "@/types/product";
+
 // Define specific product data interfaces for different product types
 export interface FoodProductData {
   foodType: string;
@@ -239,7 +242,7 @@ class ProductService {
   }
 
   // Create a new product
-  async createProduct(productData: ProductFormData): Promise<ApiResponse<Product>> {
+  async createProduct(productData: TypedProductFormData): Promise<ApiResponse<Product>> {
     try {
       // === DEBUG: Kiểm tra dữ liệu đầu vào ===
       console.log('=== PRODUCT SERVICE CREATE DEBUG ===');
@@ -250,7 +253,7 @@ class ProductService {
       console.log('Description length:', productData.description?.length || 0);
 
       // === DATA SANITIZATION: Trim và validate dữ liệu ===
-      const sanitizedData: ProductFormData = {
+      const sanitizedData = {
         ...productData,
         // Trim string fields to remove whitespace
         name: productData.name?.toString().trim() || '',
@@ -304,12 +307,26 @@ class ProductService {
       console.log('Price per unit:', sanitizedData.pricePerUnit);
       console.log('Current available:', sanitizedData.currentAvailable);
       
+      // === Convert to BaseProduct and remove price, using only pricePerUnit ===
+      console.log('Converting ProductFormData to BaseProduct...');
+      // Cast to unknown to bypass type incompatibilities between local and imported types
+      const baseProductData = toBaseProduct(sanitizedData as unknown as TypedProductFormData);
+      
+      // Ensure we're only sending pricePerUnit, not price
+      if ('price' in baseProductData) {
+        delete baseProductData.price;
+      }
+      
+      console.log('Converted data:', baseProductData);
+      console.log('Price field exists:', 'price' in baseProductData);
+      console.log('PricePerUnit field exists:', 'pricePerUnit' in baseProductData);
+      
       // === API CALL ===
       console.log('Sending payload to API...');
       const response = await fetch(`${this.baseUrl}`, {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(sanitizedData),
+        body: JSON.stringify(baseProductData),
         credentials: 'include', // Include cookies for session-based auth
       });
       
@@ -342,7 +359,7 @@ class ProductService {
   }
 
   // Update an existing product
-  async updateProduct(id: string, productData: Partial<ProductFormData>): Promise<ApiResponse<Product>> {
+  async updateProduct(id: string, productData: Partial<TypedProductFormData>): Promise<ApiResponse<Product>> {
     try {
       // === DEBUG: Kiểm tra dữ liệu đầu vào ===
       console.log('=== PRODUCT SERVICE UPDATE DEBUG ===');
@@ -351,7 +368,7 @@ class ProductService {
       console.log('Manufacturer Name (raw):', `"${productData.manufacturerName || 'not provided'}"`);
 
       // === DATA SANITIZATION: Trim string fields ===
-      const sanitizedData: Partial<ProductFormData> = { ...productData };
+      const sanitizedData = { ...productData };
       
       // Only sanitize fields that are provided
       if (productData.name !== undefined) {
@@ -417,10 +434,26 @@ class ProductService {
       console.log('Product Name (sanitized):', `"${sanitizedData.name || 'not provided'}"`);
       console.log('Manufacturer Name (sanitized):', `"${sanitizedData.manufacturerName || 'not provided'}"`);
 
+      // Convert sanitized data to BaseProduct for the API
+      console.log('Converting ProductFormData to BaseProduct...');
+      // Cast to proper type to bypass type incompatibilities between local and imported types
+      const baseProductData = sanitizedData.name ? 
+        toBaseProduct(sanitizedData as unknown as TypedProductFormData) : 
+        sanitizedData;
+      
+      // Ensure we're only sending pricePerUnit, not price
+      if ('price' in baseProductData) {
+        delete baseProductData.price;
+      }
+      
+      console.log('Converted data for update:', baseProductData);
+      console.log('Price field exists:', 'price' in baseProductData);
+      console.log('PricePerUnit field exists:', 'pricePerUnit' in baseProductData);
+
       const response = await fetch(`${this.baseUrl}/${id}`, {
         method: 'PUT',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify(sanitizedData),
+        body: JSON.stringify(baseProductData),
         credentials: 'include', // Include cookies for session-based auth
       });
 

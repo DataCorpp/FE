@@ -182,7 +182,6 @@ export interface BaseProduct {
   manufacturerName?: string; // Required for form compatibility
   category: string;
   description: string;
-  price?: number; // Made optional for compatibility
   countInStock?: number; // From currentAvailable
   image: string;
   rating?: number;
@@ -201,7 +200,9 @@ export interface BaseProduct {
   currentAvailable: number;
   unitType: string;
   
+  // Price fields - pricePerUnit is the source of truth
   pricePerUnit: number;
+  price?: number; // Deprecated, use pricePerUnit instead
   priceCurrency?: string;
   
   leadTime: string;
@@ -228,8 +229,8 @@ export interface BaseProduct {
   lastProduced?: string;
   
   // Timestamps
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string; // Made optional
+  updatedAt?: string;
   
   // Nested product type specific data for backwards compatibility
   foodProductData?: FoodProductData;
@@ -242,7 +243,8 @@ export interface BaseProduct {
 
 // Production-specific Product interface
 export interface ProductionProduct extends BaseProduct {
-  // All properties from BaseProduct are inherited
+  // Add at least one production-specific property
+  productionStatus?: 'active' | 'inactive' | 'pending' | 'discontinued';
 }
 
 // Type for creating new products (excludes auto-generated fields)
@@ -256,9 +258,12 @@ export type UpdateProductData = BaseProduct;
 
 // Type for product form submission (includes all possible fields)
 export interface ProductFormData extends BaseProduct {
-  // Ensure all required fields for forms are present
+  // Form-specific fields
+  imageFile?: File;
+  
+  // Override some BaseProduct fields to make required in form
   manufacturerName: string;
-  price: number;
+  pricePerUnit: number;
   originCountry: string;
 }
 
@@ -267,7 +272,7 @@ export interface ProductApiData {
   name: string;
   description: string;
   category: string;
-  price: number;
+  pricePerUnit: number;
   brand?: string;
   minimumOrderQuantity: number;
   dailyCapacity: number;
