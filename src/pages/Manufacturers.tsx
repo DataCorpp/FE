@@ -57,8 +57,8 @@ import { cn } from "@/lib/utils";
 import { manufacturerApi } from "@/lib/api";
 import { createSafeBlurVariants, createClampedBlurVariants } from "@/hooks/use-safe-blur";
 
-// API configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+// API configuration - Fixed to match backend API structure
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
 // Updated interface to match User model from backend exactly
 export interface ApiManufacturer {
@@ -429,7 +429,7 @@ const Manufacturers = () => {
       setLoadingFilters(true);
       
       // Load all manufacturers first to extract unique values
-      const response = await fetch(`${API_BASE_URL}/api/users/manufacturers?page=1&limit=1000`);
+      const response = await fetch(`${API_BASE_URL}/users/manufacturers?page=1&limit=1000`);
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.manufacturers) {
@@ -513,7 +513,7 @@ const Manufacturers = () => {
         limit: '1000' // Load all for client-side filtering
       });
       
-      const response = await fetch(`${API_BASE_URL}/api/users/manufacturers?${params}`);
+      const response = await fetch(`${API_BASE_URL}/users/manufacturers?${params}`);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -523,7 +523,7 @@ const Manufacturers = () => {
       
       if (data.success && data.manufacturers) {
         const convertedManufacturers = data.manufacturers.map(convertApiToUI);
-        // console.log('Loaded manufacturers:', convertedManufacturers.length, convertedManufacturers); // Debug log
+        console.log(`[SERVER] Fetched ${data.manufacturers.length} manufacturers`);
         setManufacturers(convertedManufacturers);
         setTotalCount(data.total || convertedManufacturers.length);
       } else {

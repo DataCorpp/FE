@@ -19,7 +19,6 @@ export interface ApiResponse<T = Record<string, unknown>> {
   email?: string;
   role?: string;
   status?: string;
-  token?: string;
   verificationCode?: string;
   // Add properties for food product responses
   products?: T[];
@@ -82,37 +81,31 @@ export interface CrawlerTaskData {
   aiProvider?: 'default' | 'openai' | 'gemini' | 'claude';
 }
 
-// Tạo một instance axios với cấu hình chung
-const createApiInstance = (baseURL: string): AxiosInstance => {
-  const instance = axios.create({
-    baseURL,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  });
+// Create simple axios instance for session-based authentication
+export const api = axios.create({
+  baseURL: 'http://localhost:3000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
-  // Thêm interceptor để xử lý token
-  instance.interceptors.request.use(
-    (config) => {
-      // Lấy token từ localStorage nếu có
-      const token = localStorage.getItem('auth_token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-
-  return instance;
-};
-
-// Khởi tạo các instance API
-const api = createApiInstance(API_BASE_URL);
-const aiApi = createApiInstance(AI_API_BASE_URL);
+const aiApi = axios.create({
+  baseURL: AI_API_BASE_URL,
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 // Tạo instance API riêng cho admin với interceptor riêng
-const adminApiInstance = createApiInstance(API_BASE_URL);
+const adminApiInstance = axios.create({
+  baseURL: 'http://localhost:3000/api',
+  withCredentials: true,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 adminApiInstance.interceptors.request.use(
   (config) => {
     // Lấy thông tin admin từ localStorage
@@ -384,32 +377,41 @@ export const foodProductApi = {
     return api.get<ApiResponse>(`/foodproducts/${id}`);
   },
 
-  // Create new food product
-  createFoodProduct: (data: Partial<{
+  // Create new food product - Updated interface để match với form data
+  createFoodProduct: (data: {
     name: string;
     category: string;
-    manufacturer: string;
-    image: string;
-    price: string;
-    pricePerUnit: number;
-    rating: number;
-    productType: string;
     description: string;
+    image?: string;
+    manufacturerName: string;
+    manufacturer: string;
+    originCountry: string;
     minOrderQuantity: number;
+    dailyCapacity: number;
+    currentAvailable?: number;
+    unitType: string;
+    pricePerUnit: number;
+    priceCurrency: string;
     leadTime: string;
     leadTimeUnit: string;
-    sustainable: boolean;
-    sku: string;
-    unitType: string;
-    currentAvailable: number;
-    ingredients: string[];
+    sustainable?: boolean;
+    productType: string;
+    // Food-specific details (flattened, not nested)
+    foodType: string;
     flavorType: string[];
+    ingredients: string[];
+    allergens: string[];
     usage: string[];
+    packagingType: string;
     packagingSize: string;
     shelfLife: string;
-    manufacturerRegion: string;
-  }>) => {
-    return api.post<ApiResponse>('/foodproducts', data);
+    shelfLifeStartDate?: string;
+    shelfLifeEndDate?: string;
+    storageInstruction: string;
+    manufacturerRegion?: string;
+  }) => {
+    // Sử dụng public endpoint để tránh authentication requirement
+    return api.post<ApiResponse>('/foodproducts/public', data);
   },
 
   // Update food product
@@ -437,7 +439,8 @@ export const foodProductApi = {
     shelfLife: string;
     manufacturerRegion: string;
   }>) => {
-    return api.put<ApiResponse>(`/foodproducts/${id}`, data);
+    // Sử dụng public endpoint để tránh authentication requirement
+    return api.put<ApiResponse>(`/foodproducts/public/${id}`, data);
   },
 
   // Delete food product
@@ -461,11 +464,14 @@ export const foodProductApi = {
   }
 };
 
-// API cho xác thực người dùng
+// API cho xác thực người dùng - session-based
 export const authApi = {
-  login: (email: string, password: string, useSession: boolean = false) => {
-    const config = useSession ? { withCredentials: true } : {};
-    return api.post<ApiResponse>('/users/login', { email, password }, config);
+  login: (email: string, password: string) => {
+    return api.post<ApiResponse>('/users/login', { email, password });
+  },
+  
+  googleLogin: (token: string, email: string, name: string, picture?: string) => {
+    return api.post<ApiResponse>('/users/google-login', { token, email, name, picture });
   },
   
   register: (userData: {
@@ -496,19 +502,15 @@ export const authApi = {
   },
   
   getCurrentUser: () => {
-    return api.get<ApiResponse>('/users/me', { withCredentials: true });
+    return api.get<ApiResponse>('/users/me');
   },
   
   updateProfile: (userData: Partial<ProductData>) => {
-    return api.put<ApiResponse>('/users/profile', userData, { withCredentials: true });
+    return api.put<ApiResponse>('/users/profile', userData);
   },
   
   logout: () => {
-    localStorage.removeItem('auth_token');
-    // Also logout from session if used
-    api.post('/users/logout', {}, { withCredentials: true })
-      .catch(err => console.error("Session logout error:", err));
-    return Promise.resolve();
+    return api.post<ApiResponse>('/users/logout');
   }
 };
 

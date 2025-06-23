@@ -38,7 +38,7 @@ const SignInForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { toast } = useToast();
-  const { login } = useUser();
+  const { login, updateUserFromSession } = useUser();
   const navigate = useNavigate();
 
   // Form schema
@@ -94,13 +94,9 @@ const SignInForm = () => {
           
           const userInfo = userInfoResponse.data;
           
-          // API URL để xử lý Google OAuth
-          const apiBaseUrl = 'http://localhost:3000/api'; // Backend API URL
-          // console.log('API URL being used:', `${apiBaseUrl}/users/google-login`);
-          
-          // Send token to backend for verification and login/signup
-          const backendResponse = await axios.post(
-            `${apiBaseUrl}/users/google-login`,
+          // 1. Send data to /api/users/google-login
+          const googleLoginResponse = await axios.post(
+            'http://localhost:3000/api/users/google-login',
             {
               token: tokenResponse.access_token,
               email: userInfo.email,
@@ -111,48 +107,40 @@ const SignInForm = () => {
               withCredentials: true // Important: enables cookies to be sent with request
             }
           );
+
+          if (!googleLoginResponse.data || !googleLoginResponse.data._id) {
+            throw new Error("Google login failed");
+          }
+
+          const { isNewUser } = googleLoginResponse.data;
+
+          // 2. If successful: call GET /users/me to update user in context
+          const userResponse = await axios.get('http://localhost:3000/api/users/me', {
+            withCredentials: true
+          });
+
+          if (!userResponse.data || !userResponse.data._id) {
+            throw new Error("Failed to get user data after Google login");
+          }
+
+          // 3. Update user state directly (no traditional login call)
+          // Call a simple setter function from context to update user state
+          updateUserFromSession(userResponse.data);
           
-          // Log response để debug
-          // console.log('Backend response:', backendResponse.data);
-          
-          // Destructure dữ liệu từ response
-          const { isNewUser, ...userData } = backendResponse.data;
-          
-          // console.log('User data:', { email: userInfo.email, role: userData.role, isNewUser });
-          
-          // Lấy thông tin user từ session đã được thiết lập bởi backend
-          try {
-            // Gọi API để lấy thông tin user hiện tại từ session
-            const userResponse = await axios.get(`${apiBaseUrl}/users/me`, {
-              withCredentials: true
-            });
-            // console.log("Current user from session:", userResponse.data);
-            
-            // Handle login with the user context - sử dụng thông tin từ response ban đầu
-            await login(userData.email, "", userData.role, true);
-            
-            if (isNewUser) {
-              // Redirect to profile setup for new users
-              toast({
-                title: t("welcome", "Welcome to Lovely Mate!"),
-                description: t("complete-profile", "Please complete your profile to continue."),
-              });
-              navigate("/profile-setup");
-            } else {
-              // Redirect existing users to dashboard
-              toast({
-                title: t("welcome-back", "Welcome back"),
-                description: t("sign-in-success", "You've successfully signed in."),
-              });
-              navigate("/dashboard");
-            }
-          } catch (error) {
-            console.error("Error getting current user:", error);
+          if (isNewUser) {
+            // Redirect to profile setup for new users
             toast({
-              title: t("auth-failed", "Authentication failed"),
-              description: t("google-auth-error", "Could not sign in with Google. Please try again."),
-              variant: "destructive",
+              title: t("welcome", "Welcome to Lovely Mate!"),
+              description: t("complete-profile", "Please complete your profile to continue."),
             });
+            navigate("/profile-setup");
+          } else {
+            // Redirect existing users to dashboard
+            toast({
+              title: t("welcome-back", "Welcome back"),
+              description: t("sign-in-success", "You've successfully signed in."),
+            });
+            navigate("/dashboard");
           }
         } catch (error) {
           console.error("Google authentication error:", error);
@@ -174,15 +162,15 @@ const SignInForm = () => {
     return () => {
       window.removeEventListener('message', handleOAuthMessage);
     };
-  }, [login, navigate, t, toast]);
+  }, [updateUserFromSession, navigate, t, toast]);
 
   // Sign in form handler
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
 
     try {
-      // Use the login function from context with the selected role
-      await login(data.email, data.password, data.accountType);
+      // Use the login function from context
+      await login(data.email, data.password);
 
       toast({
         title: t("welcome-back", "Welcome back"),

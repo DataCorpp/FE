@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { authApi } from "@/lib/api"; // Import authApi
+import { authApi, api } from "@/lib/api"; // Import authApi and api
 import { ApiResponse } from "@/lib/api"; // Add this import
 
 export type UserRole = "manufacturer" | "brand" | "retailer";
@@ -63,7 +63,6 @@ export interface RegistrationResponse {
   email: string;
   role: UserRole;
   status: string;
-  token: string;
   verificationCode?: string;
 }
 
@@ -71,9 +70,11 @@ interface UserContextType {
   role: UserRole;
   isAuthenticated: boolean;
   user: UserData | null;
-  login: (email: string, password: string, role?: UserRole, useSession?: boolean) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  googleLogin: (token: string, email: string, name: string, picture?: string) => Promise<{ isNewUser: boolean }>;
+  updateUserFromSession: (userData: Record<string, unknown>) => void;
   register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<RegistrationResponse>;
-  logout: () => void;
+  logout: () => Promise<void>;
   switchRole: (newRole: UserRole) => void;
   updateUserProfile: (updatedData: Partial<UserData>) => Promise<void>;
   updateRoleSettings: <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>) => void;
@@ -92,112 +93,188 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<UserData | null>(null);
   const [role, setRole] = useState<UserRole>("manufacturer");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Check if user is already logged in from localStorage
+
+
+  // Check session on app load
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
-      setUser(userData);
-      setRole(userData.role);
-      setIsAuthenticated(true);
-    }
+    authApi.getCurrentUser()
+      .then(res => {
+        const responseData = res.data as Record<string, unknown>;
+        const userData: UserData = {
+          id: responseData._id as string,
+          name: responseData.name as string,
+          email: responseData.email as string,
+          companyName: (responseData.companyName as string) || "Demo Company",
+          role: responseData.role as UserRole,
+          profileComplete: (responseData.profileComplete as boolean) || false,
+          createdAt: (responseData.createdAt as string) || new Date().toISOString(),
+          lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
+          notifications: (responseData.notifications as number) || 0,
+          avatar: (responseData.avatar as string) || "",
+          status: (responseData.status as "online" | "away" | "busy") || "online",
+          emailVerified: true,
+          phone: responseData.phone as string,
+          website: responseData.website as string,
+          address: responseData.address as string,
+          description: responseData.description as string,
+          manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
+          brandSettings: responseData.brandSettings as BrandSettings,
+          retailerSettings: responseData.retailerSettings as RetailerSettings,
+        };
+        setUser(userData);
+        setRole(userData.role);
+        setIsAuthenticated(true);
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setUser(null);
+        setRole("manufacturer");
+        setIsAuthenticated(false);
+        setIsLoading(false);
+      });
   }, []);
 
-  const login = async (email: string, password: string, selectedRole?: UserRole, useSession: boolean = false): Promise<void> => {
+  const login = async (email: string, password: string): Promise<void> => {
+    // Tránh gọi login nếu password rỗng (có thể từ Google login)
+    if (!password || password.trim() === '') {
+      console.warn('Login skipped: empty password provided');
+      return;
+    }
+
     try {
-      // Make an actual API call to authenticate
-      let response;
+      // First, authenticate with credentials
+      await authApi.login(email, password);
       
-      if (password === "" && useSession) {
-        // OAuth login case - use the session data from backend
-        // console.log("OAuth login flow - checking current user from session");
-        response = await authApi.getCurrentUser();
-      } else {
-        // Normal login with password
-        response = await authApi.login(email, password, useSession);
-      }
+      // Then get user data
+      const response = await authApi.getCurrentUser();
       
       if (!response.data || !response.data._id) {
-        throw new Error(response.data?.message || "Login failed");
+        throw new Error("Failed to get user data after login");
       }
       
-      // Get the role from the API response
-      const roleFromApi = response.data.role as UserRole;
-      
-      // Create role-specific settings based on the role from API
-      let roleSpecificSettings = {};
-      
-      if (roleFromApi === "manufacturer") {
-        roleSpecificSettings = {
-          manufacturerSettings: {
-            productionCapacity: 50000,
-            certifications: ["ISO 9001", "Organic", "Fair Trade"],
-            preferredCategories: ["Food", "Beverage", "Personal Care"],
-            minimumOrderValue: 10000
-          }
-        };
-      } else if (roleFromApi === "brand") {
-        roleSpecificSettings = {
-          brandSettings: {
-            marketSegments: ["Health-conscious", "Eco-friendly", "Premium"],
-            brandValues: ["Sustainability", "Quality", "Innovation"],
-            targetDemographics: ["Millennials", "Gen Z", "Health enthusiasts"],
-            productCategories: ["Organic Foods", "Wellness", "Eco-friendly products"]
-          }
-        };
-      } else if (roleFromApi === "retailer") {
-        roleSpecificSettings = {
-          retailerSettings: {
-            storeLocations: 12,
-            averageOrderValue: 75,
-            customerBase: ["Urban professionals", "Health-conscious families", "Millennials"],
-            preferredCategories: ["Organic", "Local", "Sustainable", "Health food"]
-          }
-        };
-      }
-      
-      // Convert API status to UserData status if needed
-      let userStatus: "online" | "away" | "busy" = "online";
-      if (response.data.status === "online" || response.data.status === "away" || response.data.status === "busy") {
-        userStatus = response.data.status as "online" | "away" | "busy";
-      }
-      
-      // Access response data safely
+      // Convert API response to UserData format  
       const responseData = response.data as Record<string, unknown>;
-      
-      // Create user data from API response
       const userData: UserData = {
         id: responseData._id as string,
         name: responseData.name as string,
         email: responseData.email as string,
         companyName: (responseData.companyName as string) || "Demo Company",
-        role: roleFromApi,
+        role: responseData.role as UserRole,
         profileComplete: (responseData.profileComplete as boolean) || false,
         createdAt: (responseData.createdAt as string) || new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-        notifications: (responseData.notifications as number) || Math.floor(Math.random() * 10),
+        lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
+        notifications: (responseData.notifications as number) || 0,
         avatar: (responseData.avatar as string) || "",
-        status: userStatus,
-        ...roleSpecificSettings
+        status: (responseData.status as "online" | "away" | "busy") || "online",
+        emailVerified: true,
+        phone: responseData.phone as string,
+        website: responseData.website as string,
+        address: responseData.address as string,
+        description: responseData.description as string,
+        manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
+        brandSettings: responseData.brandSettings as BrandSettings,
+        retailerSettings: responseData.retailerSettings as RetailerSettings,
       };
       
-      // Store the token in localStorage only if not using session
-      if (responseData.token && !useSession) {
-        localStorage.setItem("auth_token", responseData.token as string);
-      }
-      
-      // Save to localStorage for persistence
-      localStorage.setItem("user", JSON.stringify(userData));
-      
-      // Update state
       setUser(userData);
-      setRole(roleFromApi);
+      setRole(userData.role);
       setIsAuthenticated(true);
+      
     } catch (error) {
       console.error("Login error:", error);
       throw error;
     }
+  };
+
+  const googleLogin = async (token: string, email: string, name: string, picture?: string): Promise<{ isNewUser: boolean }> => {
+    try {
+      // Call Google login API endpoint
+      const response = await api.post('/users/google-login', {
+        token,
+        email,
+        name,
+        picture
+      });
+
+      if (!response.data || !response.data._id) {
+        throw new Error("Google login failed");
+      }
+
+      // Extract isNewUser flag
+      const { isNewUser, ...userData } = response.data;
+
+      // Get updated user data from session
+      const userResponse = await authApi.getCurrentUser();
+      
+      if (!userResponse.data || !userResponse.data._id) {
+        throw new Error("Failed to get user data after Google login");
+      }
+
+      // Convert API response to UserData format
+      const responseData = userResponse.data as Record<string, unknown>;
+      const userDataFormatted: UserData = {
+        id: responseData._id as string,
+        name: responseData.name as string,
+        email: responseData.email as string,
+        companyName: (responseData.companyName as string) || "Demo Company",
+        role: responseData.role as UserRole,
+        profileComplete: (responseData.profileComplete as boolean) || false,
+        createdAt: (responseData.createdAt as string) || new Date().toISOString(),
+        lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
+        notifications: (responseData.notifications as number) || 0,
+        avatar: (responseData.avatar as string) || picture || "",
+        status: (responseData.status as "online" | "away" | "busy") || "online",
+        emailVerified: true,
+        phone: responseData.phone as string,
+        website: responseData.website as string,
+        address: responseData.address as string,
+        description: responseData.description as string,
+        manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
+        brandSettings: responseData.brandSettings as BrandSettings,
+        retailerSettings: responseData.retailerSettings as RetailerSettings,
+      };
+
+      setUser(userDataFormatted);
+      setRole(userDataFormatted.role);
+      setIsAuthenticated(true);
+
+      return { isNewUser: Boolean(isNewUser) };
+
+    } catch (error) {
+      console.error("Google login error:", error);
+      throw error;
+    }
+  };
+
+  const updateUserFromSession = (userData: Record<string, unknown>): void => {
+    // Convert API response to UserData format
+    const userDataFormatted: UserData = {
+      id: userData._id as string,
+      name: userData.name as string,
+      email: userData.email as string,
+      companyName: (userData.companyName as string) || "Demo Company",
+      role: userData.role as UserRole,
+      profileComplete: (userData.profileComplete as boolean) || false,
+      createdAt: (userData.createdAt as string) || new Date().toISOString(),
+      lastLogin: (userData.lastLogin as string) || new Date().toISOString(),
+      notifications: (userData.notifications as number) || 0,
+      avatar: (userData.avatar as string) || "",
+      status: (userData.status as "online" | "away" | "busy") || "online",
+      emailVerified: true,
+      phone: userData.phone as string,
+      website: userData.website as string,
+      address: userData.address as string,
+      description: userData.description as string,
+      manufacturerSettings: userData.manufacturerSettings as ManufacturerSettings,
+      brandSettings: userData.brandSettings as BrandSettings,
+      retailerSettings: userData.retailerSettings as RetailerSettings,
+    };
+
+    setUser(userDataFormatted);
+    setRole(userDataFormatted.role);
+    setIsAuthenticated(true);
   };
 
   const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<RegistrationResponse> => {
@@ -233,18 +310,14 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         emailVerified: false
       };
       
-      // Store the token in localStorage
-      if (response.data.token) {
-        localStorage.setItem("auth_token", response.data.token);
-      }
-      
-      // Save user to localStorage
-      localStorage.setItem("user", JSON.stringify(newUser));
-      
       // Update state
       setUser(newUser);
       setRole(newUser.role);
       setIsAuthenticated(true);
+      
+      console.log('✅ Registration successful');
+      console.log('- User ID:', newUser.id);
+      console.log('- User role:', newUser.role);
       
       // Return the response data (including any verificationCode for dev mode)
       return response.data as RegistrationResponse;
@@ -254,13 +327,20 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const logout = (): void => {
-    // Clear local storage
-    localStorage.removeItem("user");
-    
-    // Reset state
-    setUser(null);
-    setIsAuthenticated(false);
+  const logout = async (): Promise<void> => {
+    try {
+      // Call logout API to destroy session
+      await authApi.logout();
+    } catch (error) {
+      console.error("Logout API error:", error);
+      // Continue with logout even if API call fails
+    } finally {
+      // Reset state
+      setUser(null);
+      setIsAuthenticated(false);
+      setRole("manufacturer");
+      console.log('✅ Logout successful');
+    }
   };
 
   const switchRole = (newRole: UserRole): void => {
@@ -270,9 +350,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         ...user,
         role: newRole
       };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
       
       // Update state
       setUser(updatedUser);
@@ -295,9 +372,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           ...user,
           ...updatedData,
         };
-        
-        // Save to localStorage
-        localStorage.setItem("user", JSON.stringify(updatedUser));
         
         // Update state
         setUser(updatedUser);
@@ -351,9 +425,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           [settingsKey]: settings
         };
       }
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
       
       // Update state
       setUser(updatedUser);
@@ -421,14 +492,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           throw new Error(response.data.message);
         }
         
-        // Update local user state and localStorage
+        // Update local user state
         const updatedUser = {
           ...user,
           [settingsKey]: updatedSettings
         };
-        
-        // Save to localStorage
-        localStorage.setItem("user", JSON.stringify(updatedUser));
         
         // Update state
         setUser(updatedUser);
@@ -451,9 +519,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         status: status
       };
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
       // Update state
       setUser(updatedUser);
     }
@@ -466,9 +531,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         ...user,
         avatar: avatarUrl
       };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
       
       // Update state
       setUser(updatedUser);
@@ -490,9 +552,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           emailVerified: true,
           status: "online"
         };
-        
-        // Save to localStorage
-        localStorage.setItem("user", JSON.stringify(updatedUser));
         
         // Update state
         setUser(updatedUser);
@@ -536,14 +595,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           profileComplete: profileData.profileComplete ?? user.profileComplete,
         };
         
-        // Save to localStorage with lastUpdated timestamp
-        const userWithMeta = {
-          ...updatedUser,
-          lastUpdated: new Date().toISOString()
-        };
-        localStorage.setItem("user", JSON.stringify(userWithMeta));
-        
-        // Update state with type-safe user object
+        // Update state
         setUser(updatedUser);
         
         // If role was updated, update the role state as well
@@ -575,9 +627,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           role: newRole
         };
         
-        // Save to localStorage
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        
         // Update state
         setUser(updatedUser);
         setRole(newRole);
@@ -592,13 +641,45 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Show loading state while checking session
+  if (isLoading) {
+    return (
+      <UserContext.Provider 
+        value={{ 
+          role,
+          isAuthenticated: false, 
+          user: null, 
+          login,
+          googleLogin,
+          updateUserFromSession,
+          register, 
+          logout,
+          switchRole,
+          updateUserProfile,
+          updateRoleSettings,
+          updateUserStatus,
+          updateUserAvatar,
+          verifyEmail,
+          resendVerificationEmail,
+          updateProfile,
+          updateUserRole,
+          updateRoleSettingsInDb
+        }}
+      >
+        {children}
+      </UserContext.Provider>
+    );
+  }
+
   return (
     <UserContext.Provider 
       value={{ 
         role,
         isAuthenticated, 
         user, 
-        login, 
+        login,
+        googleLogin,
+        updateUserFromSession,
         register, 
         logout,
         switchRole,
