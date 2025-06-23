@@ -507,7 +507,7 @@ const Manufacturers = () => {
       
       if (data.success && data.manufacturers) {
         const convertedManufacturers = data.manufacturers.map(convertApiToUI);
-        // console.log('Loaded manufacturers:', convertedManufacturers.length, convertedManufacturers); // Debug log
+        console.log(`[SERVER] Fetched ${data.manufacturers.length} manufacturers`);
         setManufacturers(convertedManufacturers);
         setTotalCount(data.total || convertedManufacturers.length);
       } else {

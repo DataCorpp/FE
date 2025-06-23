@@ -570,6 +570,7 @@ const Products = () => {
         
         if (response.data?.products) {
           const apiProducts = response.data.products as unknown as Product[];
+          console.log(`[SERVER] Fetched ${apiProducts.length} products`);
           setProducts(apiProducts);
           setPagination({
             page: response.data.page || 1,

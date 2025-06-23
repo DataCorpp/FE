@@ -710,8 +710,10 @@ export const Production = () => {
           );
           
           setProducts(productsWithDetails);
+          console.log(`[SERVER] Fetched ${productsWithDetails.length} products`);
         } else {
           setProducts([]);
+          console.log(`[SERVER] Production.tsx: Fetched 0 products`);
         }
       } catch (error) {
         console.error('Error fetching products:', error);
