@@ -1253,10 +1253,20 @@ type UpdateProductData = Product;
       console.log('Update response:', response);
       
       if (response.success) {
-        // Update local state
+        // Get updated product from API response or use our local updated version with API fields
+        const updatedProductFromApi = response.data || updatedProduct;
+        
+        // Create a merged product
+        const mergedProduct = {
+          ...updatedProduct,
+          ...updatedProductFromApi,
+        };
+        
+        // Update local state with merged data to ensure all changes are reflected
         setProducts(products.map((p) => 
-          p._id === updatedProduct._id ? updatedProduct : p
+          p._id === updatedProduct._id ? mergedProduct : p
         ));
+        
         console.log('Product updated successfully via API');
         
         toast({

@@ -91,6 +91,13 @@ export function toFoodProduct(formData: ProductFormData): BaseProduct {
     console.warn('toFoodProduct called with non-food product type:', formData.productType);
   }
   
+  // Check if this is an update to an existing product
+  const isUpdate = Boolean(formData._id);
+  
+  if (isUpdate) {
+    console.log(`Updating existing food product: ${formData._id}`);
+  }
+  
   // Ensure food-specific fields are correctly formatted
   const foodProduct: BaseProduct = {
     ...baseProduct,
@@ -104,11 +111,19 @@ export function toFoodProduct(formData: ProductFormData): BaseProduct {
     shelfLife: formData.shelfLife,
     storageInstruction: formData.storageInstruction,
     
-    // Handle array fields - preserve exactly as provided without defaults
-    flavorType: formData.flavorType,
-    ingredients: formData.ingredients,
-    allergens: formData.allergens,
-    usage: formData.usage,
+    // CRITICAL FIX: Ensure arrays are properly formatted to avoid string conversion issues
+    // ALWAYS use explicit array instances even if empty
+    flavorType: Array.isArray(formData.flavorType) ? [...formData.flavorType] : 
+               (formData.flavorType ? [formData.flavorType].flat() : []),
+               
+    ingredients: Array.isArray(formData.ingredients) ? [...formData.ingredients] : 
+                (formData.ingredients ? [formData.ingredients].flat() : []),
+                
+    allergens: Array.isArray(formData.allergens) ? [...formData.allergens] : 
+              (formData.allergens ? [formData.allergens].flat() : []),
+              
+    usage: Array.isArray(formData.usage) ? [...formData.usage] : 
+          (formData.usage ? [formData.usage].flat() : []),
     
     // Ensure dates are properly formatted
     shelfLifeStartDate: formData.shelfLifeStartDate instanceof Date ? 
@@ -121,18 +136,63 @@ export function toFoodProduct(formData: ProductFormData): BaseProduct {
     // Add nested foodProductData for backward compatibility
     foodProductData: {
       foodType: formData.foodType,
-      flavorType: formData.flavorType,
-      ingredients: formData.ingredients,
-      allergens: formData.allergens,
-      usage: formData.usage,
+      flavorType: Array.isArray(formData.flavorType) ? [...formData.flavorType] : 
+                 (formData.flavorType ? [formData.flavorType].flat() : []),
+      ingredients: Array.isArray(formData.ingredients) ? [...formData.ingredients] : 
+                  (formData.ingredients ? [formData.ingredients].flat() : []),
+      allergens: Array.isArray(formData.allergens) ? [...formData.allergens] : 
+                (formData.allergens ? [formData.allergens].flat() : []),
+      usage: Array.isArray(formData.usage) ? [...formData.usage] : 
+            (formData.usage ? [formData.usage].flat() : []),
       packagingSize: formData.packagingSize,
       shelfLife: formData.shelfLife,
       manufacturerRegion: formData.manufacturerRegion,
     }
   };
   
+  // Preserve critical fields for updates
+  if (isUpdate) {
+    // Ensure ID fields are properly preserved
+    foodProduct._id = formData._id;
+    foodProduct.id = formData.id;
+    
+    // Preserve timestamps
+    if (formData.createdAt) {
+      foodProduct.createdAt = formData.createdAt;
+    }
+    foodProduct.updatedAt = new Date().toISOString();
+    
+    // Preserve metadata fields
+    if (formData.user) {
+      foodProduct.user = formData.user;
+    }
+    
+    if (formData.sku) {
+      foodProduct.sku = formData.sku;
+    }
+    
+    // Preserve calculated/system fields
+    if (formData.reorderPoint !== undefined) {
+      foodProduct.reorderPoint = formData.reorderPoint;
+    }
+    
+    if (formData.lastProduced) {
+      foodProduct.lastProduced = formData.lastProduced;
+    }
+    
+    // Preserve ratings and reviews
+    if (formData.rating !== undefined) {
+      foodProduct.rating = formData.rating;
+    }
+    
+    if (formData.numReviews !== undefined) {
+      foodProduct.numReviews = formData.numReviews;
+    }
+  }
+  
   // Log the final data being sent to backend
-  console.log('Food product data being sent to backend:', {
+  console.log(`${isUpdate ? 'Updated' : 'New'} food product data ready for backend:`, {
+    _id: foodProduct._id,
     foodType: foodProduct.foodType,
     packagingType: foodProduct.packagingType,
     packagingSize: foodProduct.packagingSize,

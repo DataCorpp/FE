@@ -352,6 +352,15 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
             : prevImages
         );
       }
+
+      // Log for debugging purposes
+      console.log('Initializing form with product data:', product);
+      console.log('Product ID:', product._id);
+      console.log('Food specific data:', {
+        flavorType: product.flavorType || product.foodProductData?.flavorType,
+        foodType: product.foodType || product.foodProductData?.foodType,
+        ingredients: product.ingredients || product.foodProductData?.ingredients,
+      });
     }
   }, [product]);
 
@@ -651,6 +660,23 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
+        // Ensure array fields are properly formatted as arrays
+        const sanitizedFoodData = {
+          ...foodProductData,
+          flavorType: Array.isArray(foodProductData.flavorType) 
+                      ? foodProductData.flavorType 
+                      : (foodProductData.flavorType ? [foodProductData.flavorType].flat() : []),
+          ingredients: Array.isArray(foodProductData.ingredients)
+                       ? foodProductData.ingredients
+                       : (foodProductData.ingredients ? [foodProductData.ingredients].flat() : []),
+          allergens: Array.isArray(foodProductData.allergens)
+                     ? foodProductData.allergens
+                     : (foodProductData.allergens ? [foodProductData.allergens].flat() : []),
+          usage: Array.isArray(foodProductData.usage)
+                 ? foodProductData.usage
+                 : (foodProductData.usage ? [foodProductData.usage].flat() : [])
+        };
+        
         // Prepare data to match backend expectations
         const finalProductData: ProductFormData = {
           // Preserve original ID and other metadata if editing
@@ -661,7 +687,12 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
             updatedAt: new Date().toISOString(),
             sku: product.sku,
             reorderPoint: product.reorderPoint,
-            lastProduced: product.lastProduced
+            lastProduced: product.lastProduced,
+            // Preserve any rating/reviews data if they exist
+            rating: product.rating,
+            numReviews: product.numReviews,
+            // Preserve any other backend-generated fields
+            countInStock: product.countInStock || product.currentAvailable
           } : {}),
           
           // Basic product info
@@ -672,8 +703,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           
           // Manufacturer info - ensure consistent field naming
           manufacturer: formData.manufacturer!,
+          brand: formData.manufacturer!, // Ensure brand is updated to match manufacturer
           originCountry: formData.originCountry!,
-          manufacturerRegion: foodProductData.manufacturerRegion,
+          manufacturerRegion: sanitizedFoodData.manufacturerRegion,
           
           // Production details
           minOrderQuantity: Number(formData.minOrderQuantity),
@@ -683,6 +715,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           
           // Pricing
           pricePerUnit: Number(formData.pricePerUnit),
+          price: Number(formData.pricePerUnit), // Ensure price field is also updated
           priceCurrency: formData.priceCurrency!,
           
           // Lead time
@@ -695,36 +728,37 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           // Product type - ensures backend receives the proper values
           productType: "Food Product",
           
-          // Food-specific fields - IMPORTANT: use exactly what the user provided without defaults
-          foodType: foodProductData.foodType,
-          flavorType: foodProductData.flavorType,
-          ingredients: foodProductData.ingredients,
-          allergens: foodProductData.allergens,
-          usage: foodProductData.usage,
-          packagingType: foodProductData.packagingType,
-          packagingSize: foodProductData.packagingSize,
-          shelfLife: foodProductData.shelfLife,
-          storageInstruction: foodProductData.storageInstruction,
+          // Food-specific fields - IMPORTANT: use the sanitized array values
+          foodType: sanitizedFoodData.foodType,
+          flavorType: sanitizedFoodData.flavorType,
+          ingredients: sanitizedFoodData.ingredients,
+          allergens: sanitizedFoodData.allergens,
+          usage: sanitizedFoodData.usage,
+          packagingType: sanitizedFoodData.packagingType,
+          packagingSize: sanitizedFoodData.packagingSize,
+          shelfLife: sanitizedFoodData.shelfLife,
+          storageInstruction: sanitizedFoodData.storageInstruction,
           
           // Handle dates properly for backend
-          ...(foodProductData.shelfLifeStartDate ? {
-            shelfLifeStartDate: new Date(foodProductData.shelfLifeStartDate)
+          ...(sanitizedFoodData.shelfLifeStartDate ? {
+            shelfLifeStartDate: new Date(sanitizedFoodData.shelfLifeStartDate)
           } : {}),
           
-          ...(foodProductData.shelfLifeEndDate ? {
-            shelfLifeEndDate: new Date(foodProductData.shelfLifeEndDate)
+          ...(sanitizedFoodData.shelfLifeEndDate ? {
+            shelfLifeEndDate: new Date(sanitizedFoodData.shelfLifeEndDate)
           } : {}),
           
           // Ensure foodProductData is also included for backward compatibility
+          // Deep copy to prevent reference issues
           foodProductData: {
-            foodType: foodProductData.foodType,
-            flavorType: foodProductData.flavorType,
-            ingredients: foodProductData.ingredients,
-            allergens: foodProductData.allergens || [],
-            usage: foodProductData.usage,
-            packagingSize: foodProductData.packagingSize,
-            shelfLife: foodProductData.shelfLife,
-            manufacturerRegion: foodProductData.manufacturerRegion
+            foodType: sanitizedFoodData.foodType,
+            flavorType: [...sanitizedFoodData.flavorType],
+            ingredients: [...sanitizedFoodData.ingredients],
+            allergens: [...(sanitizedFoodData.allergens || [])],
+            usage: [...sanitizedFoodData.usage],
+            packagingSize: sanitizedFoodData.packagingSize,
+            shelfLife: sanitizedFoodData.shelfLife,
+            manufacturerRegion: sanitizedFoodData.manufacturerRegion
           }
         };
 
@@ -743,6 +777,230 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         
         // Convert ProductFormData to BaseProduct before submission using specialized adapter
         let productData = toFoodProduct(finalProductData);
+        
+        // Log the data after conversion to verify array fields
+        console.log('Food product data after conversion to BaseProduct:', {
+          foodType: productData.foodType,
+          packagingType: productData.packagingType,
+          packagingSize: productData.packagingSize,
+          shelfLife: productData.shelfLife,
+          storageInstruction: productData.storageInstruction,
+          flavorType: Array.isArray(productData.flavorType) 
+                     ? `Array with ${productData.flavorType.length} items` 
+                     : `Not an array: ${typeof productData.flavorType}`,
+          ingredients: Array.isArray(productData.ingredients) 
+                      ? `Array with ${productData.ingredients.length} items` 
+                      : `Not an array: ${typeof productData.ingredients}`,
+          allergens: Array.isArray(productData.allergens) 
+                    ? `Array with ${productData.allergens.length} items` 
+                    : `Not an array: ${typeof productData.allergens}`,
+          usage: Array.isArray(productData.usage) 
+                 ? `Array with ${productData.usage.length} items` 
+                 : `Not an array: ${typeof productData.usage}`
+        });
+        
+        // For updates, ensure we're preserving all necessary data
+        if (product && product._id) {
+          console.log("Updating existing product ID:", product._id);
+          
+          // Log detailed information about the product ID
+          console.log("Product ID details:", {
+            id: product.id,
+            _id: product._id!, // Use non-null assertion operator
+            productIdType: typeof product._id,
+            productIdValue: String(product._id)
+          });
+          
+          // Check if the product ID is a valid MongoDB ObjectId
+          // MongoDB ObjectIds are 24-character hex strings
+          const isValidMongoId = (id: string): boolean => {
+            return /^[0-9a-fA-F]{24}$/.test(id);
+          };
+          
+          const productIdStr = String(product._id!);
+          
+          if (!isValidMongoId(productIdStr)) {
+            console.warn('⚠️ Not a valid MongoDB ObjectId:', productIdStr);
+            console.warn('This appears to be a temporary ID that has not been saved to the database yet.');
+            
+            toast({
+              title: "Cannot Update New Product",
+              description: "This product needs to be created first before it can be updated.",
+              variant: "default", // Using "default" instead of "warning"
+            });
+            
+            // Convert ProductFormData to BaseProduct before submission using specialized adapter
+            const newProductData = toFoodProduct(finalProductData);
+            
+            // Treat this as a new product creation instead
+            console.log('🔄 Switching to product creation mode...');
+            
+            // Call the submission handler as if this is a new product
+            onSubmit(newProductData);
+            setSubmitLoading(false);
+            return;
+          }
+          
+          // Make sure we're using the correct ID format (MongoDB ObjectId)
+          // The null check is already done in the if condition
+          const productId = productIdStr;
+            
+          console.log("Final product ID for API call:", productId);
+          
+          // 🔧 CRITICAL FIX: Use the foodProductApi directly for updates 
+          // instead of generic onSubmit
+          const { foodProductApi } = await import('@/lib/api');
+          
+          // Create a simple payload with essential fields
+          const updatePayload = {
+            name: productData.name,
+            category: productData.category,
+            manufacturer: productData.manufacturer,
+            description: productData.description,
+            originCountry: productData.originCountry,
+            image: productData.image,
+            pricePerUnit: productData.pricePerUnit,
+            minOrderQuantity: productData.minOrderQuantity,
+            dailyCapacity: productData.dailyCapacity,
+            unitType: productData.unitType,
+            
+            // Food-specific fields with proper array handling
+            foodType: productData.foodType,
+            flavorType: Array.isArray(productData.flavorType) ? productData.flavorType : [],
+            ingredients: Array.isArray(productData.ingredients) ? productData.ingredients : [],
+            allergens: Array.isArray(productData.allergens) ? productData.allergens : [],
+            usage: Array.isArray(productData.usage) ? productData.usage : [],
+            packagingType: productData.packagingType,
+            packagingSize: productData.packagingSize,
+            shelfLife: productData.shelfLife,
+            storageInstruction: productData.storageInstruction
+          };
+          
+          // 🔍 Log the exact data being sent to API
+          console.log('🚀 Sending update data to API:', {
+            id: productId,
+            data: updatePayload
+          });
+          
+          try {
+            // First verify the product exists
+            console.log('🔍 Checking if product exists with ID:', productId);
+            const verifyResponse = await foodProductApi.getFoodProductById(productId);
+            console.log('✅ Product found in database:', verifyResponse.data);
+            
+            // Now proceed with update
+            const response = await foodProductApi.updateFoodProduct(productId, updatePayload);
+            
+            // Log the API response
+            console.log('✅ API update response:', response.data);
+            
+            // Verify the API call succeeded
+            if (response.data && (response.data.success !== false)) {
+              console.log('✅ Update successful! Updated product:', response.data);
+              toast({
+                title: "Product Updated",
+                description: "Product updated successfully!",
+                variant: "default",
+              });
+            } else {
+              // Log the error
+              console.error('❌ Update failed:', response.data);
+              toast({
+                title: "Update Failed",
+                description: response.data?.message || "Failed to update product. Please try again.",
+                variant: "destructive",
+              });
+            }
+          } catch (verifyError: unknown) {
+            console.error('❌ Product verification failed:', verifyError);
+            
+            // Try to extract error message and details
+            let errorMessage = "Product not found or cannot be accessed.";
+            let errorDetails: Record<string, unknown> = {};
+            
+            if (verifyError && typeof verifyError === 'object' && 'response' in verifyError) {
+              const axiosError = verifyError as { 
+                response?: { 
+                  status?: number;
+                  data?: { 
+                    message?: string;
+                    error?: string;
+                    requestedId?: string;
+                    totalProductsInDb?: number;
+                  } 
+                } 
+              };
+              
+              if (axiosError.response?.data) {
+                console.error('❌ Backend error response:', axiosError.response.data);
+                errorMessage = axiosError.response.data.message || errorMessage;
+                errorDetails = axiosError.response.data;
+              }
+              
+              // Specifically handle 404 errors
+              if (axiosError.response?.status === 404) {
+                console.error('❌ Product not found in database. It may have been deleted or never saved.');
+                errorMessage = "This product cannot be found in the database. It may have been deleted or was never saved.";
+                
+                // If we have information about total products in DB
+                if (errorDetails.totalProductsInDb !== undefined) {
+                  console.log(`📊 There are ${errorDetails.totalProductsInDb} food products in the database`);
+                }
+              }
+              
+              // Handle invalid ID format (400 errors)
+              if (axiosError.response?.status === 400 && axiosError.response?.data?.error === 'INVALID_ID_FORMAT') {
+                console.error('❌ Invalid ID format:', productId);
+                errorMessage = "The product ID is not in a valid format. Please try creating a new product instead.";
+                
+                // Recommend creating a new product instead
+                // Convert ProductFormData to BaseProduct before submission using specialized adapter
+                const newProductData = toFoodProduct(finalProductData);
+                
+                // Display a warning toast
+                toast({
+                  title: "Creating New Product Instead",
+                  description: "The product ID was invalid. Creating a new product with this data.",
+                  variant: "default",
+                });
+                
+                // Call the submission handler as if this is a new product
+                onSubmit(newProductData);
+                setSubmitLoading(false);
+                return;
+              }
+            }
+            
+            // Display error toast with more detailed information
+            toast({
+              title: "Product Not Found",
+              description: errorMessage,
+              variant: "destructive",
+            });
+            
+            // Display a helpful message about next steps
+            toast({
+              title: "What To Do Next",
+              description: "Try creating a new product instead, or check if the ID is correct.",
+              variant: "default",
+            });
+            
+            throw new Error(`Product verification failed: ${errorMessage}`);
+          }
+          
+          // Log the exact data being sent to the API handler
+          console.log('🔧 Final productData being submitted:', productData);
+          
+          // If there's a navigation redirect needed after update
+          if (onSubmit) {
+            // The onSubmit prop is typically used for navigation/UI updates after successful submission
+            // It should NOT be responsible for API calls when updating products
+            onSubmit(productData);
+          }
+          
+          setSubmitLoading(false);
+          return;
+        }
         
         // Attach user ID if available from context
         if (user?.id) {
@@ -776,12 +1034,12 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           // Allow continuation without user ID - backend will handle this
         }
         
-        // Call the submission handler
+        // Call the submission handler for new products
         onSubmit(productData);
 
         toast({
-          title: "Success",
-          description: product ? "Product updated successfully!" : "Product created successfully!",
+          title: "Product Created",
+          description: "Product created successfully!",
           variant: "default",
         });
 
@@ -1867,6 +2125,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
               </>
             ) : (
               <>
+                <Check className="h-4 w-4 mr-2" />
                 {product ? 'Update Product' : 'Create Product'}
               </>
             )}
