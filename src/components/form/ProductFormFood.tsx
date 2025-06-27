@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
+import { isValidObjectId } from "@/utils/validationUtils";
 import {
   ChevronDown,
   X,
@@ -41,8 +42,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { BaseProduct, ProductFormData, FoodProductData } from "@/types/product";
-import { toBaseProduct } from "@/utils/productAdapters";
+import { BaseProduct, ProductFormData } from "@/types/product";
+import { FoodProductData } from "@/services/productService";
+import { toBaseProduct, toFoodProduct, attachUserToProduct } from "@/utils/productAdapters";
 
 // Interfaces - Extended local interface với các trường bổ sung
 interface ExtendedFoodProductData extends FoodProductData {
@@ -246,7 +248,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   onSubmit,
   isLoading,
   onBack,
-}) => {
+}): JSX.Element => {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { user } = useUser();
@@ -260,7 +262,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       : {
           name: "",
           category: "",
-          manufacturerName: "",
+          manufacturer: "",
           originCountry: "",
           minOrderQuantity: 1000,
           dailyCapacity: 5000,
@@ -278,19 +280,28 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   );
 
   // Food-specific state với ExtendedFoodProductData
-  const [foodProductData, setFoodProductData] = useState<ExtendedFoodProductData>({
-    flavorType: product?.foodProductData?.flavorType || [],
-    ingredients: product?.foodProductData?.ingredients || [],
-    usage: product?.foodProductData?.usage || [],
-    allergens: product?.foodProductData?.allergens || [],
-    packagingType: product?.packagingType || "",
-    packagingSize: product?.foodProductData?.packagingSize || "",
-    shelfLife: product?.foodProductData?.shelfLife || "",
-    shelfLifeStartDate: product?.shelfLifeStartDate ? product.shelfLifeStartDate.toString() : "",
-    shelfLifeEndDate: product?.shelfLifeEndDate ? product.shelfLifeEndDate.toString() : "",
-    storageInstruction: product?.storageInstruction || "",
-    manufacturerRegion: product?.foodProductData?.manufacturerRegion || "",
-    foodType: product?.foodProductData?.foodType || "",
+  const [foodProductData, setFoodProductData] = useState<ExtendedFoodProductData>(() => {
+    
+    return {
+      // Check for data in multiple possible locations with fallbacks
+      // IMPORTANT: Use empty arrays or empty strings instead of undefined to avoid null/undefined issues
+      flavorType: product?.flavorType || product?.foodProductData?.flavorType || [],
+      ingredients: product?.ingredients || product?.foodProductData?.ingredients || [],
+      usage: product?.usage || product?.foodProductData?.usage || [],
+      allergens: product?.allergens || product?.foodProductData?.allergens || [],
+      
+      // Packaging and Storage fields - use empty strings instead of undefined
+      packagingType: product?.packagingType || 'Bottle', // Default value for required field
+      packagingSize: product?.packagingSize || product?.foodProductData?.packagingSize || '250g', // Default value for required field
+      shelfLife: product?.shelfLife || product?.foodProductData?.shelfLife || '1 year', // Default value for required field
+      shelfLifeStartDate: product?.shelfLifeStartDate ? product.shelfLifeStartDate.toString() : '',
+      shelfLifeEndDate: product?.shelfLifeEndDate ? product.shelfLifeEndDate.toString() : '',
+      storageInstruction: product?.storageInstruction || 'Store in a cool, dry place', // Default value for required field
+      
+      // Food Details fields
+      manufacturerRegion: product?.manufacturerRegion || product?.foodProductData?.manufacturerRegion || '',
+      foodType: product?.foodType || product?.foodProductData?.foodType || 'Soy Sauce', // Default value
+    };
   });
 
   // UI state
@@ -302,6 +313,47 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const [customUsage, setCustomUsage] = useState("");
   const [selectedAllergen, setSelectedAllergen] = useState("");
   const [useAdvancedShelfLife, setUseAdvancedShelfLife] = useState(false);
+  
+  // Update form data when product changes (useful for edit mode)
+  useEffect(() => {
+    if (product) {
+      // Update main form data
+      setFormData({
+        ...formData,
+        ...product,
+      });
+      
+      // Update food product specific data with better fallbacks
+      setFoodProductData({
+        // Flavor and ingredients - use empty arrays instead of undefined
+        flavorType: product.flavorType || product.foodProductData?.flavorType || [],
+        ingredients: product.ingredients || product.foodProductData?.ingredients || [],
+        usage: product.usage || product.foodProductData?.usage || [],
+        allergens: product.allergens || product.foodProductData?.allergens || [],
+        
+        // Packaging and Storage fields - use empty strings instead of undefined
+        packagingType: product.packagingType || 'Bottle', // Default value for required field
+        packagingSize: product.packagingSize || product.foodProductData?.packagingSize || '250g', // Default value for required field
+        shelfLife: product.shelfLife || product.foodProductData?.shelfLife || '1 year', // Default value for required field
+        shelfLifeStartDate: product.shelfLifeStartDate ? product.shelfLifeStartDate.toString() : '',
+        shelfLifeEndDate: product.shelfLifeEndDate ? product.shelfLifeEndDate.toString() : '',
+        storageInstruction: product.storageInstruction || 'Store in a cool, dry place', // Default value for required field
+        
+        // Food Details fields
+        manufacturerRegion: product.manufacturerRegion || product.foodProductData?.manufacturerRegion || '',
+        foodType: product.foodType || product.foodProductData?.foodType || 'Soy Sauce', // Default value
+      });
+      
+      // Update images
+      if (product.image) {
+        setImages(prevImages => 
+          prevImages.length === 0 || prevImages[0] !== product.image 
+            ? [product.image, ...prevImages.filter((_, i) => i !== 0)]
+            : prevImages
+        );
+      }
+    }
+  }, [product]);
 
   // Real-time validation function
   const validateField = (fieldName: string, value: string) => {
@@ -320,7 +372,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         }
         break;
         
-      case "manufacturerName":
+      case "manufacturer":
         if (!value?.trim()) {
           error = "Manufacturer name is required";
         } else if (value.trim().length < 2) {
@@ -480,7 +532,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     setFormData({ ...formData, [name]: value });
 
     // Real-time validation for critical fields
-    if (name === "name" || name === "manufacturerName") {
+    if (name === "name" || name === "manufacturer") {
       // Add a small delay to avoid excessive validation calls
       setTimeout(() => {
         validateField(name, value);
@@ -507,14 +559,14 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       newErrors.category = "Category is required";
     }
 
-    if (!formData.manufacturerName?.trim()) {
-      newErrors.manufacturerName = "Manufacturer name is required";
-    } else if (formData.manufacturerName.trim().length < 2) {
-      newErrors.manufacturerName = "Manufacturer name must be at least 2 characters long";
-    } else if (formData.manufacturerName.trim().length > 100) {
-      newErrors.manufacturerName = "Manufacturer name must not exceed 100 characters";
-    } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(formData.manufacturerName.trim())) {
-      newErrors.manufacturerName = "Manufacturer name contains invalid characters";
+    if (!formData.manufacturer?.trim()) {
+      newErrors.manufacturer = "Manufacturer name is required";
+    } else if (formData.manufacturer.trim().length < 2) {
+      newErrors.manufacturer = "Manufacturer name must be at least 2 characters long";
+    } else if (formData.manufacturer.trim().length > 100) {
+      newErrors.manufacturer = "Manufacturer name must not exceed 100 characters";
+    } else if (!/^[a-zA-Z0-9\s\-&'.,()]+$/.test(formData.manufacturer.trim())) {
+      newErrors.manufacturer = "Manufacturer name contains invalid characters";
     }
 
     if (!formData.originCountry?.trim()) {
@@ -574,7 +626,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     }
 
     if (foodProductData.allergens.length === 0) {
-      newErrors.allergens = "At least one allergen is required";
+      newErrors.allergens = "At least one allergen information is required";
     }
 
     setErrors(newErrors);
@@ -584,22 +636,44 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   // Submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Ensure required fields have default values before validation
+    setFoodProductData(prev => ({
+      ...prev,
+      packagingType: prev.packagingType || 'Bottle',
+      packagingSize: prev.packagingSize || '250g',
+      shelfLife: prev.shelfLife || '1 year',
+      storageInstruction: prev.storageInstruction || 'Store in a cool, dry place',
+      foodType: prev.foodType || 'Soy Sauce'
+    }));
 
     if (validateForm()) {
       setSubmitLoading(true);
       
       try {
-        // Chuẩn bị dữ liệu để truyền cho parent component
+        // Prepare data to match backend expectations
         const finalProductData: ProductFormData = {
+          // Preserve original ID and other metadata if editing
+          ...(product ? { 
+            _id: product._id,
+            id: product.id,
+            createdAt: product.createdAt,
+            updatedAt: new Date().toISOString(),
+            sku: product.sku,
+            reorderPoint: product.reorderPoint,
+            lastProduced: product.lastProduced
+          } : {}),
+          
           // Basic product info
           name: formData.name!,
           category: formData.category!,
           description: formData.description!,
           image: formData.image || (images.length > 0 ? images[0] : ""),
           
-          // Manufacturer info
-          manufacturerName: formData.manufacturerName!,
+          // Manufacturer info - ensure consistent field naming
+          manufacturer: formData.manufacturer!,
           originCountry: formData.originCountry!,
+          manufacturerRegion: foodProductData.manufacturerRegion,
           
           // Production details
           minOrderQuantity: Number(formData.minOrderQuantity),
@@ -607,7 +681,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           currentAvailable: Number(formData.currentAvailable || 0),
           unitType: formData.unitType!,
           
-          // Pricing - Chỉ sử dụng pricePerUnit
+          // Pricing
           pricePerUnit: Number(formData.pricePerUnit),
           priceCurrency: formData.priceCurrency!,
           
@@ -618,22 +692,10 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           // Sustainability
           sustainable: formData.sustainable || false,
           
-          // Product type
+          // Product type - ensures backend receives the proper values
           productType: "Food Product",
           
-          // Food-specific details - chỉ giữ các trường chuẩn trong FoodProductData
-          foodProductData: {
-            flavorType: foodProductData.flavorType,
-            ingredients: foodProductData.ingredients,
-            usage: foodProductData.usage,
-            allergens: foodProductData.allergens || [],
-            packagingSize: foodProductData.packagingSize,
-            shelfLife: foodProductData.shelfLife,
-            manufacturerRegion: foodProductData.manufacturerRegion,
-            foodType: foodProductData.foodType,
-          },
-          
-          // Các trường mở rộng từ ExtendedFoodProductData được đưa vào cấp cao nhất
+          // Food-specific fields - IMPORTANT: use exactly what the user provided without defaults
           foodType: foodProductData.foodType,
           flavorType: foodProductData.flavorType,
           ingredients: foodProductData.ingredients,
@@ -643,23 +705,78 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           packagingSize: foodProductData.packagingSize,
           shelfLife: foodProductData.shelfLife,
           storageInstruction: foodProductData.storageInstruction,
-          manufacturerRegion: foodProductData.manufacturerRegion,
+          
+          // Handle dates properly for backend
+          ...(foodProductData.shelfLifeStartDate ? {
+            shelfLifeStartDate: new Date(foodProductData.shelfLifeStartDate)
+          } : {}),
+          
+          ...(foodProductData.shelfLifeEndDate ? {
+            shelfLifeEndDate: new Date(foodProductData.shelfLifeEndDate)
+          } : {}),
+          
+          // Ensure foodProductData is also included for backward compatibility
+          foodProductData: {
+            foodType: foodProductData.foodType,
+            flavorType: foodProductData.flavorType,
+            ingredients: foodProductData.ingredients,
+            allergens: foodProductData.allergens || [],
+            usage: foodProductData.usage,
+            packagingSize: foodProductData.packagingSize,
+            shelfLife: foodProductData.shelfLife,
+            manufacturerRegion: foodProductData.manufacturerRegion
+          }
         };
 
-        console.log('=== PRODUCT FORM SUBMIT DEBUG ===');
-        console.log('Form data being passed to parent:', finalProductData);
-        console.log('Product Name:', finalProductData.name);
-        console.log('Manufacturer Name:', finalProductData.manufacturerName);
-        console.log('Category:', finalProductData.category);
-        console.log('Product Type:', finalProductData.productType);
-        console.log('Food Type:', finalProductData.foodType);
-        console.log('Price per unit:', finalProductData.pricePerUnit);
-        console.log('=== END DEBUG ===');
-
-        // Chuyển đổi ProductFormData sang BaseProduct trước khi gọi onSubmit
-        const productData = toBaseProduct(finalProductData);
+        // Log the data before conversion to check for any default values
+        console.log('Food product data before conversion:', {
+          foodType: finalProductData.foodType,
+          packagingType: finalProductData.packagingType,
+          packagingSize: finalProductData.packagingSize,
+          shelfLife: finalProductData.shelfLife,
+          storageInstruction: finalProductData.storageInstruction,
+          flavorType: finalProductData.flavorType,
+          ingredients: finalProductData.ingredients,
+          allergens: finalProductData.allergens,
+          usage: finalProductData.usage
+        });
         
-        // Gọi callback để parent component xử lý
+        // Convert ProductFormData to BaseProduct before submission using specialized adapter
+        let productData = toFoodProduct(finalProductData);
+        
+        // Attach user ID if available from context
+        if (user?.id) {
+          // First validate the user ID format
+          if (!isValidObjectId(user.id)) {
+            console.error('Invalid user ID format:', user.id);
+            toast({
+              title: "User ID Error",
+              description: "Invalid user ID format. Please contact support.",
+              variant: "destructive",
+            });
+            setSubmitLoading(false);
+            return;
+          }
+          
+          try {
+            productData = attachUserToProduct(productData, user.id);
+            console.log('User ID attached successfully:', user.id);
+          } catch (userIdError) {
+            console.error('Error attaching user ID:', userIdError);
+            toast({
+              title: "User ID Error",
+              description: "Invalid user ID format. Please contact support.",
+              variant: "destructive",
+            });
+            setSubmitLoading(false);
+            return;
+          }
+        } else {
+          console.warn('No user ID available from context');
+          // Allow continuation without user ID - backend will handle this
+        }
+        
+        // Call the submission handler
         onSubmit(productData);
 
         toast({
@@ -808,13 +925,13 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="manufacturerName" className="text-base font-medium">
+                  <Label htmlFor="manufacturer" className="text-base font-medium">
                     Manufacturer Name *
                   </Label>
                   <Input
-                    id="manufacturerName"
-                    name="manufacturerName"
-                    value={formData.manufacturerName || ""}
+                    id="manufacturer"
+                    name="manufacturer"
+                    value={formData.manufacturer || ""}
                     onChange={handleChange}
                     placeholder="Enter manufacturer name"
                     required
@@ -822,20 +939,20 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                     maxLength={100}
                     className={cn(
                       "transition-all duration-300 focus:ring-2 focus:ring-primary/20",
-                      errors.manufacturerName && "border-red-500 focus:ring-red-200"
+                      errors.manufacturer && "border-red-500 focus:ring-red-200"
                     )}
                   />
-                  {errors.manufacturerName && (
+                  {errors.manufacturer && (
                     <motion.p
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       className="text-sm text-red-500"
                     >
-                      {errors.manufacturerName}
+                      {errors.manufacturer}
                     </motion.p>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    {formData.manufacturerName?.length || 0}/100 characters
+                    {formData.manufacturer?.length || 0}/100 characters
                   </p>
                 </div>
 

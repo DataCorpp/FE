@@ -178,8 +178,8 @@ export interface BaseProduct {
   
   // Basic Product fields (matches backend FoodProduct model)
   name: string;
-  brand?: string; // From manufacturerName
-  manufacturerName?: string; // Required for form compatibility
+  brand?: string; // From manufacturer name
+  manufacturerName?: string; // Deprecated, use manufacturer instead
   category: string;
   description: string;
   countInStock?: number; // From currentAvailable
@@ -191,7 +191,7 @@ export interface BaseProduct {
   productType: string;
   
   // Extended fields for production (from FoodProduct.ts)
-  manufacturer?: string; // Same as manufacturerName
+  manufacturer?: string; // Primary field for manufacturer name
   originCountry?: string; // Made optional
   manufacturerRegion?: string;
   
@@ -262,7 +262,7 @@ export interface ProductFormData extends BaseProduct {
   imageFile?: File;
   
   // Override some BaseProduct fields to make required in form
-  manufacturerName: string;
+  manufacturer: string;
   pricePerUnit: number;
   originCountry: string;
 }
@@ -288,7 +288,8 @@ export interface ProductApiData {
   usage?: string[];
   packagingSize?: string;
   shelfLife?: string;
-  manufacturerName?: string;
+  manufacturer: string; // Primary field for manufacturer name
+  manufacturerName?: string; // Deprecated, kept for backward compatibility
   manufacturerRegion?: string;
   foodType?: string;
   allergens?: string[];

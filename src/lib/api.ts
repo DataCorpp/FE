@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { ProductApiData } from '@/types/product';
 
 // Use hardcoded URLs if environment variables are not available
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
@@ -377,14 +378,13 @@ export const foodProductApi = {
     return api.get<ApiResponse>(`/foodproducts/${id}`);
   },
 
-  // Create new food product - Updated interface để match với form data
+  // Create new food product - Updated interface to match with form data
   createFoodProduct: (data: {
     name: string;
     category: string;
     description: string;
     image?: string;
-    manufacturerName: string;
-    manufacturer: string;
+    manufacturer: string; // Use manufacturer consistently instead of manufacturerName
     originCountry: string;
     minOrderQuantity: number;
     dailyCapacity: number;
@@ -409,16 +409,17 @@ export const foodProductApi = {
     shelfLifeEndDate?: string;
     storageInstruction: string;
     manufacturerRegion?: string;
+    user?: string; // User ID field
   }) => {
-    // Sử dụng public endpoint để tránh authentication requirement
-    return api.post<ApiResponse>('/foodproducts/public', data);
+    // Use the authenticated endpoint
+    return api.post<ApiResponse>('/foodproducts', data);
   },
 
   // Update food product
   updateFoodProduct: (id: string, data: Partial<{
     name: string;
     category: string;
-    manufacturer: string;
+    manufacturer: string; // Use manufacturer consistently
     image: string;
     price: string;
     pricePerUnit: number;
@@ -438,9 +439,10 @@ export const foodProductApi = {
     packagingSize: string;
     shelfLife: string;
     manufacturerRegion: string;
+    user?: string; // User ID field
   }>) => {
-    // Sử dụng public endpoint để tránh authentication requirement
-    return api.put<ApiResponse>(`/foodproducts/public/${id}`, data);
+    // Use the authenticated endpoint
+    return api.put<ApiResponse>(`/foodproducts/${id}`, data);
   },
 
   // Delete food product
