@@ -1,73 +1,57 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { projects } from "./mockData";
 import { useTheme } from "@/contexts/ThemeContext";
+import { foodProductApi, projectApi, Project as ApiProject } from "../../../lib/api";
+import type { ProductCategory, SupplierType } from "./types";
 import "@/styles/theme-variables.css";
-import { ChevronLeft, Plus, Eye, Edit, XCircle, ChevronDown, ChevronUp, X, Check, AlertTriangle, Search } from "lucide-react";
+import { ChevronLeft, Plus, Eye, Edit, XCircle, ChevronDown, ChevronUp, X, Check, AlertTriangle, Search, Calendar, Package, Settings, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-// Add product suggestions data
-const productSuggestions = [
-  { id: 1, name: "Chocolate Bar", type: "PRODUCT", icon: "🍫" },
-  { id: 2, name: "Energy Drink", type: "PRODUCT", icon: "🥤" },
-  { id: 3, name: "Protein Bar", type: "PRODUCT", icon: "🍫" },
-  { id: 4, name: "Organic Snacks", type: "CATEGORY", icon: "🥜" },
-  { id: 5, name: "Coffee Beans", type: "PRODUCT", icon: "☕" },
-  { id: 6, name: "Vitamin Supplements", type: "CATEGORY", icon: "💊" },
-  { id: 7, name: "Fruit Juice", type: "PRODUCT", icon: "🧃" },
-  { id: 8, name: "Granola Bars", type: "PRODUCT", icon: "🥣" },
-  { id: 9, name: "Herbal Tea", type: "PRODUCT", icon: "🍵" },
-  { id: 10, name: "Plant-based Milk", type: "CATEGORY", icon: "🥛" }
-];
+// Status helper functions for consistent mapping between BE and UI
+const getStatusDisplayName = (status: string): string => {
+  switch(status) {
+    case 'draft': return 'Research Phase';
+    case 'active': return 'Active';
+    case 'in_review': return 'In Review';
+    case 'paused': return 'Paused';
+    case 'completed': return 'Completed';
+    case 'cancelled': return 'Cancelled';
+    default: return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+  }
+};
 
-// Add packaging suggestions
-const packagingSuggestions = [
-  { id: 1, name: "Plastic Bag", material: "Plastic" },
-  { id: 2, name: "Paper Bag", material: "Paper" },
-  { id: 3, name: "Box", material: "Cardboard" },
-  { id: 4, name: "Bottle", material: "Glass" },
-  { id: 5, name: "Bottle", material: "Plastic" },
-  { id: 6, name: "Jar", material: "Glass" },
-  { id: 7, name: "Pouch", material: "Flexible Plastic" },
-  { id: 8, name: "Can", material: "Aluminum" },
-  { id: 9, name: "Sachet", material: "Foil" }
-];
-
-// Add ingredient suggestions
-const ingredientSuggestions = [
-  { id: 1, name: "Cocoa Mass", category: "Chocolate" },
-  { id: 2, name: "Sugar", category: "Sweeteners" },
-  { id: 3, name: "Cocoa Butter", category: "Chocolate" },
-  { id: 4, name: "Sea Salt", category: "Additives" },
-  { id: 5, name: "Almonds", category: "Nuts" },
-  { id: 6, name: "Vanilla Extract", category: "Flavorings" },
-  { id: 7, name: "Milk Powder", category: "Dairy" },
-  { id: 8, name: "Lecithin", category: "Emulsifiers" },
-  { id: 9, name: "Natural Flavors", category: "Flavorings" },
-  { id: 10, name: "Organic Cane Sugar", category: "Sweeteners" }
-];
-
-// Add consultant service suggestions
-const consultantSuggestions = [
-  { id: 1, name: "Formulation", specialty: "Product Development" },
-  { id: 2, name: "Packaging Design", specialty: "Design" },
-  { id: 3, name: "Regulatory Compliance", specialty: "Legal" },
-  { id: 4, name: "Quality Assurance", specialty: "Operations" },
-  { id: 5, name: "Supply Chain Management", specialty: "Operations" },
-  { id: 6, name: "Marketing Strategy", specialty: "Marketing" },
-  { id: 7, name: "Shelf Life Testing", specialty: "Quality" },
-  { id: 8, name: "Nutritional Analysis", specialty: "Science" },
-  { id: 9, name: "Export Documentation", specialty: "Legal" },
-  { id: 10, name: "Sensory Testing", specialty: "Quality" }
-];
+const getStatusColor = (status: string, isDark = false): string => {
+  switch(status) {
+    case 'active':
+      return isDark ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-700";
+    case 'paused':
+      return isDark ? "bg-yellow-900/40 text-yellow-300" : "bg-yellow-100 text-yellow-700";
+    case 'completed':
+      return isDark ? "bg-green-800/60 text-green-300" : "bg-green-100 text-green-500";
+    case 'info_required':
+    case 'cancelled':
+      return isDark ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-600";
+    case 'draft':
+      return isDark ? "bg-yellow-900/40 text-yellow-300" : "bg-yellow-100 text-yellow-700";
+    case 'in_review':
+      return isDark ? "bg-purple-900/40 text-purple-300" : "bg-purple-100 text-purple-700";
+    default:
+      return "";
+  }
+};
 
 interface Props {
-  onNext: (projectId?: number) => void; // Modified to accept project ID
+  onNext: (projectId?: string | number) => void;
   onBack: () => void;
   onNewProject: () => void;
+  selectedProduct?: ProductCategory | null;
+  selectedSupplierType?: SupplierType | null;
+  projectData?: any;
 }
 
 interface Project {
   id: number;
+  _id?: string; // Store original MongoDB ObjectId for API calls
   name: string;
   created: string;
   status: string;
@@ -76,56 +60,293 @@ interface Project {
   volume?: string;
   description?: string;
   anonymous?: boolean;
+  selectedProduct?: ProductCategory;
+  selectedSupplierType?: SupplierType;
+  image?: string;
+  packagingObjects?: Array<{
+    id: number;
+    name: string;
+    material: string;
+  }>;
+  packaging?: string[];
+  locationList?: string[];
+  allergen?: string[];
+  certification?: string[];
+  additional?: string;
+  hideFromCurrent?: boolean;
 }
 
-const statusColor = (status: string, isDark = false) => {
-  switch (status) {
-    case "in_review":
-      return isDark ? "bg-blue-900/40 text-blue-300" : "bg-blue-100 text-blue-700";
-    case "closed":
-      return isDark ? "bg-slate-800/60 text-slate-300" : "bg-gray-100 text-gray-500";
-    case "info_required":
-      return isDark ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-600";
-    default:
-      return "";
-  }
+// Update the ApiProject interface reference to include additional fields
+interface ApiProjectExtended {
+  _id: string;
+  name: string;
+  description: string;
+  status: 'draft' | 'active' | 'in_review' | 'paused' | 'completed' | 'cancelled';
+  selectedProduct?: {
+    id: string;
+    name: string;
+    type: 'PRODUCT' | 'CATEGORY' | 'FOODTYPE';
+    image?: string;
+  };
+  selectedSupplierType?: SupplierType;
+  volume: string;
+  units: string;
+  packaging?: string[];
+  packagingObjects?: Array<{
+    id: number;
+    name: string;
+    material: string;
+  }>;
+  locationList?: string[];
+  location?: string[];
+  allergen?: string[];
+  certification?: string[];
+  additional?: string;
+  anonymous?: boolean;
+  hideFromCurrent?: boolean;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Helper functions for category/product display (consistent with Step1 & Step2)
+const getCategoryIcon = (categoryName: string): string => {
+  const categoryIcons: Record<string, string> = {
+    'Dressing': '🥗',
+    'Instant Food': '🍜',
+    'Miso': '🥣',
+    'Sauce': '🫙',
+    'Seasoning Mix': '🧂',
+    'Soy Sauce': '🥢',
+    'Teriyaki': '🍖', 'Ponzu': '🍋',
+    'Marinade': '🍖', 'Seasoning': '🧂',
+    'Ramen': '🍜', 'Udon': '🍜', 'Soba': '🍜', 'Noodles': '🍜',
+    'Rice': '🍚', 'Sake': '🍶', 'Beer': '🍺', 'Wine': '🍷',
+    'Tea': '🍵', 'Coffee': '☕', 'Juice': '🧃', 'Water': '💧',
+    'Beverages': '🥤', 'Beverage': '🥤', 'Drink': '🥤',
+    'Snacks': '🍿', 'Snack': '🍿',
+    'Dairy': '🥛', 'Milk': '🥛',
+    'Bakery': '🍞', 'Bread': '🍞',
+    'Meat': '🥩', 'Seafood': '🐟', 'Fish': '🐟',
+    'Vegetables': '🥬', 'Vegetable': '🥬',
+    'Fruits': '🍎', 'Fruit': '🍎',
+    'Condiments': '🍯', 'Spices': '🌶️', 'Spice': '🌶️',
+    'Cereals': '🥣', 'Cereal': '🥣',
+    'Confectionery': '🍬', 'Candy': '🍬', 'Sweet': '🍬',
+    'Frozen': '🧊', 'Canned': '🥫', 'Organic': '🌱', 'Health': '💚',
+    'Baby Food': '🍼', 'Pet Food': '🐕',
+    'Chocolate': '🍫',
+    'Other': '📦',
+    'Paper': '📄',
+    'Bag': '👜',
+    'Packaging': '📦'
+  };
+  
+  const matchedKey = Object.keys(categoryIcons).find(key => 
+    categoryName.toLowerCase().includes(key.toLowerCase())
+  );
+  
+  return categoryIcons[matchedKey || 'Other'];
 };
 
-const statusText = (status: string) => {
-  switch (status) {
-    case "in_review":
-      return "In review";
-    case "closed":
-      return "Closed";
-    case "info_required":
-      return "Info required";
-    default:
-      return status;
-  }
+const getCategoryImage = (categoryName: string): string => {
+  const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd', '#ff9ff3', '#74b9ff'];
+  const colorIndex = categoryName.length % colors.length;
+  const color = colors[colorIndex];
+  const encodedName = encodeURIComponent(categoryName.replace(/\s+/g, '+'));
+  
+  return `https://via.placeholder.com/300x300/${color.substring(1)}/ffffff?text=${encodedName}&font=Arial`;
 };
 
-const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject }) => {
+// Deprecated - using getStatusColor and getStatusDisplayName instead
+const statusColor = getStatusColor;
+const statusText = getStatusDisplayName;
+
+const Step3_ReviewProjects: React.FC<Props> = ({ 
+  onNext, 
+  onBack, 
+  onNewProject,
+  selectedProduct,
+  selectedSupplierType,
+  projectData
+}) => {
+  // Toast notifications
+  const { toast } = useToast();
+  
+  // API States
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [productSuggestions, setProductSuggestions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // UI States
   const [projectDetailsVisible, setProjectDetailsVisible] = useState<number | null>(null);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const { theme } = useTheme();
   const isDarkMode = theme === 'dark';
   
-  // New state for popups
+  // Popup states
   const [editPopupVisible, setEditPopupVisible] = useState(false);
   const [cancelPopupVisible, setCancelPopupVisible] = useState(false);
+  const [deletePopupVisible, setDeletePopupVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editedProject, setEditedProject] = useState<Project | null>(null);
 
-  // New state for product name suggestions
+  // Product search states
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [productSearchQuery, setProductSearchQuery] = useState("");
   const [productInputFocused, setProductInputFocused] = useState(false);
+  
+  // Load API data
+  useEffect(() => {
+    const loadProjectsData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Load real projects and food types in parallel
+        const [projectsRes, foodTypesRes] = await Promise.all([
+          projectApi.getProjects({ limit: 10 }).catch(() => null), // Load real projects
+          foodProductApi.getFoodTypes() // Load food types instead of products
+        ]);
+        
+        // Handle real projects data
+        if (projectsRes?.success && projectsRes.data?.projects) {
+          // Convert API projects to local Project format
+          const apiProjects: Project[] = projectsRes.data.projects.map((apiProject: ApiProjectExtended) => ({
+            id: parseInt(apiProject._id.slice(-6), 16), // Convert MongoDB ObjectId to number for display
+            _id: apiProject._id, // Store original MongoDB ObjectId for API calls
+            name: apiProject.name,
+            created: new Date(apiProject.createdAt).toISOString().split('T')[0],
+            status: apiProject.status === 'in_review' ? 'in_review' : 
+                   apiProject.status === 'completed' ? 'completed' :
+                   apiProject.status === 'cancelled' ? 'info_required' : apiProject.status,
+            details: getProjectStatusDetails(apiProject.status),
+            volume: apiProject.volume,
+            units: apiProject.units,
+            description: apiProject.description,
+            anonymous: apiProject.anonymous,
+            selectedProduct: apiProject.selectedProduct ? {
+              id: parseInt(apiProject.selectedProduct.id),
+              name: apiProject.selectedProduct.name,
+              type: apiProject.selectedProduct.type,
+              image: apiProject.selectedProduct.image
+            } : undefined,
+            selectedSupplierType: apiProject.selectedSupplierType,
+            image: apiProject.selectedProduct?.image,
+            packagingObjects: apiProject.packagingObjects,
+            packaging: apiProject.packaging,
+            locationList: apiProject.locationList,
+            allergen: apiProject.allergen,
+            certification: apiProject.certification,
+            additional: apiProject.additional,
+            hideFromCurrent: apiProject.hideFromCurrent
+          }));
+          
+          // Add current project if it was just created
+          if (selectedProduct && projectData) {
+            const currentProject: Project = {
+              id: projectData.projectId ? parseInt(projectData.projectId.slice(-6), 16) : Date.now(),
+              _id: projectData.projectId, // Store the original MongoDB ObjectId if available
+              name: selectedProduct.name,
+              created: new Date().toISOString().split('T')[0],
+              status: "in_review",
+              details: "Keep an eye out – we may email you for additional project details",
+              volume: projectData.volume || "10K - 50K",
+              units: projectData.units || "Units",
+              description: projectData.description || "Manufacturing project created from your selection",
+              anonymous: projectData.anonymous || false,
+              selectedProduct: selectedProduct,
+              selectedSupplierType: selectedSupplierType,
+              image: selectedProduct.image,
+              packagingObjects: projectData.packagingObjects || [],
+              packaging: projectData.packaging || [],
+              locationList: projectData.locationList || ["Global"],
+              allergen: projectData.allergen || [],
+              certification: projectData.certification || [],
+              additional: projectData.additional || "",
+              hideFromCurrent: projectData.hideFromCurrent || false
+            };
+            
+            // Add to beginning of list if not already there
+            const existingProject = apiProjects.find(p => p.name === currentProject.name);
+            if (!existingProject) {
+              apiProjects.unshift(currentProject);
+            }
+          }
+          
+          setProjects(apiProjects);
+        } else {
+          // Fallback to mock data if API fails
+          const mockProjects: Project[] = [
+            {
+              id: 1,
+              name: selectedProduct?.name || "Chocolate Bar",
+              created: new Date().toISOString().split('T')[0],
+              status: "in_review",
+              details: "Keep an eye out – we may email you for additional project details",
+              volume: projectData?.volume || "10K - 50K",
+              units: projectData?.units || "Units",
+              description: projectData?.description || "Manufacturing project created from your selection",
+              anonymous: projectData?.anonymous || false,
+              selectedProduct: selectedProduct,
+              selectedSupplierType: selectedSupplierType,
+              image: selectedProduct?.image,
+              packagingObjects: projectData?.packagingObjects || [],
+              packaging: projectData?.packaging || [],
+              locationList: projectData?.locationList || ["Global"],
+              allergen: projectData?.allergen || [],
+              certification: projectData?.certification || [],
+              additional: projectData?.additional || "",
+              hideFromCurrent: projectData?.hideFromCurrent || false
+            }
+          ];
+          setProjects(mockProjects);
+        }
+        
+        // Handle food types for suggestions
+        if (foodTypesRes.data?.success && foodTypesRes.data?.data && Array.isArray(foodTypesRes.data.data)) {
+          // Convert food types to product suggestions format
+          const foodTypes = foodTypesRes.data.data;
+          const foodTypeSuggestions = foodTypes.map((foodType, index) => ({
+            id: index + 1000, // offset to avoid ID conflicts
+            name: foodType,
+            type: "CATEGORY",
+            category: "Food Type"
+          }));
+          setProductSuggestions(foodTypeSuggestions);
+        }
+        
+      } catch (err) {
+        console.error('Error loading projects data:', err);
+        setError('Failed to load projects. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProjectsData();
+  }, [selectedProduct, selectedSupplierType, projectData]);
+
+  // Helper function to get project status details
+  const getProjectStatusDetails = (status: string): string => {
+    const statusDetails = {
+      'draft': 'Project is being prepared',
+      'active': 'Project is actively seeking manufacturers',
+      'in_review': 'Keep an eye out – we may email you for additional project details',
+      'paused': 'Project has been temporarily paused',
+      'completed': 'Project has been successfully completed',
+      'cancelled': 'Please check your email – our team has requested additional project details'
+    };
+    return statusDetails[status as keyof typeof statusDetails] || 'Project status updated';
+  };
   
   // Filter product suggestions based on search query
   const filteredProducts = productSearchQuery.trim() === ""
     ? productSuggestions
     : productSuggestions.filter(product => 
-        product.name.toLowerCase().includes(productSearchQuery.toLowerCase())
+        product.name.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+        (product.category && product.category.toLowerCase().includes(productSearchQuery.toLowerCase()))
       );
 
   // Check for reduced motion preference
@@ -169,13 +390,32 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
 
   // Navigate to project details
   const navigateToProjectDetail = (projectId: number) => {
-    onNext(projectId);
+    console.log("Navigating to project detail with ID:", projectId);
+    // Check if we have the MongoDB ObjectId
+    const project = projects.find(p => p.id === projectId);
+    const mongoId = project?._id;
+    if (mongoId) {
+      console.log("Found MongoDB ObjectId:", mongoId);
+      onNext(mongoId); // Truyền MongoDB ObjectId dưới dạng chuỗi
+    } else {
+      console.log("No MongoDB ObjectId found, using display ID:", projectId);
+      onNext(projectId);
+    }
   };
   
   // Show edit popup
   const handleEditProject = (project: Project) => {
     setSelectedProject(project);
-    setEditedProject({...project});
+    setEditedProject({
+      ...project,
+      packagingObjects: project.packagingObjects || [],
+      packaging: project.packaging || [],
+      locationList: project.locationList || ["Global"],
+      allergen: project.allergen || [],
+      certification: project.certification || [],
+      additional: project.additional || "",
+      hideFromCurrent: project.hideFromCurrent || false
+    });
     setProductSearchQuery(project.name); // Initialize the search field with current project name
     setEditPopupVisible(true);
   };
@@ -186,30 +426,257 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
     setCancelPopupVisible(true);
   };
   
+  // Show delete popup
+  const handleDeleteProject = (project: Project) => {
+    setSelectedProject(project);
+    setDeletePopupVisible(true);
+  };
+  
   // Handle product selection from suggestions
-  const handleProductSelect = (productName: string) => {
+  const handleProductSelect = (product: any) => {
     if (editedProject) {
-      setEditedProject({...editedProject, name: productName});
+      // Update both name and selectedProduct
+      setEditedProject({
+        ...editedProject, 
+        name: product.name,
+        selectedProduct: {
+          id: product.id,
+          name: product.name,
+          type: product.type || 'CATEGORY',
+          image: product.image
+        }
+      });
     }
-    setProductSearchQuery(productName);
+    setProductSearchQuery(product.name);
     setShowProductSuggestions(false);
   };
   
   // Submit edited project
-  const handleSubmitEdit = () => {
-    // In a real app, you would update the project data here
-    console.log("Edited project:", editedProject);
+  const handleSubmitEdit = async () => {
+    if (!editedProject || !selectedProject) return;
+    
+    try {
+      // Check if we have the original MongoDB ObjectId
+      const projectId = selectedProject._id || selectedProject.id.toString();
+      
+      if (!projectId) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Unable to update project: Invalid project ID"
+        });
+        return;
+      }
+      
+      // Update project via API - match the ProjectData interface structure
+      const updateData = {
+        name: editedProject.name,
+        description: editedProject.description || '',
+        volume: editedProject.volume || '10K - 50K',
+        units: editedProject.units || 'Units',
+        anonymous: editedProject.anonymous || false,
+        // Include these fields from the original project to maintain data consistency
+        selectedProduct: editedProject.selectedProduct ? {
+          id: editedProject.selectedProduct.id.toString(),
+          name: editedProject.selectedProduct.name,
+          type: editedProject.selectedProduct.type as 'PRODUCT' | 'CATEGORY' | 'FOODTYPE',
+          image: editedProject.selectedProduct.image
+        } : undefined,
+        selectedSupplierType: editedProject.selectedSupplierType,
+        packaging: editedProject.packaging || [],
+        packagingObjects: editedProject.packagingObjects || [],
+        location: editedProject.locationList || ["Global"],
+        allergen: editedProject.allergen || [],
+        certification: editedProject.certification || [],
+        additional: editedProject.additional || '',
+        hideFromCurrent: editedProject.hideFromCurrent || false
+      };
+      
+      console.log("Updating project with ID:", projectId, "Data:", updateData);
+      
+      const response = await projectApi.updateProject(projectId, updateData);
+      
+      if (response.success) {
+        // Update local projects list with all the updated fields
+        setProjects(prevProjects => 
+          prevProjects.map(p => 
+            p.id === selectedProject.id 
+              ? { 
+                  ...p, 
+                  name: editedProject.name,
+                  description: editedProject.description,
+                  volume: editedProject.volume,
+                  units: editedProject.units,
+                  anonymous: editedProject.anonymous,
+                  selectedProduct: editedProject.selectedProduct,
+                  selectedSupplierType: editedProject.selectedSupplierType,
+                  packaging: editedProject.packaging,
+                  packagingObjects: editedProject.packagingObjects,
+                  locationList: editedProject.locationList,
+                  allergen: editedProject.allergen,
+                  certification: editedProject.certification,
+                  additional: editedProject.additional,
+                  hideFromCurrent: editedProject.hideFromCurrent
+                }
+              : p
+          )
+        );
+        
+        // Show success message with matching information if available
+        if (response.data?.project?.matchingManufacturers) {
+          const matchCount = response.data.project.matchingManufacturers.length;
+          toast({
+            title: "Project updated successfully!",
+            description: `Found ${matchCount} matching partners for your project.`
+          });
+        } else {
+        toast({
+          title: "Success",
+          description: "Project updated successfully!"
+        });
+        }
+        
+        console.log("Project updated successfully:", response.data);
+      } else {
+        console.error("API returned success: false", response);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to update project: Unknown error"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error("Error updating project:", error);
+      const errorMessage = error.message || error.response?.data?.message || "Unknown error occurred";
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to update project: ${errorMessage}`
+      });
+    } finally {
     setEditPopupVisible(false);
     setSelectedProject(null);
     setEditedProject(null);
+    }
   };
   
   // Confirm project cancellation
-  const handleConfirmCancel = () => {
-    // In a real app, you would handle project cancellation here
-    console.log("Cancelled project:", selectedProject);
+  const handleConfirmCancel = async () => {
+    if (!selectedProject) return;
+    
+    try {
+      // Check if we have the original MongoDB ObjectId
+      const projectId = selectedProject._id || selectedProject.id.toString();
+      
+      if (!projectId) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Unable to cancel project: Invalid project ID"
+        });
+        return;
+      }
+      
+      console.log("Cancelling project with ID:", projectId);
+      
+      // Update project status to cancelled via API
+      const response = await projectApi.updateProjectStatus(
+        projectId, 
+        'cancelled',
+        'Project cancelled by user'
+      );
+      
+      if (response.success) {
+        // Update local projects list
+        setProjects(prevProjects => 
+          prevProjects.map(p => 
+            p.id === selectedProject.id 
+              ? { ...p, status: 'info_required', details: 'Project has been cancelled' }
+              : p
+          )
+        );
+        console.log("Project cancelled successfully");
+        toast({
+          title: "Success",
+          description: "Project cancelled successfully!"
+        });
+      } else {
+        console.error("API returned success: false", response);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to cancel project: Unknown error"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error("Error cancelling project:", error);
+      const errorMessage = error.message || error.response?.data?.message || "Unknown error occurred";
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to cancel project: ${errorMessage}`
+      });
+    } finally {
     setCancelPopupVisible(false);
     setSelectedProject(null);
+    }
+  };
+  
+  // Confirm project deletion
+  const handleConfirmDelete = async () => {
+    if (!selectedProject) return;
+    
+    try {
+      // Check if we have the original MongoDB ObjectId
+      const projectId = selectedProject._id || selectedProject.id.toString();
+      
+      if (!projectId) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Unable to delete project: Invalid project ID"
+        });
+        return;
+      }
+      
+      console.log("Deleting project with ID:", projectId);
+      
+      // Delete project via API
+      const response = await projectApi.deleteProject(projectId);
+      
+      if (response.success) {
+        // Remove project from local projects list
+        setProjects(prevProjects => 
+          prevProjects.filter(p => p.id !== selectedProject.id)
+        );
+        console.log("Project deleted successfully");
+        toast({
+          title: "Success",
+          description: "Project deleted successfully!"
+        });
+      } else {
+        console.error("API returned success: false", response);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to delete project: Unknown error"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error("Error deleting project:", error);
+      const errorMessage = error.message || error.response?.data?.message || "Unknown error occurred";
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: `Failed to delete project: ${errorMessage}`
+      });
+    } finally {
+      setDeletePopupVisible(false);
+      setSelectedProject(null);
+    }
   };
 
   // Animation variants
@@ -353,7 +820,7 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.5, delay: 0.3 }}
               >
-                Projects
+                All Projects
               </motion.h2>
             </div>
             
@@ -385,7 +852,42 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
-            {projects.length === 0 ? (
+            {loading ? (
+              <motion.div 
+                className="py-16 flex flex-col items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <motion.div
+                  className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                />
+                <p className="mt-4 text-muted-foreground">Loading projects...</p>
+              </motion.div>
+            ) : error ? (
+              <motion.div 
+                className="py-16 flex flex-col items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+              >
+                <div className={`w-20 h-20 rounded-full ${isDarkMode ? 'bg-red-900/30' : 'bg-red-100'} flex items-center justify-center mb-4`}>
+                  <AlertTriangle className={`h-10 w-10 ${isDarkMode ? 'text-red-300' : 'text-red-500'}`} />
+                </div>
+                <h3 className={`text-xl font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>Error Loading Projects</h3>
+                <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'} mb-4`}>{error}</p>
+                <motion.button
+                  className={`px-4 py-2 rounded-md ${isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-500 text-white hover:bg-blue-600'}`}
+                  onClick={() => window.location.reload()}
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  Retry
+                </motion.button>
+              </motion.div>
+            ) : projects.length === 0 ? (
               <motion.div 
                 className="py-16 flex flex-col items-center justify-center"
                 initial={{ opacity: 0 }}
@@ -433,7 +935,7 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                           isDarkMode 
                             ? 'bg-gradient-to-br from-blue-900/30 to-slate-800' 
                             : 'bg-gradient-to-br from-primary/20 to-primary/5'
-                        } rounded-full flex items-center justify-center`}
+                        } rounded-full flex items-center justify-center overflow-hidden border border-primary/10`}
                         whileHover={{ 
                           rotate: [0, 5, -5, 0],
                           scale: 1.05,
@@ -445,6 +947,21 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                         layoutId={`project-icon-${proj.id}`}
                         variants={itemVariants}
                       >
+                        {proj.selectedProduct?.type === 'PRODUCT' && proj.selectedProduct?.image ? (
+                          <img 
+                            src={proj.selectedProduct.image}
+                            alt={proj.name}
+                            className="w-full h-full object-cover rounded-full"
+                            onError={(e) => {
+                              // Fallback to icon if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<span class="text-2xl">${getCategoryIcon(proj.name)}</span>`;
+                              }
+                            }}
+                          />
+                        ) : (
                         <motion.span 
                           className="text-2xl"
                           animate={{ 
@@ -456,8 +973,9 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                             scale: { duration: 3, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }
                           }}
                         >
-                          {proj.name === "Chocolate Bar" ? "🍫" : "🥤"}
+                            {getCategoryIcon(proj.name)}
                         </motion.span>
+                        )}
                       </motion.div>
                       <div>
                         <motion.div 
@@ -484,7 +1002,7 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                             whileHover={{ scale: 1.05 }}
                             transition={{ duration: 0.2 }}
                           >
-                            {statusText(proj.status)}
+                            {getStatusDisplayName(proj.status)}
                           </motion.span>
                           <span className={isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}>{proj.details}</span>
                         </motion.div>
@@ -561,10 +1079,28 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                                 <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}`}>Product:</span>
                                 <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{proj.name}</span>
                               </div>
+                              {proj.selectedProduct?.type && (
+                                <div className="flex justify-between mb-3">
+                                  <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}`}>Type:</span>
+                                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                    proj.selectedProduct.type === 'PRODUCT' 
+                                      ? isDarkMode ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-700'
+                                      : isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {proj.selectedProduct.type}
+                                  </span>
+                                </div>
+                              )}
+                              {proj.selectedSupplierType && (
+                                <div className="flex justify-between mb-3">
+                                  <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}`}>Looking for:</span>
+                                  <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{proj.selectedSupplierType.name}</span>
+                                </div>
+                              )}
                               <div className="flex justify-between mb-3">
                                 <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}`}>Status:</span>
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor(proj.status, isDarkMode)}`}>
-                                  {statusText(proj.status)}
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${getStatusColor(proj.status, isDarkMode)}`}>
+                                  {getStatusDisplayName(proj.status)}
                                 </span>
                               </div>
                               <div className="flex justify-between mb-3">
@@ -573,7 +1109,7 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                               </div>
                               <div className="flex justify-between">
                                 <span className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-muted-foreground'}`}>Volume:</span>
-                                <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{proj.volume || "10K - 50K"}</span>
+                                <span className={`text-xs font-medium ${isDarkMode ? 'text-slate-200' : 'text-slate-700'}`}>{proj.volume || "10K - 50K"} {proj.units || "Units"}</span>
                               </div>
                             </div>
                           </motion.div>
@@ -621,6 +1157,19 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                                 >
                                   <XCircle size={14} />
                                   Cancel Project
+                                </motion.button>
+                                <motion.button
+                                  className={`flex items-center gap-1.5 text-xs ${
+                                    isDarkMode 
+                                      ? 'bg-red-900/60 text-red-200 hover:bg-red-900/80' 
+                                      : 'bg-red-200 text-red-700 hover:bg-red-300'
+                                  } px-3 py-1.5 rounded-md`}
+                                  whileHover={{ scale: 1.05 }}
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => handleDeleteProject(proj)}
+                                >
+                                  <Trash2 size={14} />
+                                  Delete Project
                                 </motion.button>
                               </div>
                             </div>
@@ -730,16 +1279,35 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                                     ? 'hover:bg-slate-600 text-slate-200' 
                                     : 'hover:bg-gray-100 text-gray-800'
                                 } transition-colors`}
-                                onClick={() => handleProductSelect(product.name)}
+                                onClick={() => handleProductSelect(product)}
                                 initial={{ opacity: 0, y: -5 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: index * 0.05 }}
                                 whileHover={{ x: 5, backgroundColor: isDarkMode ? 'rgba(100, 116, 139, 0.5)' : 'rgba(243, 244, 246, 1)' }}
                               >
-                                <span className="text-xl">{product.icon}</span>
+                                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center overflow-hidden">
+                                  {product.image ? (
+                                    <img 
+                                      src={product.image}
+                                      alt={product.name}
+                                      className="w-full h-full object-cover rounded-lg"
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = 'none';
+                                        const parent = e.currentTarget.parentElement;
+                                        if (parent) {
+                                          parent.innerHTML = `<span class="text-xl">${getCategoryIcon(product.name)}</span>`;
+                                        }
+                                      }}
+                                    />
+                                  ) : (
+                                    <span className="text-xl">{getCategoryIcon(product.name)}</span>
+                                  )}
+                                </div>
                                 <div className="flex-1">
                                   <div className="font-medium">{product.name}</div>
-                                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>{product.type}</div>
+                                  <div className={`text-xs ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                                    {product.category || product.type || 'PRODUCT'}
+                                  </div>
                                 </div>
                               </motion.div>
                             ))}
@@ -750,6 +1318,42 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                   </div>
                   
                   <div className="mb-4">
+                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                      Description
+                    </label>
+                    <textarea 
+                      className={`w-full px-3 py-2 rounded-md ${
+                        isDarkMode 
+                          ? 'bg-slate-700 border-slate-600 text-white focus:border-blue-500' 
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                      } border focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all`}
+                      rows={3}
+                      value={editedProject.description || ""}
+                      onChange={(e) => setEditedProject({...editedProject, description: e.target.value})}
+                      placeholder="Enter project description"
+                    />
+                  </div>
+                  
+                  {/* Additional Requirements */}
+                  <div className="mb-4">
+                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                      Additional Requirements
+                    </label>
+                    <textarea 
+                      className={`w-full px-3 py-2 rounded-md ${
+                        isDarkMode 
+                          ? 'bg-slate-700 border-slate-600 text-white focus:border-blue-500' 
+                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
+                      } border focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all`}
+                      rows={2}
+                      value={editedProject.additional || ""}
+                      onChange={(e) => setEditedProject({...editedProject, additional: e.target.value})}
+                      placeholder="Enter any additional requirements..."
+                    />
+                  </div>
+                  
+                  <div className="flex gap-4 mb-4">
+                    <div className="flex-1">
                     <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                       Volume
                     </label>
@@ -765,11 +1369,15 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                       <option value="1K - 10K">1K - 10K</option>
                       <option value="10K - 50K">10K - 50K</option>
                       <option value="50K - 100K">50K - 100K</option>
-                      <option value="100K+">100K+</option>
+                      <option value="100K - 500K">100K - 500K</option>
+                      <option value="500K - 1M">500K - 1M</option>
+                      <option value="1M - 5M">1M - 5M</option>
+                      <option value="5M - 10M">5M - 10M</option>
+                      <option value="10M+">10M+</option>
                     </select>
                   </div>
                   
-                  <div className="mb-4">
+                    <div className="w-1/3">
                     <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                       Units
                     </label>
@@ -792,39 +1400,58 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
                       <option value="Liters">Liters</option>
                       <option value="Gallons">Gallons</option>
                     </select>
+                    </div>
                   </div>
                   
-                  <div className="mb-4">
-                    <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-                      Description
+                  {/* Project Visibility Options */}
+                  <div className="flex flex-col space-y-3 mb-6">
+                    <div className="flex items-center justify-between">
+                      <label className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                        Hide project from current manufacturers
                     </label>
-                    <textarea 
-                      className={`w-full px-3 py-2 rounded-md ${
-                        isDarkMode 
-                          ? 'bg-slate-700 border-slate-600 text-white focus:border-blue-500' 
-                          : 'bg-white border-gray-300 text-gray-900 focus:border-blue-500'
-                      } border focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all`}
-                      rows={3}
-                      value={editedProject.description || ""}
-                      onChange={(e) => setEditedProject({...editedProject, description: e.target.value})}
-                      placeholder="Enter product description"
-                    />
+                      <motion.div 
+                        className={`w-11 h-6 rounded-full p-1 cursor-pointer flex items-center ${
+                          editedProject.hideFromCurrent ? 'bg-primary justify-end' : 'bg-gray-300 justify-start dark:bg-slate-700'
+                        }`}
+                        onClick={() => setEditedProject({...editedProject, hideFromCurrent: !editedProject.hideFromCurrent})}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <motion.div 
+                          className="w-4 h-4 bg-white rounded-full" 
+                          layout
+                          transition={{ 
+                            type: "spring",
+                            stiffness: 700,
+                            damping: 30
+                          }}
+                        />
+                      </motion.div>
                   </div>
                   
-                  <div className="mb-6">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className={`w-4 h-4 ${
-                          isDarkMode ? 'bg-slate-700 border-slate-600' : 'bg-white border-gray-300'
-                        } focus:ring-blue-500/20 rounded transition-all`}
-                        checked={editedProject.anonymous || false}
-                        onChange={(e) => setEditedProject({...editedProject, anonymous: e.target.checked})}
-                      />
-                      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+                    <div className="flex items-center justify-between">
+                      <label className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>
                         Post project anonymously
-                      </span>
                     </label>
+                      <motion.div 
+                        className={`w-11 h-6 rounded-full p-1 cursor-pointer flex items-center ${
+                          editedProject.anonymous ? 'bg-primary justify-end' : 'bg-gray-300 justify-start dark:bg-slate-700'
+                        }`}
+                        onClick={() => setEditedProject({...editedProject, anonymous: !editedProject.anonymous})}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <motion.div 
+                          className="w-4 h-4 bg-white rounded-full" 
+                          layout
+                          transition={{ 
+                            type: "spring",
+                            stiffness: 700,
+                            damping: 30
+                          }}
+                        />
+                      </motion.div>
+                    </div>
                   </div>
                   
                   <div className="flex justify-end gap-3 mt-6">
@@ -955,20 +1582,122 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
         )}
       </AnimatePresence>
       
+      {/* Delete Project Popup */}
+      <AnimatePresence>
+        {deletePopupVisible && selectedProject && (
+          <>
+            <motion.div 
+              className="fixed inset-0 bg-black/50 z-40 backdrop-blur-sm"
+              variants={backdropVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={() => setDeletePopupVisible(false)}
+            />
+            
+            <div className="modal-container">
+              <motion.div 
+                className={`modal-content ${
+                  isDarkMode ? 'bg-slate-800 border border-slate-700' : 'bg-white border border-slate-200'
+                } rounded-lg shadow-xl`}
+                variants={popupVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+              >
+                <div className={`p-5 border-b ${isDarkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      Delete Project
+                    </h3>
+                    <motion.button 
+                      className="text-gray-400 hover:text-gray-500"
+                      whileHover={{ scale: 1.1, rotate: 90 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={() => setDeletePopupVisible(false)}
+                    >
+                      <X size={20} />
+                    </motion.button>
+                  </div>
+                </div>
+                
+                <div className="p-5">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className={`w-12 h-12 flex items-center justify-center rounded-full ${
+                      isDarkMode ? 'bg-red-900/40 text-red-300' : 'bg-red-100 text-red-600'
+                    }`}>
+                      <Trash2 size={24} />
+                    </div>
+                    
+                    <div>
+                      <h4 className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        Permanently Delete Project?
+                      </h4>
+                      <p className={`text-sm ${isDarkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+                        This will permanently delete the project "{selectedProject.name}" and all associated data. This action cannot be undone.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex justify-end gap-3">
+                    <motion.button
+                      className={`py-2 px-4 rounded-md text-sm font-medium ${
+                        isDarkMode 
+                          ? 'bg-slate-700 text-slate-200 hover:bg-slate-600' 
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => setDeletePopupVisible(false)}
+                    >
+                      No, keep project
+                    </motion.button>
+                    
+                    <motion.button
+                      className={`py-2 px-4 rounded-md text-sm font-medium ${
+                        isDarkMode 
+                          ? 'bg-red-600 text-white hover:bg-red-700' 
+                          : 'bg-red-500 text-white hover:bg-red-600'
+                      }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleConfirmDelete}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Trash2 size={16} />
+                        Yes, delete permanently
+                      </span>
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
+        )}
+      </AnimatePresence>
+      
       {/* Global styles for consistency */}
       <style>{`
         :root {
           --primary-rgb: 0, 112, 243;
+          --secondary-rgb: 100, 116, 139;
+          --foreground-rgb: 2, 8, 23;
           --border-rgb: 226, 232, 240;
           --muted-rgb: 241, 245, 249;
         }
         
+        [data-theme="dark"] {
+          --foreground-rgb: 248, 250, 252;
+          --border-rgb: 39, 39, 42;
+          --muted-rgb: 39, 39, 42;
+        }
+        
         .project-card {
-          transition: all var(--duration-normal) ease-in-out;
+          transition: all 0.3s ease-in-out;
         }
         
         .project-detail-panel {
-          box-shadow: 0 4px 12px rgba(var(--slate-850-rgb), 0.1);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
         
         /* Fix for popup centering */
@@ -986,6 +1715,15 @@ const Step3_ReviewProjects: React.FC<Props> = ({ onNext, onBack, onNewProject })
           max-width: 500px;
           max-height: 90vh;
           overflow-y: auto;
+        }
+        
+        /* Manufacturing Projects specific styles */
+        .manufacturing-project-header {
+          background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.1) 0%, rgba(var(--secondary-rgb), 0.05) 100%);
+        }
+        
+        .manufacturing-project-icon {
+          background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.2) 0%, rgba(var(--primary-rgb), 0.05) 100%);
         }
       `}</style>
     </div>

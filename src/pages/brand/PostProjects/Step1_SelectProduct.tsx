@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { productCategories, supplierTypes } from "./mockData";
+import { foodProductApi, projectApi } from "../../../lib/api";
 import type { ProductCategory, SupplierType } from "./types";
 import { motion, AnimatePresence, useMotionValue, useTransform } from "framer-motion";
 
@@ -10,6 +10,15 @@ interface Props {
   selectedSupplierType?: SupplierType;
   setSelectedSupplierType?: (s: SupplierType) => void;
 }
+
+// Static supplier types (these are business logic constants)
+const supplierTypes: SupplierType[] = [
+  { id: 1, name: "Manufacturer" },
+  { id: 2, name: "Packaging Supplier" },
+  { id: 3, name: "Ingredient Supplier" },
+  { id: 4, name: "Secondary Packager" },
+  { id: 5, name: "Packaging Services" },
+];
 
 const Step1_SelectProduct: React.FC<Props> = ({ 
   onNext, 
@@ -22,6 +31,13 @@ const Step1_SelectProduct: React.FC<Props> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProductSuggestions, setShowProductSuggestions] = useState(false);
   const [localSelectedSupplierType, setLocalSelectedSupplierType] = useState<SupplierType>(supplierTypes[0]);
+  
+  // API states
+  const [foodTypes, setFoodTypes] = useState<string[]>([]);
+  const [manufacturers, setManufacturers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
   const dropdownRef = useRef<HTMLDivElement>(null);
   const productSearchRef = useRef<HTMLDivElement>(null);
   const iconRotateX = useMotionValue(0);
@@ -32,10 +48,158 @@ const Step1_SelectProduct: React.FC<Props> = ({
   const selectedSupplierType = propSelectedSupplierType || localSelectedSupplierType;
   const setSelectedSupplierType = propSetSelectedSupplierType || setLocalSelectedSupplierType;
   
+  // Function to get default category icon/image
+  const getCategoryIcon = (categoryName: string): string => {
+    const categoryIcons: Record<string, string> = {
+      'Dressing': '🥗',
+      'Instant Food': '🍜',
+      'Miso': '🥣',
+      'Sauce': '🫙',
+      'Seasoning Mix': '🧂',
+      'Soy Sauce': '🍯',
+      'Beverages': '🥤',
+      'Beverage': '🥤',
+      'Drink': '🥤',
+      'Snacks': '🍿',
+      'Snack': '🍿',
+      'Dairy': '🥛',
+      'Milk': '🥛',
+      'Bakery': '🍞',
+      'Bread': '🍞',
+      'Meat': '🥩',
+      'Seafood': '🐟',
+      'Fish': '🐟',
+      'Vegetables': '🥬',
+      'Vegetable': '🥬',
+      'Fruits': '🍎',
+      'Fruit': '🍎',
+      'Condiments': '🍯',
+      'Spices': '🌶️',
+      'Spice': '🌶️',
+      'Cereals': '🥣',
+      'Cereal': '🥣',
+      'Confectionery': '🍬',
+      'Candy': '🍬',
+      'Sweet': '🍬',
+      'Frozen': '🧊',
+      'Canned': '🥫',
+      'Organic': '🌱',
+      'Health': '💚',
+      'Baby Food': '🍼',
+      'Pet Food': '🐕',
+      'Chocolate': '🍫',
+      'Coffee': '☕',
+      'Tea': '🍵',
+      'Other': '📦'
+    };
+    
+    // Find matching category (case insensitive)
+    const matchedKey = Object.keys(categoryIcons).find(key => 
+      categoryName.toLowerCase().includes(key.toLowerCase())
+    );
+    
+    return categoryIcons[matchedKey || 'Other'];
+  };
+  
+  // Function to get default category image URL
+  const getCategoryImage = (categoryName: string): string => {
+    // Create a more attractive placeholder for categories
+    const colors = [
+      'ff6b6b/ffffff', // Red
+      '4ecdc4/ffffff', // Teal  
+      '45b7d1/ffffff', // Blue
+      '96ceb4/ffffff', // Green
+      'ffeaa7/333333', // Yellow
+      'dda0dd/ffffff', // Plum
+      'ff9ff3/ffffff', // Pink
+      '74b9ff/ffffff', // Light Blue
+    ];
+    
+    // Use category name to consistently pick a color
+    const colorIndex = categoryName.length % colors.length;
+    const color = colors[colorIndex];
+    const encodedName = encodeURIComponent(categoryName.replace(/\s+/g, '+'));
+    
+    return `https://via.placeholder.com/300x300/${color}?text=${encodedName}&font=Arial`;
+  };
+  
+  // Function to get display image for any product/category
+  const getDisplayImage = (item: ProductCategory): string => {
+    if (item.type === 'PRODUCT' && item.image) {
+      return item.image;
+    } else if (item.type === 'CATEGORY') {
+      return getCategoryImage(item.name);
+    }
+    // Fallback for products without image
+    return getCategoryImage(item.name);
+  };
+  
+  // Function to get display icon for any product/category
+  const getDisplayIcon = (item: ProductCategory): string => {
+    if (item.type === 'CATEGORY') {
+      return getCategoryIcon(item.name);
+    }
+    return '🥤'; // Default product icon
+  };
+  
+  // Combine categories and products into a unified ProductCategory format
+  const productCategories: ProductCategory[] = [
+    // Food Types (like Soy Sauce, Miso, etc.)
+    ...foodTypes.map((foodType, index) => ({
+      id: index + 1000, // offset to avoid ID conflicts
+      name: foodType,
+      type: "CATEGORY" as const
+    }))
+  ];
+  
+
+  
   const filtered = productCategories.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Load initial data
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Load food types, manufacturers, and project analytics in parallel
+        const [foodTypesRes, manufacturersRes, analyticsRes] = await Promise.all([
+          foodProductApi.getFoodTypes(),
+          foodProductApi.getManufacturers(),
+          projectApi.getProjectAnalytics().catch(() => null) // Optional - don't fail if analytics unavailable
+        ]);
+        
+        // Handle food types
+        if (foodTypesRes.data?.success && foodTypesRes.data?.data && Array.isArray(foodTypesRes.data.data)) {
+          setFoodTypes(foodTypesRes.data.data);
+        }
+        
+        // Handle manufacturers
+        if (manufacturersRes.data?.data && Array.isArray(manufacturersRes.data.data)) {
+          setManufacturers(manufacturersRes.data.data);
+        }
+        
+        // Optional: Use analytics data to show user insights
+        if (analyticsRes?.data) {
+          console.log('User project analytics:', analyticsRes.data);
+          // Could show user stats like "You have X active projects" in UI
+        }
+        
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Failed to load data. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
+
+  // Handle click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -83,6 +247,50 @@ const Step1_SelectProduct: React.FC<Props> = ({
     [iconRotateX, iconRotateY, iconScale],
     ([rotX, rotY, scale]) => `perspective(1000px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(${scale})`
   );
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex flex-row w-full min-h-screen">
+        <div className="flex-1 flex flex-col justify-center items-center p-12">
+          <motion.div
+            className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full"
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+          />
+          <p className="mt-4 text-muted-foreground">Loading data...</p>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-12 min-h-screen bg-muted/40">
+          <div className="w-80 h-80 bg-background rounded-xl shadow-lg flex items-center justify-center">
+            <div className="text-muted-foreground">Loading...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex flex-row w-full min-h-screen">
+        <div className="flex-1 flex flex-col justify-center items-center p-12">
+          <div className="text-red-500 mb-4">⚠️ Error</div>
+          <p className="text-muted-foreground text-center">{error}</p>
+          <button 
+            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded"
+            onClick={() => window.location.reload()}
+          >
+            Retry
+          </button>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-12 min-h-screen bg-muted/40">
+          <div className="w-80 h-80 bg-background rounded-xl shadow-lg flex items-center justify-center">
+            <div className="text-muted-foreground">Please retry</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-row w-full min-h-screen">
@@ -154,7 +362,7 @@ const Step1_SelectProduct: React.FC<Props> = ({
                 stiffness: 100
               }}
             >
-              Post a Project
+              Post Project
             </motion.h2>
             <motion.p 
               className="text-muted-foreground text-center"
@@ -162,7 +370,7 @@ const Step1_SelectProduct: React.FC<Props> = ({
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.7, delay: 0.2 }}
             >
-              With few easy steps you can get great manufacturers to signal interest in making any product.
+              Connect with verified partners (Manufacturers, Suppliers, Packaging Services, etc.) to bring your project to life.
             </motion.p>
           </div>
           
@@ -172,7 +380,7 @@ const Step1_SelectProduct: React.FC<Props> = ({
             animate={{ y: 0, opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.3 }}
           >
-            <label className="block text-sm font-medium mb-1">Find a...</label>
+            <label className="block text-sm font-medium mb-1">Looking for...</label>
             <div className="relative" ref={dropdownRef}>
               <motion.div 
                 className="w-full border rounded px-3 py-2 bg-muted flex justify-between items-center cursor-pointer hover:bg-muted/80 transition-colors"
@@ -242,7 +450,7 @@ const Step1_SelectProduct: React.FC<Props> = ({
             <div className="relative">
               <motion.input
                 className="w-full border rounded px-3 py-2 bg-muted focus:ring-2 focus:ring-primary/30 focus:outline-none transition-all"
-                placeholder="Search by product or category..."
+                placeholder="Search by category (e.g., Sauce, Packaging, Beverage, etc.)..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 onFocus={() => setShowProductSuggestions(true)}
@@ -301,15 +509,36 @@ const Step1_SelectProduct: React.FC<Props> = ({
                       transition: { delay: index * 0.05 } 
                     }}
                   >
-                    <motion.span 
-                      className="mr-2 inline-block"
-                      whileHover={{ rotate: [0, -10, 10, -5, 0], scale: 1.2 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      {p.type === "CATEGORY" ? "📦" : "🥤"}
-                    </motion.span>
-                    <span>{p.name}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">{p.type}</span>
+                    <div className="mr-3 w-10 h-10 rounded-lg flex items-center justify-center overflow-hidden border border-border/50 flex-shrink-0 bg-background">
+                      <div 
+                        className="w-full h-full flex items-center justify-center"
+                        style={{
+                          background: `linear-gradient(135deg, ${(() => {
+                            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd', '#ff9ff3', '#74b9ff'];
+                            const colorIndex = p.name.length % colors.length;
+                            return colors[colorIndex] + '20, ' + colors[colorIndex] + '50';
+                          })()})`
+                        }}
+                      >
+                        <span className="text-base select-none">
+                          {getCategoryIcon(p.name)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm truncate">{p.name}</div>
+                      <div className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                        {p.type === 'PRODUCT' || p.type === 'FOODTYPE' || p.type === 'CATEGORY' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-primary/10 text-primary font-medium">
+                            Category
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-secondary/30 text-secondary-foreground font-medium">
+                            Category
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 ))}
               </motion.div>
@@ -340,14 +569,14 @@ const Step1_SelectProduct: React.FC<Props> = ({
               }}
               transition={{ duration: 1, repeat: Infinity }}
             />
-            {selectedProduct ? "Next" : "Select a product to continue"}
+            {selectedProduct ? "Next" : "Select a category to continue"}
           </motion.button>
         </div>
       </div>
       
-      <div className="flex-1 flex items-center justify-center p-12 min-h-screen bg-muted/40">
+      <div className="flex-1 flex items-center justify-center p-8 min-h-screen bg-muted/40">
         <motion.div 
-          className="w-80 h-80 bg-background rounded-xl shadow-lg flex flex-col items-center justify-center border border-border relative"
+          className="w-[480px] h-[600px] bg-background rounded-2xl shadow-xl flex flex-col border border-border relative overflow-hidden"
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ 
@@ -358,13 +587,13 @@ const Step1_SelectProduct: React.FC<Props> = ({
             damping: 15
           }}
           whileHover={{ 
-            boxShadow: "0 10px 30px rgba(0,0,0,0.1)",
-            y: -5
+            boxShadow: "0 20px 50px rgba(0,0,0,0.1)",
+            y: -8
           }}
           style={{ perspective: "1000px" }}
         >
           <motion.div
-            className="absolute inset-0 bg-primary/5 rounded-xl"
+            className="absolute inset-0 bg-primary/5 rounded-2xl"
             animate={{ 
               background: [
                 "radial-gradient(circle at 20% 20%, rgba(var(--primary-rgb), 0.08) 0%, rgba(var(--primary-rgb), 0) 70%)",
@@ -378,7 +607,7 @@ const Step1_SelectProduct: React.FC<Props> = ({
           {selectedProduct ? (
               <motion.div 
                 key="selected"
-                className="flex flex-col items-center relative z-10"
+                className="flex flex-col items-center relative z-10 p-8 h-full justify-center"
                 initial={{ scale: 0.8, opacity: 0, rotateY: -20 }}
                 animate={{ scale: 1, opacity: 1, rotateY: 0 }}
                 exit={{ scale: 0.8, opacity: 0, rotateY: 20 }}
@@ -389,46 +618,52 @@ const Step1_SelectProduct: React.FC<Props> = ({
                   damping: 20
                 }}
               >
+                {/* Large Product/Category Image */}
                 <motion.div 
-                  className="w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full flex items-center justify-center mb-4 relative"
+                  className="w-48 h-48 bg-gradient-to-br from-primary/20 to-primary/5 rounded-3xl flex items-center justify-center mb-8 relative overflow-hidden border-2 border-primary/10 shadow-2xl"
                   whileHover={{ 
-                    rotate: [0, 5, -5, 0],
+                    rotate: [0, 2, -2, 0],
                     scale: 1.05,
-                    boxShadow: "0 8px 20px rgba(var(--primary-rgb), 0.2)"
+                    boxShadow: "0 25px 50px rgba(var(--primary-rgb), 0.4)"
                   }}
                   transition={{ duration: 1 }}
                 >
-                  <motion.span 
-                    className="text-4xl"
-                    animate={{ 
-                      rotateY: [0, 360],
-                      scale: [1, 1.1, 1]
-                    }}
-                    transition={{ 
-                      rotateY: { duration: 10, repeat: Infinity, ease: "linear" },
-                      scale: { duration: 3, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }
-                    }}
-                  >
-                    {selectedProduct.type === "CATEGORY" ? "📦" : "🥤"}
-                  </motion.span>
                   <motion.div
-                    className="absolute inset-0 rounded-full bg-primary/10"
+                    className="w-full h-full rounded-3xl flex items-center justify-center"
+                    style={{
+                      background: `linear-gradient(135deg, ${(() => {
+                        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd', '#ff9ff3', '#74b9ff'];
+                        const colorIndex = selectedProduct.name.length % colors.length;
+                        return colors[colorIndex] + '30, ' + colors[colorIndex] + '60';
+                      })()})`
+                    }}
+                    initial={{ scale: 0.8, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <span className="text-6xl select-none">
+                      {getCategoryIcon(selectedProduct.name)}
+                    </span>
+                  </motion.div>
+                  <motion.div
+                    className="absolute inset-0 rounded-3xl bg-primary/10"
                     animate={{
                       boxShadow: [
                         "0 0 0 0px rgba(var(--primary-rgb), 0.3)",
-                        "0 0 0 10px rgba(var(--primary-rgb), 0)"
+                        "0 0 0 20px rgba(var(--primary-rgb), 0)"
                       ]
                     }}
                     transition={{
-                      duration: 2,
+                      duration: 2.5,
                       repeat: Infinity,
                       ease: "easeOut"
                     }}
                   />
                 </motion.div>
                 
-                <motion.div 
-                  className="text-lg font-semibold text-center"
+                {/* Product/Category Name */}
+                <motion.h3 
+                  className="text-2xl font-bold text-center mb-3 px-4 leading-tight"
                   animate={{ 
                     background: [
                       "linear-gradient(90deg, rgba(var(--primary-rgb), 0.8) 0%, rgba(var(--primary-rgb), 0.6) 100%)",
@@ -439,42 +674,70 @@ const Step1_SelectProduct: React.FC<Props> = ({
                     WebkitTextFillColor: "transparent"
                   }}
                   transition={{ duration: 5, repeat: Infinity, repeatType: "reverse" }}
+                  style={{ 
+                    wordBreak: 'break-word',
+                    maxWidth: '100%'
+                  }}
                 >
                   {selectedProduct.name}
-                </motion.div>
+                </motion.h3>
                 
+                {/* Type Badge */}
                 <motion.div 
-                  className="text-muted-foreground text-center mt-1"
-                  animate={{ opacity: [0.7, 1, 0.7] }}
+                  className="inline-flex items-center px-4 py-2 rounded-full text-sm mb-6 font-medium"
+                  style={{
+                    backgroundColor: 'rgba(var(--secondary-rgb), 0.15)',
+                    color: 'rgb(var(--foreground-rgb))',
+                    border: '1px solid rgba(var(--secondary-rgb), 0.3)'
+                  }}
+                  animate={{ opacity: [0.8, 1, 0.8] }}
                   transition={{ duration: 4, repeat: Infinity }}
                 >
-                  {selectedProduct.type}
+                  <span className="mr-2">
+                    {getCategoryIcon(selectedProduct.name)}
+                  </span>
+                  Category
                 </motion.div>
                 
+                {/* Looking For Info */}
                 <motion.div 
-                  className="text-sm text-muted-foreground text-center mt-4 px-3 py-1 rounded-full bg-primary/5"
+                  className="text-sm text-muted-foreground text-center px-6 py-3 rounded-full bg-primary/5 border border-primary/20 mb-4"
                   initial={{ y: 10, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.3 }}
                   whileHover={{ backgroundColor: "rgba(var(--primary-rgb), 0.1)" }}
                 >
-                  For: {selectedSupplierType.name}
+                  🔍 Looking for: <span className="font-medium">{selectedSupplierType.name}</span>
                 </motion.div>
                 
+                {/* Manufacturer Matches */}
+                {manufacturers.length > 0 && (
+                  <motion.div 
+                    className="text-sm text-primary px-4 py-2 rounded-full border border-primary/30 bg-primary/5 mb-4"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ delay: 0.5, type: "spring" }}
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    🏭 <span className="font-semibold">{manufacturers.length}</span> potential matches found
+                  </motion.div>
+                )}
+                
+                {/* Date */}
                 <motion.div 
-                  className="text-xs text-primary mt-3 px-2 py-1 rounded-full border border-primary/20"
+                  className="text-xs text-primary px-3 py-1.5 rounded-full border border-primary/20 bg-background/50"
                   initial={{ scale: 0, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.5, type: "spring" }}
+                  transition={{ delay: 0.7, type: "spring" }}
                   whileHover={{ scale: 1.1 }}
                 >
-                  6/7/2025
+                  📅 {new Date().toLocaleDateString()}
                 </motion.div>
               </motion.div>
             ) : (
               <motion.div 
                 key="empty"
-                className="text-muted-foreground text-center flex flex-col items-center relative z-10"
+                className="text-muted-foreground text-center flex flex-col items-center relative z-10 p-8 h-full justify-center"
                 initial={{ scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.8, opacity: 0 }}
@@ -482,27 +745,29 @@ const Step1_SelectProduct: React.FC<Props> = ({
               >
                 <motion.svg 
                   xmlns="http://www.w3.org/2000/svg" 
-                  width="48" 
-                  height="48" 
+                  width="80" 
+                  height="80" 
                   viewBox="0 0 24 24" 
                   fill="none" 
                   stroke="currentColor" 
-                  strokeWidth="1" 
+                  strokeWidth="2" 
                   strokeLinecap="round" 
                   strokeLinejoin="round" 
-                  className="mb-4 text-muted-foreground/50"
+                  className="mb-6 text-muted-foreground/50"
                   animate={{ 
                     rotate: [0, 5, 0, -5, 0],
                     scale: [1, 1.02, 1, 1.02, 1]
                   }}
                   transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
                 >
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"></path>
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"></path>
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"></path>
-                  <line x1="2" x2="22" y1="2" y2="22"></line>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="16" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
                 </motion.svg>
-                Select a product or category
+                <div className="text-xl font-semibold mb-3">Select a Category</div>
+                <div className="text-sm text-muted-foreground max-w-md leading-relaxed">
+                  Choose a category to find matching partners (manufacturers, suppliers, packaging services, etc.) for your project.
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -526,6 +791,16 @@ const Step1_SelectProduct: React.FC<Props> = ({
         :root {
           --primary-rgb: 0, 112, 243;
           --border-rgb: 226, 232, 240;
+          --secondary-rgb: 100, 116, 139;
+          --foreground-rgb: 15, 23, 42;
+        }
+        
+        /* Dark mode overrides */
+        .dark {
+          --primary-rgb: 59, 130, 246;
+          --border-rgb: 71, 85, 105;
+          --secondary-rgb: 148, 163, 184;
+          --foreground-rgb: 248, 250, 252;
         }
       `}</style>
     </div>
