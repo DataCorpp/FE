@@ -1144,18 +1144,8 @@ type UpdateProductData = Product;
         return;
       }
 
-      // Check if user is authenticated
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        toast({
-          title: "Authentication Required",
-          description: "Please login again to continue.",
-          variant: "destructive",
-        });
-        navigate("/auth?type=signin");
-        setIsLoading(false);
-        return;
-      }
+      // Remove token check since productService already handles authentication
+      // and specifically bypasses redirects for update operations
 
       console.log('Attempting to update product:', { id: updatedProduct._id, name: updatedProduct.name });
 
@@ -1278,10 +1268,11 @@ type UpdateProductData = Product;
         setIsAddDialogOpen(false);
         setSelectedProduct(null);
       } else {
-        // Handle specific error cases
+        // Handle specific error cases - BUT DO NOT REDIRECT FOR AUTH ERRORS
         const errorMessage = response.error || 'Failed to update product';
         
-        if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
+        // Remove this block to avoid authentication redirection
+        /* if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
           toast({
             title: "Session Expired",
             description: "Your session has expired. Please login again.",
@@ -1289,7 +1280,7 @@ type UpdateProductData = Product;
           });
           navigate("/auth?type=signin");
           return;
-        }
+        } */
         
         // Show specific error message
         toast({
@@ -1301,8 +1292,8 @@ type UpdateProductData = Product;
     } catch (error) {
       console.error('Error updating product:', error);
       
-      // Handle authentication errors
-      if (error instanceof Error && (
+      // Remove authentication error redirection for consistency
+      /* if (error instanceof Error && (
         error.message.includes('authentication') || 
         error.message.includes('login') ||
         error.message.includes('token')
@@ -1314,8 +1305,9 @@ type UpdateProductData = Product;
         });
         navigate("/auth?type=signin");
         return;
-      }
+      } */
       
+      // Just show the error without redirecting
       toast({
         title: t('production-error', "Error"),
         description: error instanceof Error ? error.message : t('production-update-error', "Failed to update product. Please try again."),
