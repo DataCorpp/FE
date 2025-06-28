@@ -392,60 +392,60 @@ const Products = () => {
   }, []);
 
   // Fetch categories
-useEffect(() => {
-  const fetchCategories = async () => {
-    try {
-      const response = await foodProductApi.getCategories();
-      console.log('Categories response:', response);
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await foodProductApi.getCategories();
+        console.log('Categories response:', response);
 
-      let categories: string[] = [];
+        let categories: string[] = [];
 
-      // Lấy payload thực sự từ API (response.data.data)
-      const payload = response?.data?.data;
+        // Lấy payload thực sự từ API (response.data.data)
+        const payload = response?.data?.data;
 
-      if (Array.isArray(payload)) {
-        // Trường hợp API trả về mảng categories trực tiếp
-        categories = payload;
-      } else if (payload && typeof payload === 'object') {
-        // Kiểm tra nếu payload chứa thuộc tính categories
-        if ('categories' in payload && Array.isArray((payload as { categories?: unknown }).categories)) {
-          categories = (payload as { categories: string[] }).categories;
-        } else {
-          // Thử tìm bất kỳ mảng string nào trong payload có thể là categories
-          const maybeCategories = Object.values(payload).find(
-            (val) => Array.isArray(val) && val.every((item) => typeof item === 'string')
-          );
-          if (maybeCategories) {
-            categories = maybeCategories as string[];
+        if (Array.isArray(payload)) {
+          // Trường hợp API trả về mảng categories trực tiếp
+          categories = payload;
+        } else if (payload && typeof payload === 'object') {
+          // Kiểm tra nếu payload chứa thuộc tính categories
+          if ('categories' in payload && Array.isArray((payload as { categories?: unknown }).categories)) {
+            categories = (payload as { categories: string[] }).categories;
+          } else {
+            // Thử tìm bất kỳ mảng string nào trong payload có thể là categories
+            const maybeCategories = Object.values(payload).find(
+              (val) => Array.isArray(val) && val.every((item) => typeof item === 'string')
+            );
+            if (maybeCategories) {
+              categories = maybeCategories as string[];
+            }
           }
         }
+
+        console.log('Extracted categories:', categories);
+
+        // Đảm bảo categories là array trước khi dùng .includes
+        if (Array.isArray(categories)) {
+          const categoryList = categories.includes("All Categories")
+            ? categories
+            : ["All Categories", ...categories];
+          setCategoryList(categoryList);
+        } else {
+          throw new Error("Categories is not an array");
+        }
+
+      } catch (error) {
+        console.error('❌ Error fetching categories:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive",
+        });
+        setCategoryList(["All Categories"]);
       }
+    };
 
-      console.log('Extracted categories:', categories);
-
-      // Đảm bảo categories là array trước khi dùng .includes
-      if (Array.isArray(categories)) {
-        const categoryList = categories.includes("All Categories")
-          ? categories
-          : ["All Categories", ...categories];
-        setCategoryList(categoryList);
-      } else {
-        throw new Error("Categories is not an array");
-      }
-
-    } catch (error) {
-      console.error('❌ Error fetching categories:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load categories",
-        variant: "destructive",
-      });
-      setCategoryList(["All Categories"]);
-    }
-  };
-
-  fetchCategories();
-}, []);
+    fetchCategories();
+  }, []);
 
 
   // Fetch all filter options and total count

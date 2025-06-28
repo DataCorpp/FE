@@ -127,10 +127,16 @@ const SignInForm = () => {
           // Call a simple setter function from context to update user state
           updateUserFromSession(userResponse.data);
           
-          if (isNewUser) {
-            // Redirect to profile setup for new users
+          // Check if user has completed their profile
+          const needsProfileSetup = isNewUser || !userResponse.data.profileComplete;
+          
+          if (needsProfileSetup) {
+            // Set flag for profile setup flow in session storage
+            sessionStorage.setItem('inProfileSetup', 'true');
+            
+            // Redirect to profile setup
             toast({
-              title: t("welcome", "Welcome to Lovely Mate!"),
+              title: isNewUser ? t("welcome", "Welcome to Lovely Mate!") : t("welcome-back", "Welcome back"),
               description: t("complete-profile", "Please complete your profile to continue."),
             });
             navigate("/profile-setup");
@@ -140,7 +146,16 @@ const SignInForm = () => {
               title: t("welcome-back", "Welcome back"),
               description: t("sign-in-success", "You've successfully signed in."),
             });
-            navigate("/dashboard");
+            
+            // Check for redirect parameter in URL
+            const params = new URLSearchParams(window.location.search);
+            const redirectPath = params.get('redirect');
+            
+            if (redirectPath) {
+              navigate(redirectPath);
+            } else {
+              navigate("/dashboard");
+            }
           }
         } catch (error) {
           console.error("Google authentication error:", error);
@@ -172,13 +187,39 @@ const SignInForm = () => {
       // Use the login function from context
       await login(data.email, data.password);
 
-      toast({
-        title: t("welcome-back", "Welcome back"),
-        description: t("sign-in-success", "You've successfully signed in."),
+      // Get the user context after login
+      const user = await axios.get('http://localhost:3000/api/users/me', {
+        withCredentials: true
       });
 
-      // Redirect to dashboard
-      navigate("/dashboard");
+      // Check if profile is complete
+      if (!user.data.profileComplete) {
+        // Set flag for profile setup flow in session storage
+        sessionStorage.setItem('inProfileSetup', 'true');
+        
+        toast({
+          title: t("welcome-back", "Welcome back"),
+          description: t("complete-profile", "Please complete your profile to continue."),
+        });
+        
+        // Redirect to profile setup
+        navigate("/profile-setup");
+      } else {
+        toast({
+          title: t("welcome-back", "Welcome back"),
+          description: t("sign-in-success", "You've successfully signed in."),
+        });
+
+        // Check for redirect parameter in URL
+        const params = new URLSearchParams(window.location.search);
+        const redirectPath = params.get('redirect');
+        
+        if (redirectPath) {
+          navigate(redirectPath);
+        } else {
+          navigate("/dashboard");
+        }
+      }
     } catch (error) {
       console.error("Sign in error:", error);
       toast({
