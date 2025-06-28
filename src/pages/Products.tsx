@@ -339,7 +339,7 @@ const mockFindMatchingProducts = async (productId: string) => {
 };
 
 if (foodProductApi) {
-  // @ts-ignore - Adding mock method for demonstration
+  // @ts-ignore - Adding mock method for demonstration  
   foodProductApi.findMatchingProducts = mockFindMatchingProducts;
 }
 

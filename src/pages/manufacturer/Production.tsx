@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { Search, Plus, Filter, Eye, Edit, Trash2, MoreHorizontal, AlertTriangle, Calendar, Target, TrendingUp, Settings, Users, Zap, Clock, Wrench, RotateCcw, Play, Pause, CheckCircle, AlertCircle, Loader2, Activity, Award, Package, Building, Beaker, Wheat, Package2, PlusCircle, X, FileText, BarChart, Pencil, RefreshCw, Factory, PauseCircle, MoreVertical, Info, DollarSign, PackageCheck, Box, ArrowLeft, Star, CalendarCheck, InfoIcon, Layers, LinkIcon, Save, Tag, UploadCloud, User, ExternalLink, ArrowRight, ArrowUpDown, ArrowUp, ArrowDown, Leaf } from "lucide-react";
+import { Search, Plus, Filter, Eye, Edit, Trash2, MoreHorizontal, AlertTriangle, Calendar, Target, TrendingUp, Settings, Users, Zap, Clock, Wrench, RotateCcw, Play, Pause, CheckCircle, AlertCircle, Loader2, Activity, Award, Package, Building, Beaker, Wheat, Package2, PlusCircle, X, FileText, BarChart, Pencil, RefreshCw, Factory, PauseCircle, MoreVertical, Info, DollarSign, PackageCheck, Box, ArrowLeft, Star, CalendarCheck, InfoIcon, Layers, LinkIcon, Save, Tag, UploadCloud, User, ExternalLink, ArrowRight, ArrowUpDown, ArrowUp, ArrowDown, Leaf, Sparkles } from "lucide-react";
 import { 
   BaseProduct, 
   CreateProductData, 
@@ -9,7 +9,6 @@ import {
   ProductApiData,
   ProductionLine,
   BatchInfo,
-  FoodProductData,
   NaturalProductData,
   HealthyProductData,
   BeverageProductData,
@@ -20,6 +19,7 @@ import {
   ProductCreateHandler,
   ProductDeleteHandler
 } from "@/types/product";
+import { FoodProductData } from "@/services/productService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
@@ -949,34 +949,13 @@ type UpdateProductData = Product;
   ) => {
     setIsLoading(true);
     
-    // === DEBUG: Kiểm tra dữ liệu đầu vào ===
-    console.log('=== HANDLE CREATE PRODUCT DEBUG ===');
-    console.log('Form Data:', originalFormData || formData);  // validate từ đây
-    console.log('Product Name:', (originalFormData?.name || formData.name)?.trim());
-    console.log('Manufacturer Name:', (originalFormData?.manufacturerName || formData.manufacturerName)?.trim());
-    console.log('User company name:', user?.companyName);
-    console.log('Product Type:', originalFormData?.productType || formData.productType);
-    console.log('Category:', originalFormData?.category || formData.category);
-    console.log('Price per unit:', originalFormData?.pricePerUnit || formData.pricePerUnit);
-    console.log('Description length:', (originalFormData?.description || formData.description)?.length || 0);
-    console.log('=== END DEBUG ===');
-    
-    // === FRONTEND VALIDATION: Kiểm tra dữ liệu bắt buộc từ form gốc ===
+    // Frontend validation
     const sourceData = originalFormData || formData;
     const productName = sourceData.name?.trim();
     const manufacturerName = sourceData.manufacturerName?.trim() || user?.companyName?.trim();
     
-    console.log('=== FRONTEND VALIDATION ===');
-    console.log('Validating user input (formData):', sourceData);
-    console.log('Trimmed Product Name:', `"${productName}"`);
-    console.log('Trimmed Manufacturer Name:', `"${manufacturerName}"`);
-    
     // Kiểm tra các field bắt buộc
     if (!productName || !manufacturerName) {
-      console.error('=== VALIDATION FAILED ===');
-      console.error('Product Name empty:', !productName);
-      console.error('Manufacturer Name empty:', !manufacturerName);
-      
       toast({
         title: t('production-error', "Error"),
         description: "Please enter full product name and manufacturer.",
@@ -1027,8 +1006,6 @@ type UpdateProductData = Product;
       return;
     }
     
-    console.log('=== FRONTEND VALIDATION PASSED ===');
-    
     try {
       // Prepare data for API
       const productData = {
@@ -1058,16 +1035,16 @@ type UpdateProductData = Product;
         sustainable: formData.sustainable,
         
         // Food-specific data
-        ...(formData.productType === 'food' && {
-          foodType: formData.foodType || formData.foodProductData?.foodType,
+        ...(formData.productType === 'Food Product' && {
+          foodType: formData.foodType || formData.foodProductData?.foodType || 'Soy Sauce',
           flavorType: formData.flavorType || formData.foodProductData?.flavorType || [],
           ingredients: formData.ingredients || formData.foodProductData?.ingredients || [],
           allergens: formData.allergens || formData.foodProductData?.allergens || [],
           usage: formData.usage || formData.foodProductData?.usage || [],
-          packagingType: formData.packagingType,
-          packagingSize: formData.packagingSize || formData.foodProductData?.packagingSize,
-          shelfLife: formData.shelfLife || formData.foodProductData?.shelfLife,
-          storageInstruction: formData.storageInstruction,
+          packagingType: formData.packagingType || 'Bottle',
+          packagingSize: formData.packagingSize || formData.foodProductData?.packagingSize || '250g',
+          shelfLife: formData.shelfLife || formData.foodProductData?.shelfLife || '1 year',
+          storageInstruction: formData.storageInstruction || 'Store in a cool, dry place',
         }),
         
         // Set type for backend
@@ -1076,29 +1053,17 @@ type UpdateProductData = Product;
               formData.productType === 'Healthy Product' ? 'health' : 'other',
               
         // Backend expects these fields
-          manufacturerName: user?.companyName || 'Unknown',
+        manufacturerName: user?.companyName || 'Unknown',
         productName: formData.name,
       };
       
-      // === DEBUG: Kiểm tra dữ liệu gửi lên API ===
-      console.log('=== API PAYLOAD DEBUG ===');
-      console.log('Product data to send to API:', productData);
-      console.log('API productName:', productData.productName);
-      console.log('API manufacturerName:', productData.manufacturerName);
-      console.log('API name:', productData.name);
-      console.log('API manufacturer:', productData.manufacturer);
-      console.log('=== END API PAYLOAD DEBUG ===');
-      
-                // Use the product service to create product - đảm bảo sử dụng pricePerUnit
+      // Use the product service to create product - đảm bảo sử dụng pricePerUnit
       productData.price = productData.pricePerUnit; // Tương thích ngược với API cũ
       const response = await productService.createProduct(productData);
       
       if (response.success) {
         // Transform response to match UI expectations
         const responseData = response.data;
-        
-        // Debug response data structure
-        console.log('API response data:', responseData);
         
         // Safely handle _id which might be undefined
         const transformedProduct: Product = {
@@ -1114,10 +1079,10 @@ type UpdateProductData = Product;
           minOrderQuantity: responseData?.minOrderQuantity || productData.minOrderQuantity || 1000,
           dailyCapacity: responseData?.dailyCapacity || productData.dailyCapacity || 5000,
           currentAvailable: responseData?.currentAvailable || productData.currentAvailable || 0,
-          unitType: responseData?.unitType || productData.unitType || 'units',
+          unitType: responseData?.unitType || productData.unitType,
           pricePerUnit: responseData?.pricePerUnit || productData.pricePerUnit,
-          leadTime: responseData?.leadTime || productData.leadTime || '1-2',
-          leadTimeUnit: responseData?.leadTimeUnit || productData.leadTimeUnit || 'weeks',
+          leadTime: responseData?.leadTime || productData.leadTime,
+          leadTimeUnit: responseData?.leadTimeUnit || productData.leadTimeUnit,
           sustainable: responseData?.sustainable || productData.sustainable || false,
           sku: responseData?.sku || `SKU-${Math.floor(Math.random() * 90000) + 10000}`,
           reorderPoint: Math.floor((responseData?.minOrderQuantity || productData.minOrderQuantity || 1000) * 0.5),
@@ -1133,8 +1098,10 @@ type UpdateProductData = Product;
           ingredients: responseData?.ingredients || productData.ingredients,
           allergens: responseData?.allergens || productData.allergens,
           usage: responseData?.usage || productData.usage,
+          packagingType: responseData?.packagingType || productData.packagingType,
           packagingSize: responseData?.packagingSize || productData.packagingSize,
           shelfLife: responseData?.shelfLife || productData.shelfLife,
+          storageInstruction: responseData?.storageInstruction || productData.storageInstruction,
         };
         
         setProducts([...products, transformedProduct]);
@@ -1177,18 +1144,8 @@ type UpdateProductData = Product;
         return;
       }
 
-      // Check if user is authenticated
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        toast({
-          title: "Authentication Required",
-          description: "Please login again to continue.",
-          variant: "destructive",
-        });
-        navigate("/auth?type=signin");
-        setIsLoading(false);
-        return;
-      }
+      // Remove token check since productService already handles authentication
+      // and specifically bypasses redirects for update operations
 
       console.log('Attempting to update product:', { id: updatedProduct._id, name: updatedProduct.name });
 
@@ -1265,16 +1222,19 @@ type UpdateProductData = Product;
         leadTime: updatedProduct.leadTime,
         leadTimeUnit: updatedProduct.leadTimeUnit,
         sustainable: updatedProduct.sustainable,
-        // Food-specific fields
-        ...(updatedProduct.productType === 'food' && {
-          foodType: updatedProduct.foodType,
-          flavorType: updatedProduct.flavorType || [],
-          ingredients: updatedProduct.ingredients || [],
-          allergens: updatedProduct.allergens || [],
-          usage: updatedProduct.usage || [],
-          packagingSize: updatedProduct.packagingSize,
-          shelfLife: updatedProduct.shelfLife,
-        }),
+        
+        // Food-specific fields - always include them for food products
+        ...(updatedProduct.productType === 'food' || updatedProduct.productType === 'Food Product' ? {
+          foodType: updatedProduct.foodType || updatedProduct.foodProductData?.foodType || '',
+          flavorType: updatedProduct.flavorType || updatedProduct.foodProductData?.flavorType || [],
+          ingredients: updatedProduct.ingredients || updatedProduct.foodProductData?.ingredients || [],
+          allergens: updatedProduct.allergens || updatedProduct.foodProductData?.allergens || [],
+          usage: updatedProduct.usage || updatedProduct.foodProductData?.usage || [],
+          packagingType: updatedProduct.packagingType || '',
+          packagingSize: updatedProduct.packagingSize || updatedProduct.foodProductData?.packagingSize || '',
+          shelfLife: updatedProduct.shelfLife || updatedProduct.foodProductData?.shelfLife || '',
+          storageInstruction: updatedProduct.storageInstruction || '',
+        } : {}),
       };
       
       // Use the product service to update product
@@ -1283,10 +1243,20 @@ type UpdateProductData = Product;
       console.log('Update response:', response);
       
       if (response.success) {
-        // Update local state
+        // Get updated product from API response or use our local updated version with API fields
+        const updatedProductFromApi = response.data || updatedProduct;
+        
+        // Create a merged product
+        const mergedProduct = {
+          ...updatedProduct,
+          ...updatedProductFromApi,
+        };
+        
+        // Update local state with merged data to ensure all changes are reflected
         setProducts(products.map((p) => 
-          p._id === updatedProduct._id ? updatedProduct : p
+          p._id === updatedProduct._id ? mergedProduct : p
         ));
+        
         console.log('Product updated successfully via API');
         
         toast({
@@ -1298,10 +1268,11 @@ type UpdateProductData = Product;
         setIsAddDialogOpen(false);
         setSelectedProduct(null);
       } else {
-        // Handle specific error cases
+        // Handle specific error cases - BUT DO NOT REDIRECT FOR AUTH ERRORS
         const errorMessage = response.error || 'Failed to update product';
         
-        if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
+        // Remove this block to avoid authentication redirection
+        /* if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
           toast({
             title: "Session Expired",
             description: "Your session has expired. Please login again.",
@@ -1309,7 +1280,7 @@ type UpdateProductData = Product;
           });
           navigate("/auth?type=signin");
           return;
-        }
+        } */
         
         // Show specific error message
         toast({
@@ -1321,8 +1292,8 @@ type UpdateProductData = Product;
     } catch (error) {
       console.error('Error updating product:', error);
       
-      // Handle authentication errors
-      if (error instanceof Error && (
+      // Remove authentication error redirection for consistency
+      /* if (error instanceof Error && (
         error.message.includes('authentication') || 
         error.message.includes('login') ||
         error.message.includes('token')
@@ -1334,8 +1305,9 @@ type UpdateProductData = Product;
         });
         navigate("/auth?type=signin");
         return;
-      }
+      } */
       
+      // Just show the error without redirecting
       toast({
         title: t('production-error', "Error"),
         description: error instanceof Error ? error.message : t('production-update-error', "Failed to update product. Please try again."),
@@ -1351,12 +1323,8 @@ type UpdateProductData = Product;
     setIsLoading(true);
 
     try {
-      console.log('=== FRONTEND DELETE PRODUCT DEBUG ===');
-      console.log('Input productId:', productId, 'Type:', typeof productId);
-      
       const product = products.find((p) => p._id === String(productId) || p.id === productId);
       if (!product) {
-        console.log('Product not found in local state');
         toast({
           title: t('production-error', "Error"),
           description: "Product not found",
@@ -1366,16 +1334,8 @@ type UpdateProductData = Product;
         return;
       }
 
-      console.log('Product found in local state:', {
-        _id: product._id,
-        id: product.id,
-        name: product.name,
-        productType: product.productType
-      });
-
       // Use MongoDB _id for API call (primary identifier)
       const deleteId = product._id || String(productId);
-      console.log('Using deleteId for API:', deleteId);
       
       // Check if user is authenticated (JWT token OR session-based)
       const token = localStorage.getItem('auth_token');
@@ -1389,14 +1349,11 @@ type UpdateProductData = Product;
           const payload = JSON.parse(atob(token.split('.')[1]));
           const currentTime = Date.now() / 1000;
           if (payload.exp && payload.exp > currentTime) {
-            console.log('Using valid JWT token authentication');
             hasValidAuth = true;
           } else {
-            console.log('JWT token expired, removing from localStorage');
             localStorage.removeItem('auth_token');
           }
         } catch (error) {
-          console.log('Invalid JWT token, removing from localStorage');
           localStorage.removeItem('auth_token');
         }
       }
@@ -1405,17 +1362,14 @@ type UpdateProductData = Product;
       if (!hasValidAuth && user) {
         try {
           JSON.parse(user); // Validate user data
-          console.log('Using session-based authentication (cookies)');
           hasValidAuth = true;
         } catch (error) {
-          console.log('Invalid user data, removing from localStorage');
           localStorage.removeItem('user');
         }
       }
       
       // If no valid authentication found, redirect to login
       if (!hasValidAuth) {
-        console.log('No valid authentication found');
         toast({
           title: "Authentication Required",
           description: "Please login again to continue.",
@@ -1426,12 +1380,8 @@ type UpdateProductData = Product;
         return;
       }
       
-      console.log('Auth token exists, making API call...');
-      
       // Use the product service to delete product
       const response = await productService.deleteProduct(deleteId);
-      
-      console.log('API response:', response);
       
       if (response.success) {
         // Remove product from local state using both possible IDs
@@ -1442,7 +1392,6 @@ type UpdateProductData = Product;
             p.id !== productId
           )
         );
-        console.log('Product removed from local state successfully');
         
         toast({
           title: t('production-product-deleted', "Product deleted"),
@@ -1455,7 +1404,6 @@ type UpdateProductData = Product;
       } else {
         // Handle specific error cases
         const errorMessage = response.error || 'Failed to delete product';
-        console.log('API error:', errorMessage);
         
         if (errorMessage.includes('authentication') || errorMessage.includes('login') || errorMessage.includes('token')) {
           toast({
@@ -1475,9 +1423,6 @@ type UpdateProductData = Product;
         });
       }
     } catch (error) {
-      console.error('=== FRONTEND DELETE ERROR ===');
-      console.error('Error details:', error);
-      
       // Handle authentication errors
       if (error instanceof Error && (
         error.message.includes('authentication') || 
@@ -1515,7 +1460,49 @@ type UpdateProductData = Product;
 
   // Open edit dialog for creating or updating a product
   const openEditDialog = (product?: Product) => {
-    setSelectedProduct(product || null);
+    // If we have a product, make sure we prepare the data properly
+    if (product) {
+      // Prepare food product data for editing
+      if (product.productType === 'Food Product') {
+        // Ensure all properties are properly set for food products
+        const preparedProduct = {
+          ...product,
+          // Always add these fields for food products, combining data from both possible locations
+          foodType: product.foodType || product.foodProductData?.foodType || '',
+          flavorType: product.flavorType || product.foodProductData?.flavorType || [],
+          ingredients: product.ingredients || product.foodProductData?.ingredients || [],
+          allergens: product.allergens || product.foodProductData?.allergens || [],
+          usage: product.usage || product.foodProductData?.usage || [],
+          packagingType: product.packagingType || '',
+          packagingSize: product.packagingSize || product.foodProductData?.packagingSize || '',
+          shelfLife: product.shelfLife || product.foodProductData?.shelfLife || '',
+          storageInstruction: product.storageInstruction || '',
+          manufacturerRegion: product.manufacturerRegion || product.foodProductData?.manufacturerRegion || '',
+          
+          // Also ensure the foodProductData object is complete for backward compatibility
+          foodProductData: {
+            ...(product.foodProductData || {}),
+            flavorType: product.flavorType || product.foodProductData?.flavorType || [],
+            ingredients: product.ingredients || product.foodProductData?.ingredients || [],
+            usage: product.usage || product.foodProductData?.usage || [],
+            packagingSize: product.packagingSize || product.foodProductData?.packagingSize || '',
+            shelfLife: product.shelfLife || product.foodProductData?.shelfLife || '',
+            manufacturerRegion: product.manufacturerRegion || product.foodProductData?.manufacturerRegion || '',
+            foodType: product.foodType || product.foodProductData?.foodType || '',
+          }
+        };
+        
+        // Set the prepared product to be edited
+        setSelectedProduct(preparedProduct);
+      } else {
+        // For other product types
+        setSelectedProduct(product);
+      }
+    } else {
+      // Creating a new product
+      setSelectedProduct(null);
+    }
+    
     setIsAddDialogOpen(true);
   };
 
@@ -1671,29 +1658,43 @@ type UpdateProductData = Product;
               </DialogHeader>
 
               <div className="px-6 py-6 overflow-y-auto max-h-[calc(95vh-130px)]">
-                {/* Conditionally render appropriate form component based on product type */}
-                {selectedProduct?.productType === "Food Product" ? (
-                                      <ProductFormFoodBeverage
-                      product={toFormData(selectedProduct)}
-                      onSubmit={(productData: ProductFormData) => {
-                        const convertedData = toBaseProduct(productData);
-                        if (selectedProduct) {
-                          handleUpdateProduct(convertedData);
-                        } else {
-                          // Truyền cả convertedData và productData gốc từ form
-                          handleCreateProduct(convertedData as CreateProductData, productData);
-                        }
-                      }}
-                      isLoading={isLoading}
-                      parentCategory="Food & Beverage"
-                    />
-                ) : (
-                  <ProductForm
-                    product={selectedProduct}
-                    onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
-                    isLoading={isLoading}
-                  />
-                )}
+                              {/* Conditionally render appropriate form component based on product type */}
+              {selectedProduct?.productType === "Food Product" ? (
+                <ProductFormFoodBeverage
+                  product={{
+                    ...toFormData(selectedProduct),
+                    // Explicitly map all food-specific fields to ensure they're displayed
+                    foodType: selectedProduct?.foodType || selectedProduct?.foodProductData?.foodType || '',
+                    flavorType: selectedProduct?.flavorType || selectedProduct?.foodProductData?.flavorType || [],
+                    ingredients: selectedProduct?.ingredients || selectedProduct?.foodProductData?.ingredients || [],
+                    allergens: selectedProduct?.allergens || selectedProduct?.foodProductData?.allergens || [],
+                    usage: selectedProduct?.usage || selectedProduct?.foodProductData?.usage || [],
+                    packagingType: selectedProduct?.packagingType || '',
+                    packagingSize: selectedProduct?.packagingSize || selectedProduct?.foodProductData?.packagingSize || '',
+                    shelfLife: selectedProduct?.shelfLife || selectedProduct?.foodProductData?.shelfLife || '',
+                    storageInstruction: selectedProduct?.storageInstruction || '',
+                    manufacturerRegion: selectedProduct?.manufacturerRegion || selectedProduct?.foodProductData?.manufacturerRegion || ''
+                  }}
+                  onSubmit={(productData: ProductFormData) => {
+                    console.log('Submitting food product data:', productData);
+                    const convertedData = toBaseProduct(productData);
+                    if (selectedProduct) {
+                      handleUpdateProduct(convertedData);
+                    } else {
+                      // Truyền cả convertedData và productData gốc từ form
+                      handleCreateProduct(convertedData as CreateProductData, productData);
+                    }
+                  }}
+                  isLoading={isLoading}
+                  parentCategory="Food & Beverage"
+                />
+              ) : (
+                <ProductForm
+                  product={selectedProduct}
+                  onSubmit={selectedProduct ? handleUpdateProduct : handleCreateProduct}
+                  isLoading={isLoading}
+                />
+              )}
               </div>
             </motion.div>
           </AnimatePresence>
@@ -3104,19 +3105,66 @@ const ProductForm: React.FC<ProductFormProps> = ({
   );
   
   // Food product specific fields
-  const [foodProductData, setFoodProductData] = useState({
-    flavorType: [] as string[],
-    ingredients: [] as string[],
-    usage: [] as string[],
-    packagingSize: "",
-    shelfLife: "",
-    manufacturerRegion: "",
-  });
+  const [foodProductData, setFoodProductData] = useState(
+    // Initialize with product data if available
+    product && (product.foodProductData || product.foodType) ? {
+      flavorType: product.foodProductData?.flavorType || product.flavorType || [],
+      ingredients: product.foodProductData?.ingredients || product.ingredients || [],
+      usage: product.foodProductData?.usage || product.usage || [],
+      packagingSize: product.foodProductData?.packagingSize || product.packagingSize || "",
+      shelfLife: product.foodProductData?.shelfLife || product.shelfLife || "",
+      manufacturerRegion: product.foodProductData?.manufacturerRegion || product.manufacturerRegion || "",
+      foodType: product.foodProductData?.foodType || product.foodType || "",
+      allergens: product.foodProductData?.allergens || product.allergens || [],
+    } : {
+      flavorType: [] as string[],
+      ingredients: [] as string[],
+      usage: [] as string[],
+      packagingSize: "",
+      shelfLife: "",
+      manufacturerRegion: "",
+      foodType: "",
+      allergens: [] as string[],
+    }
+  );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isDragging, setIsDragging] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Update form data when product changes
+  useEffect(() => {
+    if (product) {
+      console.log('Product data loaded into form:', product);
+      
+      // Update main form data
+      setFormData({
+        ...formData,
+        ...product,
+      });
+      
+      // Update food product specific data if applicable
+      if (product.productType === 'Food Product' || product.foodProductData) {
+        setFoodProductData({
+          flavorType: product.foodProductData?.flavorType || product.flavorType || [],
+          ingredients: product.foodProductData?.ingredients || product.ingredients || [],
+          usage: product.foodProductData?.usage || product.usage || [],
+          packagingSize: product.foodProductData?.packagingSize || product.packagingSize || "",
+          shelfLife: product.foodProductData?.shelfLife || product.shelfLife || "",
+          manufacturerRegion: product.foodProductData?.manufacturerRegion || product.manufacturerRegion || "",
+          foodType: product.foodProductData?.foodType || product.foodType || "",
+          allergens: product.foodProductData?.allergens || product.allergens || [],
+        });
+      }
+      
+      // Set product type
+      setSelectedProductType(product.productType || "");
+      
+      // Move to details step if editing
+      setCurrentStep('details');
+    }
+  }, [product]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3308,6 +3356,8 @@ const ProductForm: React.FC<ProductFormProps> = ({
           category: formData.category,
           pricePerUnit: Number(formData.pricePerUnit),
           brand: user?.companyName || 'Unknown',
+          manufacturer: user?.companyName || 'Unknown', // Adding required manufacturer field
+          manufacturerName: user?.companyName || 'Unknown', // Adding for backward compatibility
           minimumOrderQuantity: formData.minOrderQuantity,
           dailyCapacity: formData.dailyCapacity,
           unitType: formData.unitType,
@@ -3602,12 +3652,34 @@ const ProductForm: React.FC<ProductFormProps> = ({
   // Transform product for form compatibility
   const transformProductForForm = (prod: Product | null) => {
     if (!prod) return null;
+    
+    // Create a complete ProductFormData object with all required fields
     return {
       ...prod,
       manufacturerName: prod.manufacturerName || prod.brand || prod.manufacturer || 'Unknown',
       pricePerUnit: prod.pricePerUnit || 0,
-      originCountry: prod.originCountry || 'Unknown'
-    } as ProductFormData; // Ép kiểu rõ ràng thành ProductFormData
+      originCountry: prod.originCountry || 'Unknown',
+      // Ensure food product data is properly mapped
+      foodType: prod.foodType || prod.foodProductData?.foodType || '',
+      flavorType: prod.flavorType || prod.foodProductData?.flavorType || [],
+      ingredients: prod.ingredients || prod.foodProductData?.ingredients || [],
+      allergens: prod.allergens || prod.foodProductData?.allergens || [],
+      usage: prod.usage || prod.foodProductData?.usage || [],
+      packagingSize: prod.packagingSize || prod.foodProductData?.packagingSize || '',
+      shelfLife: prod.shelfLife || prod.foodProductData?.shelfLife || '',
+      manufacturerRegion: prod.manufacturerRegion || prod.foodProductData?.manufacturerRegion || '',
+      storageInstruction: prod.storageInstruction || '',
+      foodProductData: prod.foodProductData || {
+        flavorType: prod.flavorType || [],
+        ingredients: prod.ingredients || [],
+        usage: prod.usage || [],
+        packagingSize: prod.packagingSize || '',
+        shelfLife: prod.shelfLife || '',
+        manufacturerRegion: prod.manufacturerRegion || '',
+        foodType: prod.foodType || '',
+        allergens: prod.allergens || []
+      }
+    } as ProductFormData;
   };
 
   // Handle form submission with proper type conversion
@@ -4469,6 +4541,7 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
 }) => {
   return (
     <div className="space-y-8">
+      {/* Header with product name and image */}
       <div className="flex justify-between items-start">
         <motion.div
           initial={{ opacity: 0, x: -20 }}
@@ -4476,7 +4549,7 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
           transition={{ duration: 0.5, delay: 0.1 }}
           className="flex gap-4 items-start"
         >
-          <div className="h-20 w-20 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+          <div className="h-28 w-28 rounded-lg bg-muted overflow-hidden flex-shrink-0">
             {product.image ? (
               <img
                 src={product.image}
@@ -4497,37 +4570,41 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
                   variant="outline"
                   className="ml-2 bg-green-500/10 text-green-600 text-xs"
                 >
-                  <Zap className="h-3 w-3 mr-1" />
+                  <Leaf className="h-3 w-3 mr-1" />
                   Sustainable
                 </Badge>
               )}
             </h2>
-            <p className="text-muted-foreground">
+            <div className="flex items-center gap-2 mt-1">
               {getProductTypeBadge(product.productType)}
-            </p>
+              <Badge variant="outline" className="text-xs">
+                SKU: {product.sku}
+              </Badge>
+            </div>
           </div>
         </motion.div>
       </div>
 
+      {/* A. Basic Information */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, delay: 0.2 }}
       >
-        <Card className="card-hover-effect">
-          <CardHeader>
+        <Card className="card-hover-effect border-l-4 border-l-primary">
+          <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center">
-              <InfoIcon className="h-5 w-5 mr-2 text-primary" />
-              Product Information
+              <Info className="h-5 w-5 mr-2 text-primary" />
+              Basic Information
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
-                  SKU
+                  Product Name
                 </h4>
-                <p className="font-medium">{product.sku}</p>
+                <p className="font-medium">{product.name}</p>
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
@@ -4537,12 +4614,112 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
+                  Manufacturer
+                </h4>
+                <p className="font-medium">{product.manufacturer || product.manufacturerName || product.brand || "Not specified"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Origin Country
+                </h4>
+                <p className="font-medium">{product.originCountry}</p>
+              </div>
+              {product.manufacturerRegion && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Region
+                  </h4>
+                  <p className="font-medium">{product.manufacturerRegion}</p>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* B. Packaging and Storage */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.3 }}
+      >
+        <Card className="card-hover-effect border-l-4 border-l-green-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center">
+              <Package className="h-5 w-5 mr-2 text-green-500" />
+              Packaging and Storage
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Packaging Type
+                </h4>
+                <p className="font-medium">{product.packagingType || "Not specified"}</p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Packaging Size
+                </h4>
+                <p className="font-medium">
+                  {product.packagingSize || product.foodProductData?.packagingSize || "Not specified"}
+                </p>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Shelf Life
+                </h4>
+                <p className="font-medium">
+                  {product.shelfLife || product.foodProductData?.shelfLife || "Not specified"}
+                </p>
+              </div>
+              {(product.shelfLifeStartDate || product.shelfLifeEndDate) && (
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                    Date Range
+                </h4>
+                <p className="font-medium">
+                    {product.shelfLifeStartDate && new Date(product.shelfLifeStartDate).toLocaleDateString()} 
+                    {product.shelfLifeStartDate && product.shelfLifeEndDate && " - "}
+                    {product.shelfLifeEndDate && new Date(product.shelfLifeEndDate).toLocaleDateString()}
+                </p>
+              </div>
+              )}
+              <div className="md:col-span-2">
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Storage Instructions
+                </h4>
+                <p className="text-sm mt-1">{product.storageInstruction || "Not specified"}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* C. Production Details */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.4 }}
+      >
+        <Card className="card-hover-effect border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center">
+              <Factory className="h-5 w-5 mr-2 text-blue-500" />
+              Production Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-8 gap-y-4">
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
                   Minimum Order Quantity
                 </h4>
                 <p className="font-medium">
                   {product.minOrderQuantity} {product.unitType}
                 </p>
-              </div>
+                </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
                   Daily Capacity
@@ -4553,12 +4730,40 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
               </div>
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
-                  Price Per Unit
+                  Current Available
                 </h4>
-                <p className="font-medium">
-                  ${product.pricePerUnit.toFixed(2)} per {product.unitType}
+                <p className={cn(
+                  "font-medium",
+                  product.currentAvailable === 0 ? "text-red-500" : 
+                  product.currentAvailable < product.minOrderQuantity ? "text-amber-500" : 
+                  "text-green-600"
+                )}>
+                  {product.currentAvailable} {product.unitType}
                 </p>
               </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Unit Type
+                </h4>
+                <p className="font-medium">{product.unitType}</p>
+            </div>
+
+              <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Price per Unit
+                </h4>
+                <p className="font-medium">
+                  {product.priceCurrency === "USD" && "$"}
+                  {product.priceCurrency === "EUR" && "€"}
+                  {product.priceCurrency === "JPY" && "¥"}
+                  {product.priceCurrency === "CNY" && "¥"}
+                  {product.pricePerUnit?.toFixed(2) || '0.00'}
+                  {" "}
+                  {product.priceCurrency || "USD"}
+                </p>
+              </div>
+
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground">
                   Lead Time
@@ -4567,103 +4772,194 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
                   {product.leadTime} {product.leadTimeUnit}
                 </p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* D. Food Details */}
+      {(product.productType === 'Food Product' || product.foodType || product.foodProductData?.foodType) && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+          <Card className="card-hover-effect border-l-4 border-l-orange-500">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg flex items-center">
+                <Sparkles className="h-5 w-5 mr-2 text-orange-500" />
+                Food Details
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                  <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Food Type
+                  </h4>
+                  <p className="font-medium">{product.foodType || product.foodProductData?.foodType || "Not specified"}</p>
+                </div>
+
+                {/* Flavor Profile */}
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Flavor Profile
+                  </h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                    {(product.flavorType || product.foodProductData?.flavorType || []).length > 0 ? 
+                      (product.flavorType || product.foodProductData?.flavorType || []).map((flavor, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {flavor}
+                        </Badge>
+                      )) : 
+                      <span className="text-sm text-muted-foreground">Not specified</span>
+                    }
+                    </div>
+                  </div>
+                
+                {/* Ingredients */}
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Main Ingredients
+                  </h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                    {(product.ingredients || product.foodProductData?.ingredients || []).length > 0 ? 
+                      (product.ingredients || product.foodProductData?.ingredients || []).map((ingredient, index) => (
+                        <Badge key={index} variant="outline" className="text-xs">
+                          {ingredient}
+                        </Badge>
+                      )) : 
+                      <span className="text-sm text-muted-foreground">Not specified</span>
+                    }
+                    </div>
+                  </div>
+                
+                {/* Allergens */}
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Allergens
+                  </h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                    {(product.allergens || product.foodProductData?.allergens || []).length > 0 ? 
+                      (product.allergens || product.foodProductData?.allergens || []).map((allergen, index) => (
+                        <Badge key={index} variant="destructive" className="text-xs">
+                          {allergen}
+                        </Badge>
+                      )) : 
+                      <span className="text-sm text-muted-foreground">None</span>
+                    }
+                    </div>
+                  </div>
+                
+                {/* Usage */}
+                <div className="md:col-span-2">
+                  <h4 className="text-sm font-medium text-muted-foreground">
+                    Usage Examples
+                  </h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                    {(product.usage || product.foodProductData?.usage || []).length > 0 ? 
+                      (product.usage || product.foodProductData?.usage || []).map((usage, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs bg-primary/10 text-primary">
+                          {usage}
+                        </Badge>
+                      )) : 
+                      <span className="text-sm text-muted-foreground">Not specified</span>
+                    }
+                    </div>
+                  </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+                )}
+                
+      {/* E. Description */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.6 }}
+      >
+        <Card className="card-hover-effect border-l-4 border-l-purple-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg flex items-center">
+              <FileText className="h-5 w-5 mr-2 text-purple-500" />
+              Description
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="md:col-span-2">
-                <h4 className="text-sm font-medium text-muted-foreground">
-                  Description
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                  Product Description
                 </h4>
-                <p className="text-sm mt-1">{product.description}</p>
+                <p className="text-sm whitespace-pre-wrap">{product.description || "No description provided"}</p>
+              </div>
+              
+                  <div>
+                <h4 className="text-sm font-medium text-muted-foreground mb-2">
+                  Additional Images
+                </h4>
+                {/* For now, only display a placeholder since images array isn't available yet */}
+                <div className="text-sm text-muted-foreground">
+                  No additional images
+                  </div>
               </div>
             </div>
           </CardContent>
         </Card>
       </motion.div>
 
+      {/* Additional Information */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="grid grid-cols-1 md:grid-cols-2 gap-6"
+        transition={{ duration: 0.5, delay: 0.7 }}
       >
         <Card className="card-hover-effect">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg flex items-center">
-              <Package className="h-5 w-5 mr-2 text-primary" />
-              Inventory Status
+              <CalendarCheck className="h-5 w-5 mr-2 text-primary" />
+              Additional Information
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <h4 className="text-sm font-medium">Current Available</h4>
-                  <span
-                    className={
-                      product.currentAvailable < product.minOrderQuantity * 0.5
-                        ? "text-red-500 font-medium"
-                        : product.currentAvailable < product.minOrderQuantity
-                        ? "text-amber-500 font-medium"
-                        : "text-green-600 font-medium"
-                    }
-                  >
-                    {product.currentAvailable} {product.unitType}
-                  </span>
-                </div>
-                <Progress
-                  value={
-                    (product.currentAvailable /
-                      (product.minOrderQuantity * 3)) *
-                    100
-                  }
-                  className={`h-2 rounded-full ${
-                    product.currentAvailable < product.minOrderQuantity * 0.5
-                      ? "bg-red-500"
-                      : product.currentAvailable < product.minOrderQuantity
-                      ? "bg-amber-500"
-                      : "bg-green-600"
-                  }`}
-                />
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium mb-1">Reorder Point</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                  <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Created
+                </h4>
+                <p className="font-medium">
+                  {new Date(product.createdAt).toLocaleDateString()}
+                </p>
+                  </div>
+                
+                  <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Last Updated
+                </h4>
+                <p className="font-medium">
+                  {new Date(product.updatedAt).toLocaleDateString()}
+                </p>
+                  </div>
+                
+                  <div>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Reorder Point
+                </h4>
                 <p className="font-medium">
                   {product.reorderPoint} {product.unitType}
                 </p>
               </div>
 
               <div>
-                <h4 className="text-sm font-medium mb-1">Last Produced</h4>
+                <h4 className="text-sm font-medium text-muted-foreground">
+                  Last Produced
+                </h4>
                 <p className="font-medium">
                   {new Date(product.lastProduced).toLocaleDateString()}
                 </p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="card-hover-effect">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center">
-              <CalendarCheck className="h-5 w-5 mr-2 text-primary" />
-              Production History
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div>
-                <h4 className="text-sm font-medium mb-1">Created</h4>
-                <p className="font-medium">
-                  {new Date(product.createdAt).toLocaleDateString()}
-                </p>
-              </div>
-
-              <div>
-                <h4 className="text-sm font-medium mb-1">Last Updated</h4>
-                <p className="font-medium">
-                  {new Date(product.updatedAt).toLocaleDateString()}
-                </p>
-              </div>
-
+              
               <div>
                 <h4 className="text-sm font-medium mb-1">Production Status</h4>
                 <Badge
@@ -4683,117 +4979,29 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
                     : "In Stock"}
                 </Badge>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {/* Product Type Specific Data */}
-      {product.foodProductData && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-        >
-          <Card className="card-hover-effect">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center">
-                <Wheat className="h-5 w-5 mr-2 text-primary" />
-                Food Product Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-                {product.foodProductData.flavorType && product.foodProductData.flavorType.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Flavor Types</h4>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {product.foodProductData.flavorType.map((flavor, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {flavor}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {product.foodProductData.ingredients && product.foodProductData.ingredients.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Ingredients</h4>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {product.foodProductData.ingredients.map((ingredient, index) => (
-                        <Badge key={index} variant="outline" className="text-xs">
-                          {ingredient}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {product.foodProductData.allergens && product.foodProductData.allergens.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Allergens</h4>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {product.foodProductData.allergens.map((allergen, index) => (
-                        <Badge key={index} variant="destructive" className="text-xs">
-                          {allergen}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {product.foodProductData.usage && product.foodProductData.usage.length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Usage</h4>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {product.foodProductData.usage.map((use, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {use}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {product.foodProductData.packagingSize && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Packaging Size</h4>
-                    <p className="font-medium">{product.foodProductData.packagingSize}</p>
-                  </div>
-                )}
-                
-                {product.foodProductData.shelfLife && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Shelf Life</h4>
-                    <p className="font-medium">{product.foodProductData.shelfLife}</p>
-                  </div>
-                )}
-                
-                {product.foodProductData.manufacturerRegion && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Manufacturer Region</h4>
-                    <p className="font-medium">{product.foodProductData.manufacturerRegion}</p>
-                  </div>
-                )}
-                
-                {product.foodProductData.foodType && (
-                  <div>
-                    <h4 className="text-sm font-medium text-muted-foreground">Food Type</h4>
-                    <p className="font-medium">{product.foodProductData.foodType}</p>
+              
+              {product.sustainable && (
+                <div>
+                  <h4 className="text-sm font-medium mb-1">Sustainability</h4>
+                  <Badge
+                    variant="outline"
+                    className="bg-green-500/10 text-green-600"
+                  >
+                    <Leaf className="h-3 w-3 mr-1" />
+                    Eco-Friendly Product
+                  </Badge>
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
         </motion.div>
-      )}
 
       {/* Actions */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.5 }}
+        transition={{ duration: 0.5, delay: 0.8 }}
         className="flex justify-end gap-3"
       >
         <Button
