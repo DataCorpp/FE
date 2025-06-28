@@ -468,7 +468,7 @@ const Step2_DefineProject: React.FC<Props> = ({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
           >
-            <label className="block text-sm font-medium mb-1">Project Details & Manufacturing Requirements*</label>
+            <label className="block text-sm font-medium mb-1">Description*</label>
             <motion.textarea
               className="w-full border rounded px-3 py-2 bg-muted focus:ring-2 focus:ring-primary/30 focus:outline-none transition-all"
               rows={3}
@@ -740,7 +740,7 @@ const Step2_DefineProject: React.FC<Props> = ({
             transition={{ duration: 0.5, delay: 0.7 }}
             ref={locationRef}
           >
-            <label className="block text-sm font-medium mb-1">Supplier Location (Optional)</label>
+            <label className="block text-sm font-medium mb-1">Location*</label>
             <motion.div className="relative">
               <motion.input
                 className="w-full border rounded px-3 py-2 bg-muted focus:ring-2 focus:ring-primary/30 focus:outline-none transition-all"
