@@ -545,28 +545,21 @@ export const Production = () => {
 
       setIsLoading(true);
       try {
-        // Fetch products using the backend API structure with session
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products?limit=100`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Sử dụng productService để lấy danh sách sản phẩm (đã xử lý session và lỗi phổ biến)
+        const result = await productService.getProducts();
+
+        if (!result.success) {
+          // Nếu lỗi mạng hoặc server mới hiển thị toast, còn lỗi 404 (không có sản phẩm) sẽ được hàm getProducts trả về success=true với mảng rỗng
+          throw new Error(result.error || 'Failed to fetch products');
         }
-        
-        const data = await response.json();
-        
-        // Backend returns { products, page, pages, total }
-        const basicProducts = data.products || [];
+
+        type MinimalProduct = { _id: string; productName: string; manufacturerName: string; type: string };
+        const basicProducts = (result.data || []) as unknown as MinimalProduct[];
         
         if (basicProducts.length > 0) {
           // For each product, fetch detailed information from respective collection
           const productsWithDetails = await Promise.all(
-            basicProducts.map(async (basicProduct: { _id: string; productName: string; manufacturerName: string; type: string }) => {
+            basicProducts.map(async (basicProduct) => {
               try {
                 // Get detailed product info using the details endpoint
                 const detailsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {

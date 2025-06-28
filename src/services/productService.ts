@@ -197,6 +197,10 @@ class ProductService {
       });
       
       if (!response.ok) {
+        // Trường hợp 404 (không có sản phẩm) -> trả về mảng rỗng thay vì lỗi
+        if (response.status === 404) {
+          return { success: true, data: [], message: 'No products found' };
+        }
         if (response.status === 401) {
           this.handleApiError({ status: response.status }, 'Get products');
         }
