@@ -5,9 +5,9 @@ import { ProductApiData } from '@/types/product';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5000/api';
 
-// Add console logs to help debug API connection issues
-// console.log('API Base URL:', API_BASE_URL);
-// console.log('AI API Base URL:', AI_API_BASE_URL);
+// Add console logs for debugging
+console.log('API Base URL:', API_BASE_URL);
+console.log('AI API Base URL:', AI_API_BASE_URL);
 
 // Type definitions
 export interface ApiResponse<T = Record<string, unknown>> {
@@ -232,7 +232,7 @@ export interface AnalyticsResponse {
 
 // Create simple axios instance for session-based authentication
 export const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -280,7 +280,7 @@ const aiApi = axios.create({
 
 // Tạo instance API riêng cho admin với interceptor riêng
 const adminApiInstance = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
