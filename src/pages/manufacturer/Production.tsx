@@ -408,7 +408,7 @@ export const Production = () => {
     const checkAuthSession = async () => {
       if (!isAuthenticated) {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/me`, {
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/me`, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -562,7 +562,7 @@ export const Production = () => {
             basicProducts.map(async (basicProduct) => {
               try {
                 // Get detailed product info using the details endpoint
-                const detailsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
+                const detailsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
                   method: 'GET',
                   credentials: 'include',
                   headers: {

@@ -147,7 +147,12 @@ export interface ApiResponse<T> {
 }
 
 class ProductService {
-  private baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/products';
+  // Prefer the new VITE_API_BASE_URL env var (matches Docker / prod config). Fallback to the old one or localhost for dev.
+  private baseUrl = (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    'http://localhost:3000/api'
+  ) + '/products';
 
   // Helper function to get headers for session-based authentication
   private getAuthHeaders() {
