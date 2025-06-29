@@ -238,8 +238,8 @@ const SignInForm = () => {
     const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     
-    // Use current origin (supports both www and non-www) and ensure HTTPS
-    const redirectUri = `${window.location.origin.replace('http://', 'https://')}/google-auth-callback.html`;
+    // Redirect URI must EXACTLY match value in Google Console
+    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin.replace('http://', 'https://')}/google-auth-callback.html`;
     
     // Tạo URL OAuth với các tham số cần thiết
     const queryParams = new URLSearchParams({
