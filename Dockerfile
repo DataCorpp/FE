@@ -10,7 +10,7 @@ COPY package*.json ./
 RUN npm install
 
 # Copy environment variables first
-COPY .env ./
+COPY .env
 
 # Copy source code
 COPY . .
