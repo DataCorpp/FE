@@ -1383,7 +1383,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           {/* Display match criteria with enhanced visuals */}
                           <MatchCriteria 
                             criteria="Specializes in your product category" 
-                            matches={true} 
+                            matches={manufacturer.matchDetails?.industry?.score > 15} 
                             isDarkMode={isDarkMode}
                             importance="high"
                             tooltip="This manufacturer specializes in products similar to yours"
@@ -1391,7 +1391,11 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           
                           <MatchCriteria 
                             criteria="Has required certifications" 
-                            matches={manufacturer.certificates && manufacturer.certificates.length > 0} 
+                            matches={
+                              projectDetails?.certification?.length > 0 ? 
+                              manufacturer.matchDetails?.certifications?.score > 10 : 
+                              true
+                            } 
                             isDarkMode={isDarkMode}
                             importance="high"
                             tooltip="The manufacturer has the certifications required for your product"
@@ -1399,26 +1403,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           
                           <MatchCriteria 
                             criteria="Production capacity meets your volume" 
-                            matches={(() => {
-                              // Get project volume min/max
-                              const vol = parseVolumeRange(projectDetails?.volume);
-                              if (!vol) return false;
-                              const projectMin = vol.min;
-                              const projectMax = vol.max;
-                              // Get manufacturer capacity
-                              let manuCap = manufacturer.manufacturerSettings?.productionCapacity;
-                              if (!manuCap) return false;
-                              if (typeof manuCap === 'string' && isNaN(Number(manuCap))) {
-                                // parse string range
-                                const capParsed = parseVolumeRange(manuCap);
-                                if (!capParsed) return false;
-                                manuCap = capParsed.max;
-                              } else {
-                                manuCap = Number(manuCap);
-                              }
-                              // If manufacturer capacity >= min of project volume, it's a match
-                              return manuCap >= projectMin;
-                            })()} 
+                            matches={manufacturer.matchDetails?.capacity?.score > 9} 
                             isDarkMode={isDarkMode}
                             importance="medium"
                             tooltip="Can handle your production volume requirements"
@@ -1426,11 +1411,33 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           
                           <MatchCriteria 
                             criteria="Location preference" 
-                            matches={manufacturer.location !== undefined} 
+                            matches={manufacturer.matchDetails?.location?.score > 7} 
                             isDarkMode={isDarkMode}
                             importance="medium"
                             tooltip="Located in your preferred region"
                           />
+                          
+                          {/* Show packaging match if project has packaging requirements */}
+                          {projectDetails?.packaging?.length > 0 && (
+                            <MatchCriteria 
+                              criteria="Packaging compatibility" 
+                              matches={manufacturer.matchDetails?.packaging?.score > 5} 
+                              isDarkMode={isDarkMode}
+                              importance="medium"
+                              tooltip="Manufacturer can provide your required packaging types"
+                            />
+                          )}
+                          
+                          {/* Show allergen match if project has allergen requirements */}
+                          {projectDetails?.allergen?.length > 0 && (
+                            <MatchCriteria 
+                              criteria="Allergen requirements" 
+                              matches={manufacturer.matchDetails?.allergen?.score > 5} 
+                              isDarkMode={isDarkMode}
+                              importance="medium"
+                              tooltip="Manufacturer's products meet your allergen requirements"
+                            />
+                          )}
                         </div>
                         
                         {/* Show match details if available */}
@@ -1443,58 +1450,100 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           </h5>
                           <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-rounded-full scrollbar-track-rounded-full scrollbar-thumb-slate-400 scrollbar-track-slate-200 dark:scrollbar-thumb-slate-600 dark:scrollbar-track-slate-800">
                             {(() => {
-                              // Build detailedMatchFactors
+                              // Build detailedMatchFactors from the backend matchDetails
                               const details: { label: string, value: string }[] = [];
-                              // Location
-                              let location = projectDetails?.location || projectDetails?.locationList?.[0] || 'Global';
-                              if (location === 'Global') {
-                                details.push({ label: 'Location', value: 'Global location requested' });
-                              } else {
-                                details.push({ label: 'Location', value: location });
-                              }
-                              // Certifications
-                              const certs = projectDetails?.certification;
-                              if (!certs || (Array.isArray(certs) && certs.length === 0)) {
-                                details.push({ label: 'Certifications', value: 'No certifications required for project' });
-                              } else {
-                                details.push({ label: 'Certifications', value: Array.isArray(certs) ? certs.join(', ') : String(certs) });
-                              }
-                              // Industry
-                              if (manufacturer.industry) {
-                                details.push({ label: 'Industry', value: 'General food manufacturing match; Matches manufacturer preferred category' });
-                              }
-                              // Capacity
-                              let manuCap = manufacturer.manufacturerSettings?.productionCapacity;
-                              let manuCapNum = 0;
-                              if (manuCap) {
-                                if (typeof manuCap === 'string' && isNaN(Number(manuCap))) {
-                                  const capParsed = parseVolumeRange(manuCap);
-                                  if (capParsed) manuCapNum = capParsed.max;
-                                } else {
-                                  manuCapNum = Number(manuCap);
+                              
+                              // Use the match details from the backend if available
+                              if (manufacturer.matchDetails) {
+                                // Location
+                                if (manufacturer.matchDetails.location) {
+                                  details.push({ 
+                                    label: 'Location', 
+                                    value: manufacturer.matchDetails.location.details || 
+                                           (Array.isArray(projectDetails?.location) ? 
+                                             projectDetails.location.join(', ') : 
+                                             projectDetails?.location || 'Global location requested')
+                                  });
                                 }
-                              }
-                              const vol = parseVolumeRange(projectDetails?.volume);
-                              let capText = '';
-                              if (manuCapNum && vol) {
-                                capText = `Manufacturer capacity: ${manuCapNum.toLocaleString()} units; `;
-                                if (manuCapNum >= vol.max) {
-                                  capText += 'Full capacity match (100%)';
-                                } else if (manuCapNum > vol.min) {
-                                  capText += 'Partial match';
-                                } else {
-                                  capText += 'Below required volume';
+                                
+                                // Certifications
+                                if (manufacturer.matchDetails.certifications) {
+                                  details.push({ 
+                                    label: 'Certifications', 
+                                    value: manufacturer.matchDetails.certifications.details || 
+                                           (projectDetails?.certification?.length > 0 ? 
+                                             Array.isArray(projectDetails.certification) ? 
+                                               projectDetails.certification.join(', ') : 
+                                               String(projectDetails.certification) : 
+                                             'No certifications required for project')
+                                  });
                                 }
-                                details.push({ label: 'Capacity', value: capText });
-                              }
-                              // Nếu BE trả về matchDetails, ưu tiên merge thêm
-                              if (manufacturer.matchDetails && Object.keys(manufacturer.matchDetails).length > 0) {
+                                
+                                // Industry
+                                if (manufacturer.matchDetails.industry) {
+                                  details.push({ 
+                                    label: 'Industry', 
+                                    value: manufacturer.matchDetails.industry.details || 
+                                           'General food manufacturing match'
+                                  });
+                                }
+                                
+                                // Capacity
+                                if (manufacturer.matchDetails.capacity) {
+                                  details.push({ 
+                                    label: 'Capacity', 
+                                    value: manufacturer.matchDetails.capacity.details || 
+                                           `Manufacturer capacity: ${manufacturer.manufacturerSettings?.productionCapacity || 'Unknown'}`
+                                  });
+                                }
+                                
+                                // Packaging - new from backend
+                                if (manufacturer.matchDetails.packaging) {
+                                  details.push({
+                                    label: 'Packaging',
+                                    value: manufacturer.matchDetails.packaging.details || 
+                                           'Packaging compatibility information not available'
+                                  });
+                                }
+                                
+                                // Allergen - new from backend
+                                if (manufacturer.matchDetails.allergen) {
+                                  details.push({
+                                    label: 'Allergen',
+                                    value: manufacturer.matchDetails.allergen.details || 
+                                           'Allergen compatibility information not available'
+                                  });
+                                }
+                                
+                                // Additional - new from backend
+                                if (manufacturer.matchDetails.additional) {
+                                  details.push({
+                                    label: 'Additional',
+                                    value: manufacturer.matchDetails.additional.details || 
+                                           'No specific keyword matches found'
+                                  });
+                                }
+                                
+                                // Add any other match details that might be present
                                 Object.entries(manufacturer.matchDetails).forEach(([key, value]) => {
-                                  // Nếu key đã có ở trên thì bỏ qua
-                                  if (details.some(d => d.label.toLowerCase() === key.toLowerCase())) return;
-                                  details.push({ label: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()), value: formatMatchValue(value) });
+                                  // Skip keys we've already processed
+                                  if (['location', 'certifications', 'industry', 'capacity', 
+                                       'packaging', 'allergen', 'additional'].includes(key)) {
+                                    return;
+                                  }
+                                  
+                                  // Format the key name for display
+                                  const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                                  details.push({ 
+                                    label: formattedKey, 
+                                    value: formatMatchValue(value) 
+                                  });
                                 });
+                              } else {
+                                // Fallback if no match details are available
+                                details.push({ label: 'Match Details', value: 'No detailed matching information available' });
                               }
+                              
                               return details.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-start py-1 border-b border-dashed last:border-0 dark:border-slate-700 border-slate-200">
                                   <span className={`text-xs flex-shrink-0 mr-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.label}</span>
