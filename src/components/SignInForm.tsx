@@ -96,7 +96,7 @@ const SignInForm = () => {
           
           // 1. Send data to /api/users/google-login
           const googleLoginResponse = await axios.post(
-            'http://localhost:3000/api/users/google-login',
+            `${import.meta.env.VITE_API_BASE_URL}/users/google-login`,
             {
               token: tokenResponse.access_token,
               email: userInfo.email,
@@ -115,7 +115,7 @@ const SignInForm = () => {
           const { isNewUser } = googleLoginResponse.data;
 
           // 2. If successful: call GET /users/me to update user in context
-          const userResponse = await axios.get('http://localhost:3000/api/users/me', {
+          const userResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/users/me`, {
             withCredentials: true
           });
 
@@ -188,7 +188,7 @@ const SignInForm = () => {
       await login(data.email, data.password);
 
       // Get the user context after login
-      const user = await axios.get('http://localhost:3000/api/users/me', {
+      const user = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/users/me`, {
         withCredentials: true
       });
 
@@ -238,8 +238,8 @@ const SignInForm = () => {
     const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     
-    // Biết chính xác redirect URI đã được đăng ký trong Google Console
-    const redirectUri = 'http://datacorpsolutions.com/google-auth-callback.html';
+    // Use current origin (supports both www and non-www) and ensure HTTPS
+    const redirectUri = `${window.location.origin.replace('http://', 'https://')}/google-auth-callback.html`;
     
     // Tạo URL OAuth với các tham số cần thiết
     const queryParams = new URLSearchParams({
