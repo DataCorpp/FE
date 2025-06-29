@@ -239,7 +239,7 @@ const SignInForm = () => {
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
     
     // Biết chính xác redirect URI đã được đăng ký trong Google Console
-    const redirectUri = 'http://localhost:8080/google-auth-callback.html';
+    const redirectUri = 'http://datacorpsolutions.com/google-auth-callback.html';
     
     // Tạo URL OAuth với các tham số cần thiết
     const queryParams = new URLSearchParams({
