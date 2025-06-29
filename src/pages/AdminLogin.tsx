@@ -34,7 +34,7 @@ const AdminLogin = () => {
     const checkAuth = async () => {
       try {
         // Check admin session via API
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
           method: 'GET',
           credentials: 'include',
           headers: {
@@ -79,7 +79,7 @@ const AdminLogin = () => {
 
     try {
       // Call admin login API
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/login`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/login`, {
         method: 'POST',
         credentials: 'include',
         headers: {
