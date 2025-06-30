@@ -1,9 +1,19 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { ProductApiData } from '@/types/product';
+import { BACKEND_URL, CONTEXT_PATH } from '@/constants/app.environment';
 
-// Use hardcoded URLs if environment variables are not available
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5000/api';
+// Use constants from app.environment.ts for API base URL for consistency
+const API_BASE_URL = `${BACKEND_URL}${CONTEXT_PATH}`;
+
+// Use the same safe approach for AI API
+const getEnvVariable = (key: string, defaultValue: string): string => {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return (import.meta.env[key] as string) || defaultValue;
+  }
+  return defaultValue;
+};
+
+const AI_API_BASE_URL = getEnvVariable('VITE_AI_API_BASE_URL', 'http://localhost:5000/api');
 
 // Add console logs to help debug API connection issues
 // console.log('API Base URL:', API_BASE_URL);
@@ -28,6 +38,9 @@ export interface ApiResponse<T = Record<string, unknown>> {
   total?: number;
   // Add properties for manufacturer responses
   manufacturers?: T[];
+  // Add properties for image responses
+  image?: string;
+  images?: string[];
 }
 
 export interface ProductData {
@@ -84,7 +97,7 @@ export interface CrawlerTaskData {
 
 // Create simple axios instance for session-based authentication
 export const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -132,7 +145,7 @@ const aiApi = axios.create({
 
 // Tạo instance API riêng cho admin với interceptor riêng
 const adminApiInstance = axios.create({
-  baseURL: 'http://localhost:3000/api',
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
@@ -415,6 +428,7 @@ export const foodProductApi = {
     category: string;
     description: string;
     image?: string;
+    images?: string[]; // Add images array field
     manufacturer: string; // Use manufacturer consistently instead of manufacturerName
     originCountry: string;
     minOrderQuantity: number;
@@ -453,6 +467,7 @@ export const foodProductApi = {
     manufacturer: string; // Use manufacturer consistently
     originCountry: string;
     image: string;
+    images: string[]; // Add images array field
     price: string;
     pricePerUnit: number;
     priceCurrency: string;
@@ -484,7 +499,7 @@ export const foodProductApi = {
     const processedData = { ...data };
     
     // Process array fields
-    ['flavorType', 'ingredients', 'allergens', 'usage'].forEach(field => {
+    ['flavorType', 'ingredients', 'allergens', 'usage', 'images'].forEach(field => {
       if (processedData[field] !== undefined) {
         // If it's already an array, keep it
         if (Array.isArray(processedData[field])) {
@@ -520,6 +535,21 @@ export const foodProductApi = {
     
     // Use the authenticated endpoint
     return api.put<ApiResponse>(`/foodproducts/${id}`, processedData);
+  },
+
+  // Update product images separately
+  updateProductImages: (id: string, images: string[]) => {
+    // Validate input
+    if (!Array.isArray(images)) {
+      throw new Error("Images must be an array");
+    }
+    
+    if (!id) {
+      throw new Error("Product ID is required");
+    }
+
+    console.log(`🖼️ Updating images for product ${id}:`, images.length);
+    return api.put<ApiResponse<{ images: string[]; image: string }>>(`/foodproducts/${id}/images`, { images });
   },
 
   // Delete food product

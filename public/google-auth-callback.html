@@ -76,7 +76,7 @@
             type: 'oauth_response',
             provider: 'google',
             response: params
-          }, window.opener.location.origin);
+          }, '*');
           
           // Đóng popup sau khi gửi dữ liệu
           setTimeout(() => {

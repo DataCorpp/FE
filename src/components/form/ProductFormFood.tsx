@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from 'react-i18next';
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { BaseProduct, ProductFormData } from "@/types/product";
 import { FoodProductData } from "@/services/productService";
 import { toBaseProduct, toFoodProduct, attachUserToProduct } from "@/utils/productAdapters";
+import { foodProductApi } from "@/lib/api";
 
 // Interfaces - Extended local interface với các trường bổ sung
 interface ExtendedFoodProductData extends FoodProductData {
@@ -253,9 +254,18 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const { toast } = useToast();
   const { user } = useUser();
   const navigate = useNavigate();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+  
+  // These dummy values are added to fix compilation errors after removing image functionality
+  const images: string[] = [product?.image || ''].filter(Boolean);
+  
   // Form state
+  const [activeTab, setActiveTab] = useState("basic");
+  const [customIngredient, setCustomIngredient] = useState("");
+  const [customUsage, setCustomUsage] = useState("");
+  const [selectedAllergen, setSelectedAllergen] = useState("");
+  const [useAdvancedShelfLife, setUseAdvancedShelfLife] = useState(false);
+  
+  // Main form data
   const [formData, setFormData] = useState<Partial<ProductFormData>>(
     product
       ? { ...product }
@@ -278,10 +288,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           sustainable: false,
         }
   );
-
-  // Food-specific state với ExtendedFoodProductData
+  
+  // Food-specific state
   const [foodProductData, setFoodProductData] = useState<ExtendedFoodProductData>(() => {
-    
     return {
       // Check for data in multiple possible locations with fallbacks
       // IMPORTANT: Use empty arrays or empty strings instead of undefined to avoid null/undefined issues
@@ -303,16 +312,18 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       foodType: product?.foodType || product?.foodProductData?.foodType || 'Soy Sauce', // Default value
     };
   });
-
+  
   // UI state
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isDragging, setIsDragging] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
-  const [images, setImages] = useState<string[]>(product?.image ? [product.image] : []);
-  const [customIngredient, setCustomIngredient] = useState("");
-  const [customUsage, setCustomUsage] = useState("");
-  const [selectedAllergen, setSelectedAllergen] = useState("");
-  const [useAdvancedShelfLife, setUseAdvancedShelfLife] = useState(false);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Record<string, string[]>>({});
+  const [newValue, setNewValue] = useState<Record<string, string>>({
+    ingredient: "",
+    allergen: "",
+    usage: "",
+    flavor: "",
+  });
+  const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   
   // Update form data when product changes (useful for edit mode)
   useEffect(() => {
@@ -344,14 +355,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         foodType: product.foodType || product.foodProductData?.foodType || 'Soy Sauce', // Default value
       });
       
-      // Update images
-      if (product.image) {
-        setImages(prevImages => 
-          prevImages.length === 0 || prevImages[0] !== product.image 
-            ? [product.image, ...prevImages.filter((_, i) => i !== 0)]
-            : prevImages
-        );
-      }
+      // Image handling has been removed
 
       // Log for debugging purposes
       console.log('Initializing form with product data:', product);
@@ -461,65 +465,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     }));
   };
 
-  // File upload handlers - Updated for multiple images
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    handleFiles(files);
-  };
-
-  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setIsDragging(true);
-    } else if (e.type === "dragleave") {
-      setIsDragging(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files || []);
-    handleFiles(files);
-  };
-
-  const handleFiles = (files: File[]) => {
-    if (files.length === 0) return;
-    
-    // Limit to 6 images maximum
-    const maxImages = 6;
-    const remainingSlots = maxImages - images.length;
-    const filesToProcess = files.slice(0, remainingSlots);
-    
-    filesToProcess.forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const imageUrl = e.target?.result as string;
-          setImages(prev => [...prev, imageUrl]);
-          // Update formData with first image for backward compatibility
-          if (images.length === 0) {
-            setFormData(prev => ({ ...prev, image: imageUrl }));
-          }
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-  };
-
-  const removeImage = (index: number) => {
-    setImages(prev => {
-      const newImages = prev.filter((_, i) => i !== index);
-      // Update formData.image with first remaining image or empty string
-      setFormData(prevForm => ({ 
-        ...prevForm, 
-        image: newImages.length > 0 ? newImages[0] : "" 
-      }));
-      return newImages;
-    });
-  };
+  // Image upload handlers removed
 
   // Standard form handlers
   const handleChange = (
@@ -660,6 +606,8 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
+        // Image upload functionality removed
+        
         // Ensure array fields are properly formatted as arrays
         const sanitizedFoodData = {
           ...foodProductData,
@@ -699,7 +647,8 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           name: formData.name!,
           category: formData.category!,
           description: formData.description!,
-          image: formData.image || (images.length > 0 ? images[0] : ""),
+          // Only single image is now supported
+          image: formData.image || "",
           
           // Manufacturer info - ensure consistent field naming
           manufacturer: formData.manufacturer!,
@@ -771,7 +720,8 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         console.log('Final product data for submission:', { 
           isUpdate: !!product && !!product._id,
           productId: product?._id,
-          name: productData.name
+          name: productData.name,
+          image: productData.image // Log the main image
         });
         
         // For updates, ensure we're preserving all necessary data
@@ -854,7 +804,8 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           // 🔍 Log the exact data being sent to API
           console.log('🚀 Sending update data to API:', {
             id: productId,
-            data: updatePayload
+            data: updatePayload,
+            hasImage: !!updatePayload.image
           });
           
           try {
@@ -877,6 +828,11 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
                 description: "Product updated successfully!",
                 variant: "default",
               });
+              
+              // Update main image if it changed
+              if (response.data.image) {
+                setFormData(prev => ({ ...prev, image: response.data.image }));
+              }
               
               // IMPORTANT: Just call onSubmit to update the UI without redirecting
               // This is the fix - pass the product data to onSubmit but don't allow
@@ -1705,107 +1661,22 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
 
                 <div className="space-y-4">
                   <Label className="text-base font-medium">
-                    Product Images ({images.length}/6)
+                    Product Image
                   </Label>
                   
-                  {/* Upload Area */}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleFileChange}
-                    ref={fileInputRef}
-                    className="hidden"
-                  />
-
-                  <motion.div
-                    className={cn(
-                      "w-full h-[160px] border-2 border-dashed rounded-lg overflow-hidden relative cursor-pointer transition-all duration-300",
-                      isDragging
-                        ? "border-primary bg-primary/5"
-                        : images.length > 0
-                        ? "border-primary/50 bg-muted/20"
-                        : "border-muted-foreground/25 hover:border-primary/30 hover:bg-primary/5",
-                      images.length >= 6 && "opacity-50 cursor-not-allowed"
-                    )}
-                    onDragEnter={handleDrag}
-                    onDragLeave={handleDrag}
-                    onDragOver={handleDrag}
-                    onDrop={handleDrop}
-                    onClick={() => images.length < 6 && fileInputRef.current?.click()}
-                    whileHover={images.length < 6 ? { scale: 1.02 } : {}}
-                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                  >
-                    {images.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center h-full w-full">
-                        <UploadCloud className="h-6 w-6 text-primary/60 mb-2" />
-                        <p className="text-sm font-medium text-muted-foreground text-center">
-                          {images.length >= 6 ? "Maximum 6 images reached" : "Click to upload or drag & drop"}
-                        </p>
-                        <p className="text-xs text-muted-foreground/70">PNG, JPG, GIF up to 10MB each</p>
-                      </div>
-                    ) : (
-                      <>
-                        <img src={images[0]} alt="Main preview" className="h-full w-full object-cover" />
-                        {images.length < 6 && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/30 opacity-0 hover:opacity-100 transition-opacity">
-                            <UploadCloud className="h-6 w-6 text-white mb-1" />
-                            <span className="text-xs text-white">Click or drag to add more</span>
-                          </div>
-                        )}
-                        <div className="absolute top-2 left-2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
-                          Main
-                        </div>
-                      </>
-                    )}
-                  </motion.div>
-
-                  {/* Image Preview Grid */}
-                  <AnimatePresence>
-                    {images.length > 1 && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="grid grid-cols-3 gap-2"
-                      >
-                        {images.slice(1).map((image, index) => (
-                          <motion.div
-                            key={index + 1}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            className="relative group"
-                          >
-                            <div className="aspect-square rounded-lg overflow-hidden border-2 border-muted">
-                              <img
-                                src={image}
-                                alt={`Product ${index + 2}`}
-                                className="w-full h-full object-cover"
-                              />
-                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/60 transition-all flex items-center justify-center">
-                                <Button
-                                  type="button"
-                                  variant="destructive"
-                                  size="sm"
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeImage(index + 1);
-                                  }}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                            <div className="absolute -top-2 -right-2 bg-secondary text-secondary-foreground text-xs px-2 py-1 rounded-full">
-                              {index + 2}
-                            </div>
-                          </motion.div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  <div className="flex flex-col space-y-2">
+                    <Input
+                      id="image"
+                      name="image"
+                      value={formData.image || ""}
+                      onChange={handleChange}
+                      placeholder="Enter image URL (e.g., https://example.com/product.jpg)"
+                      className="transition-all duration-300"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Enter a URL for the product image. Image upload functionality has been disabled.
+                    </p>
+                  </div>
                 </div>
               </div>
             </CardContent>

@@ -184,6 +184,7 @@ export interface BaseProduct {
   description: string;
   countInStock?: number; // From currentAvailable
   image: string;
+  images?: string[]; // Array of additional product images
   rating?: number;
   numReviews?: number;
   
@@ -283,6 +284,7 @@ export interface ProductApiData {
   sustainable: boolean;
   productType: string;
   image: string;
+  images?: string[];
   flavorType?: string[];
   ingredients?: string[];
   usage?: string[];

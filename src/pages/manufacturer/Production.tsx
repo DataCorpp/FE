@@ -1337,6 +1337,11 @@ type UpdateProductData = Product;
       // Use MongoDB _id for API call (primary identifier)
       const deleteId = product._id || String(productId);
       
+      // Log special case for temporary products
+      if (deleteId.startsWith('temp_')) {
+        console.log('Handling deletion of temporary product:', deleteId);
+      }
+      
       // Check if user is authenticated (JWT token OR session-based)
       const token = localStorage.getItem('auth_token');
       const user = localStorage.getItem('user');
@@ -1368,8 +1373,8 @@ type UpdateProductData = Product;
         }
       }
       
-      // If no valid authentication found, redirect to login
-      if (!hasValidAuth) {
+      // Skip auth check for temporary products
+      if (!deleteId.startsWith('temp_') && !hasValidAuth) {
         toast({
           title: "Authentication Required",
           description: "Please login again to continue.",
@@ -4899,10 +4904,23 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">
                   Additional Images
                 </h4>
-                {/* For now, only display a placeholder since images array isn't available yet */}
-                <div className="text-sm text-muted-foreground">
-                  No additional images
+                {product.images && product.images.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {product.images.map((img, index) => (
+                      <div key={index} className="rounded-md overflow-hidden h-20 w-20">
+                        <img 
+                          src={img} 
+                          alt={`${product.name} - image ${index + 1}`}
+                          className="h-full w-full object-cover" 
+                        />
+                      </div>
+                    ))}
                   </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    No additional images
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>

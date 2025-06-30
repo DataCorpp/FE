@@ -489,6 +489,18 @@ class ProductService {
   // Delete a product
   async deleteProduct(id: string): Promise<ApiResponse<void>> {
     try {
+      // Check if this is a temporary ID (starts with temp_)
+      if (id.startsWith('temp_')) {
+        console.log('Deleting temporary product with ID:', id);
+        // For temporary products, we don't need to call the API
+        // Just return success since the product only exists in local state
+        return { 
+          success: true, 
+          data: undefined,
+          message: 'Temporary product removed successfully'
+        };
+      }
+      
       const response = await fetch(`${this.baseUrl}/${id}`, {
         method: 'DELETE',
         headers: this.getAuthHeaders(),

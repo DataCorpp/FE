@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/s3-request-presigner": "^3.839.0",
     "@hookform/resolvers": "^3.9.0",
     "@phosphor-icons/react": "^2.1.7",
     "@radix-ui/react-accordion": "^1.2.0",
@@ -44,6 +45,7 @@
     "@tanstack/react-query": "^5.56.2",
     "@types/leaflet": "^1.9.18",
     "@types/lodash": "^4.17.17",
+    "aws-sdk": "^2.1692.0",
     "axios": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -58,6 +60,8 @@
     "leaflet": "^1.9.4",
     "lodash": "^4.17.21",
     "lucide-react": "^0.488.0",
+    "multer": "^2.0.1",
+    "multer-s3": "^3.0.1",
     "next-themes": "^0.3.0",
     "process": "^0.11.10",
     "react": "^18.3.1",

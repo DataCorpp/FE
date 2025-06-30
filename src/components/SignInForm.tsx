@@ -193,39 +193,37 @@ const SignInForm = () => {
 
   // Social login handlers
   const handleGoogleSignIn = () => {
-    // Mở popup để đăng nhập Google
     const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    
-    // Biết chính xác redirect URI đã được đăng ký trong Google Console
+
     const redirectUri = 'http://localhost:8080/google-auth-callback.html';
-    
-    // Tạo URL OAuth với các tham số cần thiết
+
+    if (!clientId || !redirectUri) {
+      console.error('Missing Google OAuth client ID or redirect URI');
+      return;
+    }
+
     const queryParams = new URLSearchParams({
       client_id: clientId,
-      redirect_uri: redirectUri, // Sử dụng URI cố định
+      redirect_uri: redirectUri,
       response_type: 'token',
       scope: 'email profile',
       prompt: 'select_account',
-      access_type: 'online'
+      access_type: 'online',
     });
-    
-    // Log URI để debug
-    // console.log('Using redirect URI:', redirectUri);
-    
-    // Tính toán vị trí popup để hiển thị ở giữa màn hình
+
     const width = 500;
     const height = 600;
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
-    
-    // Open popup
+
     window.open(
-      `${googleOAuthUrl}?${queryParams.toString()}`, 
+      `${googleOAuthUrl}?${queryParams.toString()}`,
       'Google Sign In',
       `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
     );
   };
+
 
   const handleLineSignIn = async () => {
     try {
