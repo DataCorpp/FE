@@ -272,7 +272,8 @@ api.interceptors.response.use(
 
 const aiApi = axios.create({
   baseURL: AI_API_BASE_URL,
-  withCredentials: true,
+  // AI service is stateless; cookies not required. Disable credentials to avoid CORS issues.
+  withCredentials: false,
   headers: {
     'Content-Type': 'application/json'
   }
