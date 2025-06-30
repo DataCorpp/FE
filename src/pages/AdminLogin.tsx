@@ -33,13 +33,29 @@ const AdminLogin = () => {
     
     const checkAuth = async () => {
       try {
-        // Check admin session via API
+        // Prepare admin headers if adminAuth is stored
+        const adminHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        const adminAuth = localStorage.getItem('adminAuth');
+        const adminUserData = localStorage.getItem('adminUser');
+        if (adminAuth === 'true' && adminUserData) {
+          try {
+            const adminUser = JSON.parse(adminUserData);
+            const token = adminUser.token || 'admin-token';
+            adminHeaders.AdminAuthorization = `Bearer ${token}`;
+            adminHeaders['X-Admin-Role'] = adminUser.role;
+            adminHeaders['X-Admin-Email'] = adminUser.email;
+          } catch (err) {
+            console.error('Error parsing admin storage:', err);
+          }
+        }
+
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
           method: 'GET',
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: adminHeaders,
         });
         
         if (response.ok) {
@@ -95,7 +111,11 @@ const AdminLogin = () => {
         const userData = await response.json();
         
         if (userData && userData.role === 'admin') {
-          console.log("Admin login successful - Session created");
+          console.log("Admin login successful - Token received");
+          
+          // Save admin authentication to localStorage for subsequent requests
+          localStorage.setItem('adminUser', JSON.stringify(userData));
+          localStorage.setItem('adminAuth', 'true');
           
           // Redirect to dashboard or intended destination
           navigate(redirectPath);
