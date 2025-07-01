@@ -698,7 +698,12 @@ export const authApi = {
   
   logout: () => {
     return api.post<ApiResponse>('/users/logout');
-  }
+  },
+  
+  // Get roles registered for an email
+  getRoles: (email: string) => {
+    return api.get<ApiResponse>(`/users/roles/${encodeURIComponent(email)}`);
+  },
 };
 
 // API cho Admin
