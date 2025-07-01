@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
 import { ProductApiData } from '@/types/product';
 
 // Use hardcoded URLs if environment variables are not available
@@ -28,6 +28,11 @@ export interface ApiResponse<T = Record<string, unknown>> {
   total?: number;
   // Add properties for manufacturer responses
   manufacturers?: T[];
+  // Add properties for S3 image responses
+  signedUrl?: string;
+  fileUrl?: string;
+  key?: string;
+  expiresIn?: number;
 }
 
 export interface ProductData {
@@ -40,6 +45,7 @@ export interface ProductData {
   ingredients?: string[];
   nutritionFacts?: Record<string, unknown>;
   image?: string;
+  images?: string[]; // Add support for multiple images
   [key: string]: unknown; // For additional fields
 }
 
@@ -194,7 +200,7 @@ export interface CreateProjectResponse {
 export interface ManufacturersResponse {
   success: boolean;
   data: {
-    manufacturers: any[];
+    manufacturers: Record<string, unknown>[];
     count: number;
     projectId: string;
   };
@@ -741,9 +747,10 @@ export const projectApi = {
     try {
       const response = await api.post('/projects', projectData);
       return response.data;
-    } catch (error: any) {
-      console.error('Error creating project:', error);
-      throw new Error(error.response?.data?.message || 'Failed to create project');
+    } catch (error: unknown) {
+      const errorResponse = handleApiError(error, 'Failed to create project');
+      console.error('Error creating project:', errorResponse.message);
+      throw new Error(errorResponse.message);
     }
   },
 
@@ -982,7 +989,108 @@ export const formatTimelineEvent = (event: string): string => {
   return eventMap[event] || event.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-export default {
+// Error handling utilities
+export const isSessionError = (error: unknown): boolean => {
+  if (!error) return false;
+  
+  // Check if it's an Axios error with a response
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError;
+    // Check for 401 Unauthorized or 403 Forbidden status codes
+    return axiosError.response?.status === 401 || axiosError.response?.status === 403;
+  }
+  
+  // Check if it's a generic error with a status property
+  if (typeof error === 'object' && 'status' in error) {
+    const statusError = error as { status?: number };
+    return statusError.status === 401 || statusError.status === 403;
+  }
+  
+  // Check for error message containing session-related keywords
+  if (typeof error === 'object' && 'message' in error) {
+    const messageError = error as { message?: string };
+    const message = messageError.message?.toLowerCase() || '';
+    return message.includes('session') || 
+           message.includes('unauthorized') || 
+           message.includes('token') || 
+           message.includes('login') || 
+           message.includes('auth');
+  }
+  
+  return false;
+};
+
+// Handle API errors with consistent pattern
+export const handleApiError = <T>(error: unknown, fallbackMessage = 'An error occurred'): ApiResponse<T> => {
+  console.error('API Error:', error);
+  
+  // Check if it's a session error
+  if (isSessionError(error)) {
+    // Handle session errors gracefully without disrupting user experience
+    console.warn('Session error detected - user may need to re-authenticate');
+    return {
+      success: false,
+      error: 'SESSION_ERROR',
+      message: 'Your session has expired. Please refresh the page or log in again.'
+    };
+  }
+  
+  // Handle Axios errors
+  if (axios.isAxiosError(error)) {
+    const axiosError = error as AxiosError<ApiResponse<T>>;
+    return {
+      success: false,
+      error: axiosError.response?.data?.error || axiosError.code || 'API_ERROR',
+      message: axiosError.response?.data?.message || axiosError.message || fallbackMessage
+    };
+  }
+  
+  // Handle generic errors
+  if (error instanceof Error) {
+    return {
+      success: false,
+      error: 'ERROR',
+      message: error.message || fallbackMessage
+    };
+  }
+  
+  // Fallback for unknown error types
+  return {
+    success: false,
+    error: 'UNKNOWN_ERROR',
+    message: fallbackMessage
+  };
+};
+
+// Function to update all API error handlers to use our common error handling
+const updateErrorHandlers = (apiObject) => {
+  Object.keys(apiObject).forEach(methodKey => {
+    const method = apiObject[methodKey];
+    if (typeof method === 'function') {
+      const originalMethod = method;
+      apiObject[methodKey] = async function(...args) {
+        try {
+          return await originalMethod(...args);
+        } catch (error: unknown) {
+          const errorResponse = handleApiError(error, `Failed to ${methodKey}`);
+          console.error(`Error in ${methodKey}:`, errorResponse.message);
+          
+          // For session errors, we want to return the error response
+          // rather than throwing, to allow the UI to handle it gracefully
+          if (errorResponse.error === 'SESSION_ERROR') {
+            return errorResponse;
+          }
+          
+          throw new Error(errorResponse.message);
+        }
+      };
+    }
+  });
+  return apiObject;
+};
+
+// Update all API methods with the new error handler
+export default updateErrorHandlers({
   api,
   aiApi,
   authApi,
@@ -990,4 +1098,4 @@ export default {
   crawlerApi,
   adminApi,
   projectApi
-};
+});

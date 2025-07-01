@@ -75,6 +75,11 @@ export function formDataToProduct(formData: ProductFormData): BaseProduct {
   // Remove form-specific fields that should not be in Product
   const { imageFile, ...productWithoutFormFields } = product as Partial<ProductFormData> & BaseProduct;
 
+  // Map images array if provided
+  if (formData.images && Array.isArray(formData.images)) {
+    productWithoutFormFields.images = [...formData.images];
+  }
+
   return productWithoutFormFields;
 }
 
@@ -103,8 +108,10 @@ export function toFoodProduct(formData: ProductFormData): BaseProduct {
     ...baseProduct,
     productType: 'Food Product', // Force correct product type
     
+    // Ensure images are preserved
+    images: formData.images ? [...formData.images] : [],
+    
     // IMPORTANT: Keep user input exactly as provided without defaults
-    // Do not modify these values at all - pass through exactly as provided
     foodType: formData.foodType,
     packagingType: formData.packagingType,
     packagingSize: formData.packagingSize,
@@ -112,7 +119,6 @@ export function toFoodProduct(formData: ProductFormData): BaseProduct {
     storageInstruction: formData.storageInstruction,
     
     // CRITICAL FIX: Ensure arrays are properly formatted to avoid string conversion issues
-    // ALWAYS use explicit array instances even if empty
     flavorType: Array.isArray(formData.flavorType) ? [...formData.flavorType] : 
                (formData.flavorType ? [formData.flavorType].flat() : []),
                
@@ -375,8 +381,19 @@ export function toFormData(product: BaseProduct): ProductFormData {
  * Standardized name for conversion from form to model
  */
 export function toBaseProduct(formData: ProductFormData): BaseProduct {
+  let productData: BaseProduct;
+  
+  // Use specialized adapter for food products
   if (formData.productType === 'Food Product') {
-    return toFoodProduct(formData);
+    productData = toFoodProduct(formData);
+  } else {
+    productData = formDataToProduct(formData);
   }
-  return formDataToProduct(formData);
+  
+  // Final verification to ensure images array is preserved
+  if (formData.images && Array.isArray(formData.images)) {
+    productData.images = [...formData.images];
+  }
+  
+  return productData;
 } 

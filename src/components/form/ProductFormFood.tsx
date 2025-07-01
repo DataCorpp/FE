@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from 'react-i18next';
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { isValidObjectId } from "@/utils/validationUtils";
 import { uploadImage, validateImageFile, refreshSignedUrl, createImageUrlObject, uploadMultipleImages } from "@/utils/fileUploadUtils";
 import {
@@ -49,6 +49,10 @@ import { BaseProduct, ProductFormData } from "@/types/product";
 import { FoodProductData } from "@/services/productService";
 import { toBaseProduct, toFoodProduct, attachUserToProduct } from "@/utils/productAdapters";
 import { foodProductApi } from "@/lib/api";
+import { useFoodProductService } from "@/hooks/use-food-product";
+import { FoodProductFormData } from "@/services/foodProductService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "../ui/separator";
 
 // Interfaces - Extended local interface với các trường bổ sung
 interface ExtendedFoodProductData extends FoodProductData {
@@ -254,6 +258,12 @@ interface ImageObject {
   expiresAt: number;   // Expiration timestamp
 }
 
+// Response type for update product API (we only care about image)
+interface UpdateProductResponse {
+  image?: string;
+  [key: string]: unknown;
+}
+
 const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   product,
   parentCategory,
@@ -265,6 +275,21 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const { toast } = useToast();
   const { user } = useUser();
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditMode = !!id;
+  
+  const {
+    loading,
+    error,
+    foodProduct,
+    categories,
+    foodTypes,
+    manufacturers,
+    getFoodProductById,
+    createFoodProduct,
+    updateFoodProduct,
+    loadAllMetadata
+  } = useFoodProductService();
   
   // Update image state to store both URLs and keys
   const [images, setImages] = useState<string[]>([]);
@@ -1042,8 +1067,9 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
               });
               
               // Update main image if it changed
-              if (response.data.image) {
-                setFormData(prev => ({ ...prev, image: response.data.image }));
+              const updatedData = response.data as UpdateProductResponse;
+              if (updatedData.image) {
+                setFormData(prev => ({ ...prev, image: updatedData.image }));
               }
               
               // IMPORTANT: Just call onSubmit to update the UI without redirecting

@@ -54,7 +54,64 @@ import { cn } from "@/lib/utils";
 import { RadioGroup } from "@radix-ui/react-dropdown-menu";
 import { RadioGroupItem } from "@radix-ui/react-radio-group";
 import { toBaseProduct, toFormData } from "@/utils/productAdapters";
-import { uploadImage, validateImageFile } from "@/utils/fileUploadUtils";
+import { uploadImage, validateImageFile, refreshSignedUrl } from "@/utils/fileUploadUtils";
+import { createFoodProduct, FoodProductFormData } from '@/services/foodProductService';
+import { syncProductFromApiResponse } from "@/utils/productAdapters";
+
+// ProductImage component to handle signed URLs
+interface ProductImageProps extends React.ComponentProps<typeof motion.img> {
+  imageUrl: string;
+  alt: string;
+  className?: string;
+}
+
+const ProductImage: React.FC<ProductImageProps> = ({ imageUrl, alt, className, ...motionProps }) => {
+  const [signedUrl, setSignedUrl] = useState<string>(imageUrl);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasError, setHasError] = useState<boolean>(false);
+  
+  useEffect(() => {
+    const getSignedUrl = async () => {
+      setIsLoading(true);
+      try {
+        // Get a fresh signed URL from the server
+        const url = await refreshSignedUrl("", undefined, imageUrl);
+        setSignedUrl(url);
+        setHasError(false);
+      } catch (error) {
+        console.error("Error getting signed URL:", error);
+        // Fallback to original URL
+        setSignedUrl(imageUrl);
+        setHasError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    getSignedUrl();
+  }, [imageUrl]);
+  
+  const handleImageError = () => {
+    setHasError(true);
+  };
+  
+  return (
+    <>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-muted/20 z-10">
+          <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      )}
+      <motion.img
+        src={hasError ? '/4301793_article_good_manufacture_merchandise_production_icon.svg' : signedUrl}
+        alt={alt}
+        className={className}
+        onError={handleImageError}
+        {...motionProps}
+      />
+    </>
+  );
+};
 
 // Global style to hide scrollbars
 const styles = `
@@ -1001,6 +1058,78 @@ type UpdateProductData = Product;
     }
     
     try {
+      // If creating a Food Product, use dedicated service so that images array and other food-specific
+      // fields are preserved intact when hitting the /foodproducts endpoint.
+      if (sourceData.productType === 'Food Product') {
+        // The food product form always passes full data (including images[] and main image).
+        // Prefer originalFormData if provided (has images state), otherwise fallback to formData.
+        const foodProductPayload = (originalFormData || formData) as unknown as FoodProductFormData;
+
+        console.log('[CREATE] Using createFoodProduct service with payload:', {
+          images: foodProductPayload.images,
+          image: foodProductPayload.image,
+          imagesCount: foodProductPayload.images?.length
+        });
+
+        const createResponse = await createFoodProduct(foodProductPayload);
+
+        // Extract created product data from axios response (response.data) or fallback
+        const createdFoodProduct = createResponse && (createResponse.data ?? createResponse);
+
+        // Convert API response to Product model used in UI
+        const transformedProduct = syncProductFromApiResponse(createdFoodProduct) as Product;
+
+        // Ensure critical fallback mappings
+        transformedProduct.id = createdFoodProduct._id
+          ? parseInt(String(createdFoodProduct._id).slice(-8), 16)
+          : Math.floor(Math.random() * 10000);
+        transformedProduct._id = createdFoodProduct._id || `temp_${Date.now()}`;
+
+        // Map food-specific fields explicitly
+        transformedProduct.productType = 'Food Product';
+        transformedProduct.foodType = createdFoodProduct.foodType || foodProductPayload.foodType;
+        transformedProduct.flavorType = createdFoodProduct.flavorType || foodProductPayload.flavorType || [];
+        transformedProduct.ingredients = createdFoodProduct.ingredients || foodProductPayload.ingredients || [];
+        transformedProduct.allergens = createdFoodProduct.allergens || foodProductPayload.allergens || [];
+        transformedProduct.usage = createdFoodProduct.usage || foodProductPayload.usage || [];
+        transformedProduct.packagingType = createdFoodProduct.packagingType || foodProductPayload.packagingType;
+        transformedProduct.packagingSize = createdFoodProduct.packagingSize || foodProductPayload.packagingSize;
+        transformedProduct.shelfLife = createdFoodProduct.shelfLife || foodProductPayload.shelfLife;
+        transformedProduct.storageInstruction = createdFoodProduct.storageInstruction || foodProductPayload.storageInstruction;
+        transformedProduct.images = createdFoodProduct.images || foodProductPayload.images || [];
+
+        // Build nested foodProductData for backward compatibility
+        transformedProduct.foodProductData = {
+          foodType: transformedProduct.foodType,
+          flavorType: [...(transformedProduct.flavorType || [])],
+          ingredients: [...(transformedProduct.ingredients || [])],
+          usage: [...(transformedProduct.usage || [])],
+          packagingSize: transformedProduct.packagingSize,
+          shelfLife: transformedProduct.shelfLife,
+          manufacturerRegion: transformedProduct.manufacturerRegion,
+          allergens: [...(transformedProduct.allergens || [])]
+        };
+
+        // Derive helper/calculated fields
+        transformedProduct.reorderPoint = Math.floor((transformedProduct.minOrderQuantity || 1000) * 0.5);
+        transformedProduct.lastProduced = new Date().toISOString();
+
+        // Update local state so the new product appears immediately
+        setProducts(prev => [...prev, transformedProduct]);
+        setNewlyCreatedProductId(transformedProduct._id);
+
+        toast({
+          title: t('production-product-created', 'Product created'),
+          description: t('production-product-added', "{{name}} has been added to your product list.", { name: transformedProduct.name }),
+        });
+
+        setIsAddDialogOpen(false);
+        setIsLoading(false);
+        return;
+      }
+
+      // === Existing generic product creation for non-food products ===
+
       // Prepare data for API
       const productData = {
         // Basic product info
@@ -2150,15 +2279,17 @@ const ProductsTab: React.FC<ProductsTabProps> = ({
                         </motion.div>
                       )}
                       {product.image ? (
-                        <motion.img
-                          src={product.image}
-                          alt={product.name}
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
-                          initial={{ scale: 1.1 }}
-                          animate={{ scale: 1 }}
-                          whileHover={{ scale: 1.05 }}
-                          transition={{ duration: 0.5 }}
-                        />
+                        <>
+                          <ProductImage 
+                            imageUrl={product.image}
+                            alt={product.name}
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            initial={{ scale: 1.1 }}
+                            animate={{ scale: 1 }}
+                            whileHover={{ scale: 1.05 }}
+                            transition={{ duration: 0.5 }}
+                          />
+                        </>
                       ) : (
                         <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-muted/90 to-muted/60">
                           <motion.div
@@ -4569,6 +4700,42 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
   getProductTypeBadge,
   onEdit,
 }) => {
+  // Add state for signed URLs
+  const [mainImageUrl, setMainImageUrl] = useState<string>(product.image || "");
+  const [additionalImageUrls, setAdditionalImageUrls] = useState<string[]>(product.images || []);
+  const [isLoadingImages, setIsLoadingImages] = useState<boolean>(false);
+
+  // Effect to refresh signed URLs on component mount and when product changes
+  useEffect(() => {
+    const refreshProductImages = async () => {
+      setIsLoadingImages(true);
+      try {
+        // Refresh main image if it exists
+        if (product.image) {
+          const signedMainUrl = await refreshSignedUrl("", undefined, product.image);
+          setMainImageUrl(signedMainUrl);
+        }
+
+        // Refresh additional images if they exist
+        if (product.images && product.images.length > 0) {
+          const refreshedUrls = await Promise.all(
+            product.images.map(imgUrl => refreshSignedUrl("", undefined, imgUrl))
+          );
+          setAdditionalImageUrls(refreshedUrls);
+        }
+      } catch (error) {
+        console.error("Error refreshing image URLs:", error);
+        // Fallback to original URLs on error
+        setMainImageUrl(product.image || "");
+        setAdditionalImageUrls(product.images || []);
+      } finally {
+        setIsLoadingImages(false);
+      }
+    };
+
+    refreshProductImages();
+  }, [product]);
+
   return (
     <div className="space-y-8">
       {/* Header with product name and image */}
@@ -4579,12 +4746,21 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
           transition={{ duration: 0.5, delay: 0.1 }}
           className="flex gap-4 items-start"
         >
-          <div className="h-28 w-28 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-            {product.image ? (
+          <div className="h-28 w-28 rounded-lg bg-muted overflow-hidden flex-shrink-0 relative">
+            {isLoadingImages && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 z-10">
+                <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+            {mainImageUrl ? (
               <img
-                src={product.image}
+                src={mainImageUrl}
                 alt={product.name}
                 className="h-full w-full object-cover"
+                onError={(e) => {
+                  // Fallback to a placeholder if image fails to load
+                  (e.target as HTMLImageElement).src = '/4301793_article_good_manufacture_merchandise_production_icon.svg';
+                }}
               />
             ) : (
               <div className="h-full w-full flex items-center justify-center bg-muted">
@@ -4925,18 +5101,26 @@ const ProductDetailsContent: React.FC<ProductDetailsContentProps> = ({
                 <p className="text-sm whitespace-pre-wrap">{product.description || "No description provided"}</p>
               </div>
               
-                  <div>
+              <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-2">
                   Additional Images
                 </h4>
-                {product.images && product.images.length > 0 ? (
+                {isLoadingImages ? (
+                  <div className="flex items-center justify-center h-24">
+                    <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : additionalImageUrls.length > 0 ? (
                   <div className="grid grid-cols-2 gap-2">
-                    {product.images.map((img, index) => (
-                      <div key={index} className="rounded-md overflow-hidden h-20 w-20">
+                    {additionalImageUrls.map((img, index) => (
+                      <div key={index} className="rounded-md overflow-hidden h-20 w-20 relative">
                         <img 
                           src={img} 
                           alt={`${product.name} - image ${index + 1}`}
                           className="h-full w-full object-cover" 
+                          onError={(e) => {
+                            // Fallback to a placeholder if image fails to load
+                            (e.target as HTMLImageElement).src = '/4301793_article_good_manufacture_merchandise_production_icon.svg';
+                          }}
                         />
                       </div>
                     ))}
