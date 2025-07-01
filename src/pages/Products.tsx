@@ -447,6 +447,7 @@ const Products = () => {
     fetchCategories();
   }, []);
 
+
   // Fetch all filter options and total count
   useEffect(() => {
     const fetchFilterOptions = async () => {

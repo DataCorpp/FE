@@ -54,6 +54,7 @@ import { cn } from "@/lib/utils";
 import { RadioGroup } from "@radix-ui/react-dropdown-menu";
 import { RadioGroupItem } from "@radix-ui/react-radio-group";
 import { toBaseProduct, toFormData } from "@/utils/productAdapters";
+import { uploadImage, validateImageFile } from "@/utils/fileUploadUtils";
 
 // Global style to hide scrollbars
 const styles = `
@@ -408,7 +409,7 @@ export const Production = () => {
     const checkAuthSession = async () => {
       if (!isAuthenticated) {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/me`, {
+          const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/me`, {
             method: 'GET',
             credentials: 'include',
             headers: {
@@ -545,31 +546,24 @@ export const Production = () => {
 
       setIsLoading(true);
       try {
-        // Fetch products using the backend API structure with session
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products?limit=100`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+        // Sử dụng productService để lấy danh sách sản phẩm (đã xử lý session và lỗi phổ biến)
+        const result = await productService.getProducts();
+
+        if (!result.success) {
+          // Nếu lỗi mạng hoặc server mới hiển thị toast, còn lỗi 404 (không có sản phẩm) sẽ được hàm getProducts trả về success=true với mảng rỗng
+          throw new Error(result.error || 'Failed to fetch products');
         }
-        
-        const data = await response.json();
-        
-        // Backend returns { products, page, pages, total }
-        const basicProducts = data.products || [];
+
+        type MinimalProduct = { _id: string; productName: string; manufacturerName: string; type: string };
+        const basicProducts = (result.data || []) as unknown as MinimalProduct[];
         
         if (basicProducts.length > 0) {
           // For each product, fetch detailed information from respective collection
           const productsWithDetails = await Promise.all(
-            basicProducts.map(async (basicProduct: { _id: string; productName: string; manufacturerName: string; type: string }) => {
+            basicProducts.map(async (basicProduct) => {
               try {
                 // Get detailed product info using the details endpoint
-                const detailsResponse = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
+                const detailsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/products/${basicProduct._id}/details`, {
                   method: 'GET',
                   credentials: 'include',
                   headers: {
@@ -3196,16 +3190,47 @@ const ProductForm: React.FC<ProductFormProps> = ({
     handleFile(file);
   };
 
-  const handleFile = (file: File | undefined) => {
+  const handleFile = async (file: File | undefined) => {
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
+      try {
+        // Validate the file first
+        const validation = validateImageFile(file);
+        if (!validation.valid) {
+          toast({
+            title: "Invalid Image",
+            description: validation.message,
+            variant: "destructive"
+          });
+          return;
+        }
+
+        // Set loading state
+        setSubmitLoading(true);
+        
+        // Upload the image using our new uploadImage function
+        const imageUrl = await uploadImage(file);
+        
+        // Update form data with the returned URL
         setFormData({
           ...formData,
-          image: e.target?.result as string,
+          image: imageUrl
         });
-      };
-      reader.readAsDataURL(file);
+        
+        toast({
+          title: "Image Uploaded",
+          description: "Image has been successfully uploaded",
+          variant: "default"
+        });
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        toast({
+          title: "Upload Failed",
+          description: "Failed to upload image. Please try again.",
+          variant: "destructive"
+        });
+      } finally {
+        setSubmitLoading(false);
+      }
     }
   };
 

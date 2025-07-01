@@ -24,13 +24,30 @@ export const useAdminAuth = (redirectOnFailure = true) => {
       setIsLoading(true);
       
       try {
+        // Prepare headers with admin data from localStorage
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        const adminAuth = localStorage.getItem('adminAuth');
+        const adminUserData = localStorage.getItem('adminUser');
+        if (adminAuth === 'true' && adminUserData) {
+          try {
+            const adminUser = JSON.parse(adminUserData);
+            const token = adminUser.token || 'admin-token';
+            headers.AdminAuthorization = `Bearer ${token}`;
+            headers['X-Admin-Role'] = adminUser.role;
+            headers['X-Admin-Email'] = adminUser.email;
+          } catch (err) {
+            console.error('Error parsing admin storage:', err);
+          }
+        }
+
         // Check admin session via API
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/admin/me`, {
           method: 'GET',
           credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
         });
         
         if (response.ok) {

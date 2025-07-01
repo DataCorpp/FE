@@ -279,6 +279,9 @@ const ProfileSetup = () => {
         profileComplete: true,
       });
 
+      // Update session state to indicate setup is complete
+      sessionStorage.removeItem('inProfileSetup');
+
       toast({
         title: t("complete-setup-title", "Profile Setup Complete"),
         description: t("complete-setup-desc", "Your profile has been set up successfully."),
@@ -286,10 +289,16 @@ const ProfileSetup = () => {
 
       setCurrentStep("complete");
 
-      // Redirect to dashboard after a delay
+      // Redirect to dashboard or the last path (if available)
       setTimeout(() => {
-        navigate("/dashboard");
-      }, 5000);
+        const lastPath = sessionStorage.getItem('lastPath');
+        if (lastPath && lastPath !== '/auth' && !lastPath.includes('/profile-setup')) {
+          navigate(lastPath);
+          sessionStorage.removeItem('lastPath');
+        } else {
+          navigate("/dashboard");
+        }
+      }, 3000); // Reduced from 5000 to 3000 for better UX
     } catch (error) {
       console.error("Profile setup error:", error);
       toast({

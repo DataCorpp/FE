@@ -147,7 +147,12 @@ export interface ApiResponse<T> {
 }
 
 class ProductService {
-  private baseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:3000/api') + '/products';
+  // Prefer the new VITE_API_BASE_URL env var (matches Docker / prod config). Fallback to the old one or localhost for dev.
+  private baseUrl = (
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    'http://localhost:3000/api'
+  ) + '/products';
 
   // Helper function to get headers for session-based authentication
   private getAuthHeaders() {
@@ -197,6 +202,10 @@ class ProductService {
       });
       
       if (!response.ok) {
+        // Trường hợp 404 (không có sản phẩm) -> trả về mảng rỗng thay vì lỗi
+        if (response.status === 404) {
+          return { success: true, data: [], message: 'No products found' };
+        }
         if (response.status === 401) {
           this.handleApiError({ status: response.status }, 'Get products');
         }

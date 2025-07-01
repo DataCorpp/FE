@@ -1,0 +1,11 @@
+Kế hoạch tiếp theo:
+Step 2: Sửa các file còn lại
+Step2_DefineProject.tsx - Tích hợp API cho project definition
+Step3_ReviewProjects.tsx - Thay thế projects data bằng API
+Step4_ProjectDetail.tsx - Kết nối với manufacturer matching logic
+Step 3: Tạo API cho Projects
+Cần tạo API endpoints trong backend để:
+Tạo project mới
+Lưu project requirements
+Tìm matching manufacturers
+Quản lý project lifecycle

@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useNavigate } from "react-router-dom";
 import { isValidObjectId } from "@/utils/validationUtils";
+import { uploadImage, validateImageFile, refreshSignedUrl, createImageUrlObject, uploadMultipleImages } from "@/utils/fileUploadUtils";
 import {
   ChevronDown,
   X,
@@ -19,7 +20,9 @@ import {
   Check,
   Plus,
   Calendar,
-  Info
+  Info,
+  Image as ImageIcon,
+  Loader2
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -243,6 +246,14 @@ const SHELF_LIFE_OPTIONS = [
   { value: "5+ years", label: "5+ years - Preserved", category: "Extended" }
 ];
 
+// Add an interface for image objects
+interface ImageObject {
+  url: string;         // Original S3 URL (for database storage)
+  signedUrl: string;   // Signed URL (for display)
+  key: string;         // S3 object key (for refreshing)
+  expiresAt: number;   // Expiration timestamp
+}
+
 const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   product,
   parentCategory,
@@ -255,8 +266,11 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   const { user } = useUser();
   const navigate = useNavigate();
   
-  // These dummy values are added to fix compilation errors after removing image functionality
-  const images: string[] = [product?.image || ''].filter(Boolean);
+  // Update image state to store both URLs and keys
+  const [images, setImages] = useState<string[]>([]);
+  const [imageObjects, setImageObjects] = useState<ImageObject[]>([]);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form state
   const [activeTab, setActiveTab] = useState("basic");
@@ -355,7 +369,27 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         foodType: product.foodType || product.foodProductData?.foodType || 'Soy Sauce', // Default value
       });
       
-      // Image handling has been removed
+      // For images: create initial image objects without signedUrl (will be loaded later)
+      const initialImageUrls = product.images && Array.isArray(product.images) && product.images.length > 0
+        ? product.images
+        : product.image ? [product.image] : [];
+      
+      setImages(initialImageUrls);
+      
+      // Create image objects for each URL (we'll get signed URLs below)
+      const initialImageObjects = initialImageUrls.map(url => ({
+        url,                     // Original S3 URL
+        signedUrl: url,          // Temporarily use original URL until signed URL is loaded
+        key: '',                 // Will be populated when refreshing
+        expiresAt: 0             // Will be updated when refreshing
+      }));
+      
+      setImageObjects(initialImageObjects);
+      
+      // Load signed URLs for all images
+      if (initialImageUrls.length > 0) {
+        refreshAllSignedUrls(initialImageUrls);
+      }
 
       // Log for debugging purposes
       console.log('Initializing form with product data:', product);
@@ -367,6 +401,46 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       });
     }
   }, [product]);
+
+  // Function to refresh all signed URLs
+  const refreshAllSignedUrls = async (urls: string[]) => {
+    try {
+      // Process each URL to get a fresh signed URL
+      const refreshedObjects = await Promise.all(
+        urls.map(async (url) => {
+          try {
+            // Make API request to get signed URL for this image
+            const params = new URLSearchParams();
+            params.append('url', url);
+            
+            // Get fresh signed URL from server
+            const signedUrl = await refreshSignedUrl('', undefined, url);
+            
+            return {
+              url,                    // Original URL for database
+              signedUrl,              // Signed URL for display
+              key: '',                // We don't have the key from existing images
+              expiresAt: Date.now() + 3600000 // 1 hour from now
+            };
+          } catch (error) {
+            console.error(`Failed to get signed URL for ${url}:`, error);
+            // Return object with original URL as fallback
+            return {
+              url,
+              signedUrl: url, // Fall back to original URL
+              key: '',
+              expiresAt: 0
+            };
+          }
+        })
+      );
+      
+      setImageObjects(refreshedObjects);
+    } catch (error) {
+      console.error('Error refreshing signed URLs:', error);
+      // Don't show error toast to avoid disrupting user experience
+    }
+  };
 
   // Real-time validation function
   const validateField = (fieldName: string, value: string) => {
@@ -465,7 +539,145 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     }));
   };
 
-  // Image upload handlers removed
+  // Image upload handlers
+  const handleFileSelect = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Check if multiple files are selected
+    if (files.length > 1) {
+      await handleMultipleFiles(Array.from(files));
+    } else {
+      await handleFile(files[0]);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = e.dataTransfer.files;
+    
+    if (!files || files.length === 0) return;
+
+    // Check if multiple files are dropped
+    if (files.length > 1) {
+      await handleMultipleFiles(Array.from(files));
+    } else {
+      await handleFile(files[0]);
+    }
+  };
+
+  const handleFile = async (file: File) => {
+    // Validate the file
+    const validation = validateImageFile(file);
+    if (!validation.valid) {
+      toast({
+        title: "Invalid Image",
+        description: validation.message,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      
+      // Upload the image
+      const isMainImage = images.length === 0; // First image will be the main image
+      let foodProductId = undefined;
+      
+      // If editing an existing product, include the product ID
+      if (product && product._id) {
+        foodProductId = product._id.toString();
+      }
+      
+      // Upload and get URL information including signed URL
+      const uploadResponse = await uploadImage(file, foodProductId, isMainImage);
+      
+      // Create a combined image object with both URLs
+      const imageObject = createImageUrlObject(uploadResponse);
+      
+      // Update form data with the file URL (for database storage)
+      if (isMainImage) {
+        setFormData(prev => ({ ...prev, image: uploadResponse.fileUrl }));
+      }
+      
+      // Update images array (for database storage)
+      setImages(prev => {
+        // If this is the main image, put it at the beginning
+        if (isMainImage) {
+          return [uploadResponse.fileUrl, ...prev.filter(img => img !== uploadResponse.fileUrl)];
+        }
+        
+        // Otherwise add it to the end if not already there
+        if (!prev.includes(uploadResponse.fileUrl)) {
+          return [...prev, uploadResponse.fileUrl];
+        }
+        
+        return prev;
+      });
+      
+      // Update image objects array (for displaying signed URLs)
+      setImageObjects(prev => {
+        if (isMainImage) {
+          return [imageObject, ...prev.filter(img => img.url !== uploadResponse.fileUrl)];
+        }
+        
+        if (!prev.some(img => img.url === uploadResponse.fileUrl)) {
+          return [...prev, imageObject];
+        }
+        
+        return prev;
+      });
+      
+      toast({
+        title: "Image Uploaded",
+        description: "Image has been successfully uploaded",
+        variant: "default"
+      });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingImage(false);
+      // Clear file input so the same file can be uploaded again if needed
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const removeImage = (imageUrl: string) => {
+    // Remove image from images array (database storage)
+    setImages(prev => prev.filter(img => img !== imageUrl));
+    
+    // Remove image from image objects array (display)
+    setImageObjects(prev => prev.filter(img => img.url !== imageUrl));
+    
+    // If it was the main image, update the main image to the first remaining image
+    if (formData.image === imageUrl) {
+      const newImages = images.filter(img => img !== imageUrl);
+      setFormData(prev => ({
+        ...prev,
+        image: newImages.length > 0 ? newImages[0] : ""
+      }));
+    }
+  };
 
   // Standard form handlers
   const handleChange = (
@@ -606,8 +818,6 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       setSubmitLoading(true);
       
       try {
-        // Image upload functionality removed
-        
         // Ensure array fields are properly formatted as arrays
         const sanitizedFoodData = {
           ...foodProductData,
@@ -647,8 +857,10 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           name: formData.name!,
           category: formData.category!,
           description: formData.description!,
-          // Only single image is now supported
-          image: formData.image || "",
+          // Use the main image (first in array) if available
+          image: formData.image || (images.length > 0 ? images[0] : ""),
+          // Include the full images array with original URLs (not signed URLs)
+          images: images,
           
           // Manufacturer info - ensure consistent field naming
           manufacturer: formData.manufacturer!,
@@ -1030,6 +1242,107 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
         });
       } finally {
         setSubmitLoading(false);
+      }
+    }
+  };
+
+  // Add a new function to handle multiple files
+  const handleMultipleFiles = async (files: File[]) => {
+    // Limit to 6 files maximum
+    const filesToUpload = files.slice(0, 6);
+    
+    if (filesToUpload.length > 6) {
+      toast({
+        title: "Too Many Images",
+        description: "Maximum 6 images can be uploaded at once. Only the first 6 will be processed.",
+        variant: "destructive"
+      });
+    }
+    
+    // Validate all files first
+    const invalidFiles: string[] = [];
+    const validFiles: File[] = [];
+    
+    filesToUpload.forEach(file => {
+      const validation = validateImageFile(file);
+      if (validation.valid) {
+        validFiles.push(file);
+      } else {
+        invalidFiles.push(`${file.name}: ${validation.message}`);
+      }
+    });
+    
+    // Show warning for invalid files
+    if (invalidFiles.length > 0) {
+      toast({
+        title: `${invalidFiles.length} Invalid File(s)`,
+        description: invalidFiles.join(', '),
+        variant: "destructive"
+      });
+    }
+    
+    // If no valid files, exit early
+    if (validFiles.length === 0) return;
+    
+    try {
+      setUploadingImage(true);
+      
+      // Get food product ID if editing
+      let foodProductId = undefined;
+      if (product && product._id) {
+        foodProductId = product._id.toString();
+      }
+      
+      // Upload multiple images at once
+      const uploadResponse = await uploadMultipleImages(validFiles, foodProductId);
+      
+      // Process response - need to handle multiple files
+      if (uploadResponse.files && Array.isArray(uploadResponse.files)) {
+        const newImageObjects = uploadResponse.files.map(fileRes => createImageUrlObject(fileRes));
+        const newImageUrls = uploadResponse.files.map(fileRes => fileRes.fileUrl);
+        
+        // Update form data if we have a new main image and no existing one
+        const isFirstImageMain = images.length === 0 && newImageUrls.length > 0;
+        if (isFirstImageMain) {
+          setFormData(prev => ({ ...prev, image: newImageUrls[0] }));
+        }
+        
+        // Update images array (for database storage)
+        setImages(prev => {
+          const uniqueNewUrls = newImageUrls.filter(url => !prev.includes(url));
+          return isFirstImageMain 
+            ? [newImageUrls[0], ...prev.filter(img => img !== newImageUrls[0]), ...uniqueNewUrls.slice(1)]
+            : [...prev, ...uniqueNewUrls];
+        });
+        
+        // Update image objects array (for displaying signed URLs)
+        setImageObjects(prev => {
+          const uniqueNewObjects = newImageObjects.filter(
+            obj => !prev.some(img => img.url === obj.url)
+          );
+          return isFirstImageMain
+            ? [newImageObjects[0], ...prev.filter(img => img.url !== newImageObjects[0].url), ...uniqueNewObjects.slice(1)]
+            : [...prev, ...uniqueNewObjects];
+        });
+        
+        toast({
+          title: `${newImageObjects.length} Images Uploaded`,
+          description: "Images have been successfully uploaded",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error("Error uploading multiple images:", error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload images. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingImage(false);
+      // Clear file input so the same files can be uploaded again if needed
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
   };
@@ -1617,7 +1930,7 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
           </Card>
         </motion.div>
 
-        {/* D. Description & Media - Updated for 6 images */}
+        {/* D. Description & Media - Updated with image upload */}
         <motion.div
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
@@ -1661,22 +1974,120 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
 
                 <div className="space-y-4">
                   <Label className="text-base font-medium">
-                    Product Image
+                    Product Images
                   </Label>
                   
-                  <div className="flex flex-col space-y-2">
-                    <Input
-                      id="image"
-                      name="image"
-                      value={formData.image || ""}
-                      onChange={handleChange}
-                      placeholder="Enter image URL (e.g., https://example.com/product.jpg)"
-                      className="transition-all duration-300"
+                  {/* Image Upload Section */}
+                  <div 
+                    className={cn(
+                      "border-2 border-dashed rounded-lg p-4 transition-all duration-300",
+                      "hover:border-primary/60 hover:bg-primary/5",
+                      uploadingImage && "opacity-60 pointer-events-none"
+                    )}
+                    onDragOver={handleDrag}
+                    onDrop={handleDrop}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      multiple // Add this attribute to allow multiple file selection
+                      className="hidden"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Enter a URL for the product image. Image upload functionality has been disabled.
-                    </p>
+                    
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      {uploadingImage ? (
+                        <div className="flex flex-col items-center py-4">
+                          <Loader2 className="h-10 w-10 text-primary animate-spin mb-2" />
+                          <p className="text-sm text-muted-foreground">Uploading image(s)...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="bg-primary/10 p-3 rounded-full">
+                            <UploadCloud className="h-8 w-8 text-primary" />
+                          </div>
+                          <p className="text-sm font-medium">
+                            Drag and drop or click to upload
+                          </p>
+                          <p className="text-xs text-muted-foreground text-center">
+                            JPG, JPEG, PNG, or WebP (max 5MB each, up to 6 files)
+                          </p>
+                          <p className="text-xs text-muted-foreground text-center">
+                            Images will be automatically compressed
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleFileSelect}
+                            className="mt-2"
+                            disabled={uploadingImage}
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Select Files
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Updated Image Preview Section - now using signed URLs */}
+                  <AnimatePresence>
+                    {imageObjects.length > 0 && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="space-y-3"
+                      >
+                        <div className="text-sm font-medium flex items-center justify-between">
+                          <span>Uploaded Images ({imageObjects.length})</span>
+                          <Badge variant="outline" className="font-normal">
+                            First image is main
+                          </Badge>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-2">
+                          {imageObjects.map((imageObj, index) => (
+                            <motion.div
+                              key={imageObj.url}
+                              initial={{ opacity: 0, scale: 0.8 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              className="relative aspect-square group"
+                            >
+                              <img
+                                // Use the signed URL for display
+                                src={imageObj.signedUrl}
+                                alt={`Product ${index}`}
+                                className={cn(
+                                  "h-full w-full object-cover rounded-md border",
+                                  index === 0 && "ring-2 ring-primary" // Highlight main image
+                                )}
+                                // Handle errors by falling back to placeholder
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).src = '/4301793_article_good_manufacture_merchandise_production_icon.svg';
+                                }}
+                              />
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-md transition-opacity flex items-center justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => removeImage(imageObj.url)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                              {index === 0 && (
+                                <Badge className="absolute top-1 left-1 bg-primary">Main</Badge>
+                              )}
+                            </motion.div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               </div>
             </CardContent>

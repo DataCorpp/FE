@@ -1,7 +1,8 @@
 export type ProductCategory = {
   id: number;
   name: string;
-  type: "CATEGORY" | "PRODUCT";
+  type: "CATEGORY" | "PRODUCT" | "FOODTYPE";
+  image?: string; // Add image field for products
 };
 
 export type SupplierType = {

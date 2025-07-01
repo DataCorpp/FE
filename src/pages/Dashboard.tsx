@@ -10,6 +10,7 @@ import BrandLayout from "@/components/layouts/BrandLayout";
 import RetailerLayout from "@/components/layouts/RetailerLayout";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { useToast } from "@/hooks/use-toast";
 
 // Define task tabs for each role
 type RoleTabs = {
@@ -55,8 +56,10 @@ const Dashboard = () => {
   const { isAuthenticated, user, role: userRole } = useUser();
   const [activeTab, setActiveTab] = useState("overview");
   const { t } = useTranslation();
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Lấy role từ user
+  // Get role from user
   const role = userRole || "";
 
   useEffect(() => {
@@ -64,14 +67,51 @@ const Dashboard = () => {
       role.charAt(0).toUpperCase() + role.slice(1)
     } ${t('dashboard')} - CPG Matchmaker`;
 
-    // Nếu không authenticated, chuyển hướng đến trang auth
+    // If not authenticated, redirect to auth page
     if (!isAuthenticated) {
       navigate("/auth?type=signin");
       return;
     }
-  }, [role, navigate, isAuthenticated, t]);
+    
+    // Check if profile is complete
+    if (user && !user.profileComplete) {
+      // Set flag for profile setup flow
+      sessionStorage.setItem('inProfileSetup', 'true');
+      
+      // Show toast notification
+      toast({
+        title: t("profile-required", "Profile Completion Required"),
+        description: t("complete-profile-to-access", "Please complete your profile to access the dashboard."),
+        variant: "default",
+      });
+      
+      // Redirect to profile setup
+      navigate("/profile-setup", { replace: true });
+      return;
+    }
+    
+    setIsLoading(false);
+  }, [role, navigate, isAuthenticated, user, t, toast]);
 
-  if (!isAuthenticated) {
+  // Additional history listener to prevent direct dashboard access with incomplete profile
+  useEffect(() => {
+    const handleDirectAccess = () => {
+      if (user && !user.profileComplete && window.location.pathname === '/dashboard') {
+        // Redirect to profile setup
+        navigate("/profile-setup", { replace: true });
+      }
+    };
+    
+    // Execute once on mount
+    handleDirectAccess();
+    
+    // Clean up on unmount
+    return () => {
+      // No cleanup needed for initial check
+    };
+  }, [user, navigate]);
+
+  if (!isAuthenticated || isLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -92,8 +132,14 @@ const Dashboard = () => {
     }
   };
 
-  // Render dashboard dựa trên role
+  // Render dashboard based on role
   const renderDashboardByRole = () => {
+    // Double-check profile completion before rendering dashboard
+    if (user && !user.profileComplete) {
+      navigate("/profile-setup", { replace: true });
+      return null;
+    }
+    
     switch (role) {
       case "manufacturer":
         return (
