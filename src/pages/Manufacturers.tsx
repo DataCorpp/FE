@@ -12,7 +12,6 @@ import {
   Filter, 
   MapPin, 
   X, 
-  SlidersHorizontal, 
   Heart,
   ArrowUpDown,
   Calendar,
@@ -25,10 +24,6 @@ import {
   RefreshCw,
   Grid3X3,
   List,
-  ChevronLeft,
-  ChevronRight,
-  GitCompare,
-  Star,
   Package
 } from "lucide-react";
 import {
@@ -38,24 +33,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
-import { useManufacturerCompare } from "@/contexts/ManufacturerCompareContext";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import ManufacturerDetails from "@/components/ManufacturerDetails";
 import { cn } from "@/lib/utils";
-import { manufacturerApi } from "@/lib/api";
-import { createSafeBlurVariants, createClampedBlurVariants } from "@/hooks/use-safe-blur";
+import { createClampedBlurVariants } from "@/hooks/use-safe-blur";
+import { advancedSearch, quickSearch } from "@/utils/searchUtils";
 
 // API configuration - Fixed to match backend API structure
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
@@ -299,6 +284,7 @@ const Manufacturers = () => {
   const [selectedCertification, setSelectedCertification] = useState<string>("all");
   const [establishYearRange, setEstablishYearRange] = useState([1500, new Date().getFullYear()]);
   const [sortBy, setSortBy] = useState("name-asc");
+  const [useAdvancedSearch, setUseAdvancedSearch] = useState(true); // Default to advanced search
   
   // Available filter options from API
   const [industries, setIndustries] = useState<string[]>([]);
@@ -309,8 +295,7 @@ const Manufacturers = () => {
   // UI states
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const { favorites, toggleFavorite } = useManufacturerFavorites();
-  const { compareItems, toggleCompare, clearCompare } = useManufacturerCompare();
+  const { favorites } = useManufacturerFavorites();
   const [selectedManufacturer, setSelectedManufacturer] = useState<Manufacturer | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -370,15 +355,27 @@ const Manufacturers = () => {
   const applyFilters = useCallback((manufacturersList: Manufacturer[]) => {
     let filtered = manufacturersList;
 
-    // Search filter - search in name, description, and industry
+    // Search filter - use either advanced or quick search based on setting
     if (searchTerm && searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(manufacturer => 
-        manufacturer.name.toLowerCase().includes(term) ||
-        (manufacturer.description && manufacturer.description.toLowerCase().includes(term)) ||
-        manufacturer.industry.toLowerCase().includes(term) ||
-        manufacturer.location.toLowerCase().includes(term)
-      );
+      if (useAdvancedSearch) {
+        // Use advanced search with weighted fields for better relevance
+        filtered = advancedSearch(filtered, searchTerm, {
+          fields: [
+            { name: 'name', weight: 2.5 },           // Name has highest weight
+            { name: 'description', weight: 1.5 },    // Description is important
+            { name: 'industry', weight: 2.0 },       // Industry is very relevant
+            { name: 'location', weight: 1.0 },       // Location has standard weight
+            { name: 'certification', weight: 1.0 }   // Certification has standard weight
+          ],
+          threshold: 0.2,  // Minimum score to include result
+          exact: false     // Allow partial matches
+        });
+      } else {
+        // Use simple multi-term search (all terms must match at least one field)
+        filtered = quickSearch(filtered, searchTerm, [
+          'name', 'description', 'industry', 'location', 'certification'
+        ]);
+      }
     }
 
     // Industry filter
@@ -419,9 +416,8 @@ const Manufacturers = () => {
       );
     }
 
-    // console.log(`Filtered manufacturers: ${filtered.length} out of ${manufacturersList.length}`);
     return filtered;
-  }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites]);
+  }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites, useAdvancedSearch]);
 
   // Load filter options
   const loadFilterOptions = useCallback(async () => {
@@ -508,15 +504,45 @@ const Manufacturers = () => {
     setError(null);
     
     try {
+      // Build search parameters
       const params = new URLSearchParams({
         page: '1',
         limit: '1000' // Load all for client-side filtering
       });
       
+      // Add search parameters if available
+      if (searchTerm && searchTerm.trim()) {
+        params.set('q', searchTerm.trim());
+        // Don't send advanced search parameter since backend doesn't need it anymore
+        // We'll handle advanced filtering on the frontend side
+      }
+      
+      // Add industry filter if selected
+      if (selectedIndustry && selectedIndustry !== 'all') {
+        params.set('industry', selectedIndustry);
+      }
+      
+      // Add location filter if selected
+      if (selectedLocation && selectedLocation !== 'all') {
+        params.set('location', selectedLocation);
+      }
+      
+      // Add year range filters if adjusted
+      if (establishYearRange[0] > 1500) {
+        params.set('establish_gte', establishYearRange[0].toString());
+      }
+      
+      if (establishYearRange[1] < new Date().getFullYear()) {
+        params.set('establish_lte', establishYearRange[1].toString());
+      }
+      
+      console.log(`[REQUEST] Fetching manufacturers with params: ${params.toString()}`);
       const response = await fetch(`${API_BASE_URL}/users/manufacturers?${params}`);
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API error response:', errorData);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
       }
       
       const data = await response.json();
@@ -533,10 +559,12 @@ const Manufacturers = () => {
       console.error('Error loading manufacturers:', err);
       setError(err instanceof Error ? err.message : 'Failed to load manufacturers');
       setManufacturers([]);
+      // Show a toast notification for the error
+      toast.error('Error loading manufacturers. Please try again later.');
     } finally {
       setLoading(false);
     }
-  }, [convertApiToUI]);
+  }, [convertApiToUI, searchTerm, selectedIndustry, selectedLocation, establishYearRange]);
 
   // Search and filter functions - Updated to match SearchPanel interface
   const handleSearch = useCallback((query: string) => {
@@ -559,6 +587,19 @@ const Manufacturers = () => {
     loadFilterOptions();
     loadManufacturers();
   }, [loadFilterOptions, loadManufacturers]);
+  
+  // Debounced search effect
+  useEffect(() => {
+    // Only trigger search if term is at least 2 characters
+    if (searchTerm.trim().length >= 2 || (searchTerm.trim().length === 0 && document.activeElement?.id !== 'search-input')) {
+      const debounceTimer = setTimeout(() => {
+        console.log(`[SEARCH] Debounced search for: "${searchTerm}"`);
+        loadManufacturers();
+      }, 500); // 500ms debounce time
+      
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [searchTerm, loadManufacturers, useAdvancedSearch]);
 
   // Apply filters and sorting when dependencies change
   useEffect(() => {
@@ -755,11 +796,13 @@ const Manufacturers = () => {
                 </motion.div>
 
                 <Input
+                  id="search-input"
                   type="text"
                   placeholder={t('search-manufacturers-placeholder')}
                   className="pl-14 pr-14 h-18 text-base rounded-2xl border-2 border-transparent focus:border-primary/30 bg-card/60 backdrop-blur-sm shadow-lg transition-all duration-300 hover:shadow-xl"
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
+                  aria-label="Search manufacturers"
                 />
 
                 <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
@@ -793,6 +836,39 @@ const Manufacturers = () => {
                   transition={{ duration: 0.3 }}
                 />
               </motion.div>
+              
+              {/* Advanced Search Toggle */}
+              <div className="flex items-center justify-end mt-2">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="advanced-search" className="text-xs text-muted-foreground cursor-pointer">
+                    {useAdvancedSearch ? "Advanced Search: ON" : "Advanced Search: OFF"}
+                  </Label>
+                  <button
+                    onClick={() => setUseAdvancedSearch(!useAdvancedSearch)}
+                    className={cn(
+                      "relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none",
+                      useAdvancedSearch ? "bg-primary" : "bg-muted"
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out",
+                        useAdvancedSearch ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                  {searchTerm && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-muted/50 text-xs px-2 py-1 rounded-md text-muted-foreground"
+                    >
+                      {filteredManufacturers.length} results
+                    </motion.div>
+                  )}
+                </div>
+              </div>
             </motion.div>
 
             {/* Control Row */}
@@ -1346,3 +1422,4 @@ const Manufacturers = () => {
 };
 
 export default Manufacturers;
+
