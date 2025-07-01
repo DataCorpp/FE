@@ -10,7 +10,16 @@ const getEnvVariable = (key: string, defaultValue: string): string => {
 };
 
 // Define constants with safe fallbacks
-const BACKEND_URL = getEnvVariable('VITE_BACKEND_URL', 'http://localhost:3000');
+// Priority order:
+// 1. VITE_BACKEND_URL (new preferred key, e.g. "https://api.example.com")
+// 2. VITE_API_BASE_URL (older key – may already include context path)
+// 3. VITE_API_URL (legacy key)
+// 4. Fallback to localhost
+const BACKEND_URL =
+  getEnvVariable('VITE_BACKEND_URL', '') ||
+  getEnvVariable('VITE_API_BASE_URL', '') ||
+  getEnvVariable('VITE_API_URL', '') ||
+  'http://localhost:3000';
 const CONTEXT_PATH = getEnvVariable('VITE_CONTEXT_PATH', '/api');
 
 // Log for debugging
