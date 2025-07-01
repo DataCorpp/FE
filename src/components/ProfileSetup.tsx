@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { z } from "zod";
+import { useState } from "react";
+import { any, z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useNavigate } from "react-router-dom";
@@ -60,7 +60,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
-import { authApi } from "@/lib/api";
 
 // Define account types
 const accountTypes = ["manufacturer", "brand", "retailer"] as const;
@@ -146,19 +145,6 @@ const ProfileSetup = () => {
   
   // Role update status
   const [isRoleUpdating, setIsRoleUpdating] = useState(false);
-  const [registeredRoles, setRegisteredRoles] = useState<AccountType[]>([]);
-
-  // Fetch registered roles for this email
-  useEffect(() => {
-    if (user?.email) {
-      authApi.getRoles(user.email).then(res => {
-        const roles = ((res.data as any)?.roles ?? []) as string[];
-        setRegisteredRoles(roles as AccountType[]);
-      }).catch(err => {
-        console.error('Failed to fetch roles:', err);
-      });
-    }
-  }, [user?.email]);
 
   // Define form
   const form = useForm<ProfileSetupFormValues>({
@@ -182,16 +168,6 @@ const ProfileSetup = () => {
   // Handle account type selection with database update
   const handleAccountTypeSelect = async (type: AccountType) => {
     if (type === selectedAccountType) return; // Don't update if same role is selected
-    
-    // If role already registered and not current role, show toast and block
-    if (registeredRoles.includes(type) && type !== selectedAccountType) {
-      toast({
-        title: t('role-exists', 'Role already registered'),
-        description: t('role-exists-desc', 'This role is already registered with your email.'),
-        variant: 'destructive'
-      });
-      return;
-    }
     
     setIsRoleUpdating(true);
     
