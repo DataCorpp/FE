@@ -58,6 +58,8 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { foodProductApi } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
+import { advancedSearch, quickSearch } from "@/utils/searchUtils";
+import { Label } from "@/components/ui/label";
 
 // Define the Product interface to match both API data structure and UI needs
 interface Product {
@@ -326,27 +328,71 @@ const safeId = (id: string | number | undefined): string => {
   return id?.toString() || "";
 };
 
-// Add a mock findMatchingProducts function to the foodProductApi object
-const mockFindMatchingProducts = async (productId: string) => {
-  await new Promise(resolve => setTimeout(resolve, 1000));
-  return {
-    data: [
-      { _id: "match1", name: "Matching Product 1" },
-      { _id: "match2", name: "Matching Product 2" },
-      { _id: "match3", name: "Matching Product 3" },
-    ]
-  };
-};
+// Helper debounce hook
+function useDebounce<T>(value: T, delay = 500): T {
+  const [debounced, setDebounced] = useState(value);
 
-if (foodProductApi) {
-  // @ts-ignore - Adding mock method for demonstration  
-  foodProductApi.findMatchingProducts = mockFindMatchingProducts;
+  useEffect(() => {
+    const handler = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+
+  return debounced;
+}
+
+// Helper function for enhanced product search
+function enhancedSearchProducts(products: Product[], query: string): Product[] {
+  if (!query || !query.trim()) return products;
+  
+  // Split query into terms and prepare for matching
+  const searchTerms = query.toLowerCase().trim().split(/\s+/);
+  const fullQuery = query.toLowerCase().trim();
+  
+  // Check for full query match first across crucial fields
+  const exactMatches = products.filter(product => {
+    // Check if any field contains the FULL query string (exact match)
+    const nameMatch = (product.name || "").toLowerCase().includes(fullQuery);
+    const productNameMatch = (product.productName || "").toLowerCase().includes(fullQuery);
+    const manufacturerMatch = (product.manufacturer || "").toLowerCase().includes(fullQuery);
+    const descriptionMatch = (product.description || "").toLowerCase().includes(fullQuery);
+    
+    // Prioritize exact matches first
+    return nameMatch || productNameMatch || manufacturerMatch || descriptionMatch;
+  });
+  
+  if (exactMatches.length > 0) {
+    return exactMatches;
+  }
+  
+  // Cross-field term matching for multi-term queries
+  // This handles cases like "Soy Sauce Kikko" where "Soy Sauce" is in name and "Kikko" is in manufacturer
+  return products.filter(product => {
+    // Create a combined searchable text from all relevant fields
+    const combinedText = [
+      product.name || "",
+      product.productName || "",
+      product.manufacturer || "",
+      product.manufacturerName || "",
+      product.category || "",
+      product.description || "",
+      ...(product.ingredients || []),
+      ...(product.flavorType || []),
+      ...(product.usage || []),
+      product.packagingSize || "",
+      product.shelfLife || "",
+      product.manufacturerRegion || ""
+    ].join(" ").toLowerCase();
+    
+    // Check if ALL search terms appear in the combined text
+    return searchTerms.every(term => combinedText.includes(term));
+  });
 }
 
 const Products = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const [products, setProducts] = useState<Product[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [activeCategory, setActiveCategory] = useState("All Categories");
@@ -358,6 +404,7 @@ const Products = () => {
   const [selectedShelfLives, setSelectedShelfLives] = useState<string[]>([]);
   const [selectedPackagingSizes, setSelectedPackagingSizes] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [useAdvancedSearch, setUseAdvancedSearch] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [sortBy, setSortBy] = useState("name-asc");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -535,8 +582,8 @@ const Products = () => {
         limit: 9,
       };
       
-      if (searchTerm) {
-        params.search = searchTerm;
+      if (debouncedSearchTerm) {
+        params.search = debouncedSearchTerm;
       }
       
       if (activeCategory !== "All Categories") {
@@ -600,7 +647,51 @@ const Products = () => {
         const response = await foodProductApi.getFoodProducts(params);
         
         if (response.data?.products) {
-          const apiProducts = response.data.products as unknown as Product[];
+          let apiProducts = response.data.products as unknown as Product[];
+          // Apply client-side ranking / filtering
+          if (debouncedSearchTerm.trim()) {
+            // Try enhanced search first, which looks for matches across all fields
+            let enhancedResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+            
+            // If the enhanced search found matches, use those results
+            if (enhancedResults.length > 0) {
+              apiProducts = enhancedResults;
+            } 
+            // Otherwise fall back to existing search methods
+            else if (useAdvancedSearch) {
+              apiProducts = advancedSearch(apiProducts, debouncedSearchTerm, {
+                fields: [
+                  { name: 'name',              weight: 4 },
+                  { name: 'productName',       weight: 4 },
+                  { name: 'manufacturer',      weight: 3 },
+                  { name: 'category',          weight: 2 },
+                  { name: 'description',       weight: 1.5 },
+                  { name: 'ingredients',       weight: 1.3 },
+                  { name: 'flavorType',        weight: 1.2 },
+                  { name: 'usage',             weight: 1.2 },
+                  { name: 'packagingSize',     weight: 1 },
+                  { name: 'shelfLife',         weight: 1 },
+                  { name: 'manufacturerRegion',weight: 1 }
+                ],
+                threshold: 0.20,
+                exact: false
+              });
+            } else {
+              apiProducts = quickSearch(apiProducts, debouncedSearchTerm, [
+                'name',
+                'productName',
+                'manufacturer',
+                'category',
+                'description',
+                'ingredients',
+                'flavorType',
+                'usage',
+                'packagingSize',
+                'shelfLife',
+                'manufacturerRegion'
+              ]);
+            }
+          }
           console.log(`[SERVER] Fetched ${apiProducts.length} products`);
           setProducts(apiProducts);
           setPagination({
@@ -627,7 +718,7 @@ const Products = () => {
   useEffect(() => {
     fetchProducts();
   }, [
-    searchTerm, 
+    debouncedSearchTerm, 
     activeCategory, 
     selectedUnitTypes,
     selectedFlavorTypes,
@@ -640,6 +731,7 @@ const Products = () => {
     sustainableOnly,
     pagination.page,
     showFavoritesOnly,
+    useAdvancedSearch
   ]);
 
   // Toggle filter selections
@@ -985,7 +1077,7 @@ const Products = () => {
             <AnimatePresence mode="popLayout">
               {products.map((product, index) => (
                 <motion.div 
-                  key={product._id}
+                  key={product._id || `g-${index}`}
                   layout
                   variants={cardVariants}
                   initial="rest"
@@ -1002,7 +1094,7 @@ const Products = () => {
                   }}
                 >
                   <ProductCard
-                    key={product._id}
+                    key={product._id || `g-${index}`}
                     product={product}
                     onFindMatching={handleFindMatching}
                   />
@@ -1112,7 +1204,7 @@ const Products = () => {
             <AnimatePresence mode="popLayout">
               {products.map((product, index) => (
                 <motion.div 
-                  key={product._id} 
+                  key={product._id || `l-${index}`}
                   layout
                   initial={{ opacity: 0, y: 20, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1483,76 +1575,101 @@ const Products = () => {
           animate="visible"
         >
           {/* Search Bar */}
-          <motion.div 
-            variants={itemVariants} 
-            className="relative max-w-5xl mx-auto"
-          >
-            <motion.div
-              className="relative"
-              variants={searchBarVariants}
-              initial="unfocused"
-              whileFocus="focused"
-              whileHover="focused"
-            >
+          <motion.div variants={itemVariants} className="relative max-w-5xl mx-auto">
               <motion.div
-                className="absolute left-4 top-1/4 transform -translate-y-1/2 text-muted-foreground"
-                animate={{
-                  scale: searchTerm ? 0.9 : 1,
-                  color: searchTerm ? "#6366f1" : "#64748b"
-                }}
-                transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                className="relative"
+                variants={searchBarVariants}
+                initial="unfocused"
+                whileHover="focused"
+                whileFocus="focused"
               >
-                <Search className="h-5 w-5" />
-              </motion.div>
-              
-              <Input
-                type="search"
-                placeholder={t('search-placeholder')}
-                className="pl-14 pr-14 h-18 text-lg rounded-2xl border-2 border-transparent focus:border-primary/40 bg-card/60 backdrop-blur-sm shadow-xl focus:shadow-2xl transition-all duration-300"
-                value={searchTerm}
-                onChange={(e) => handleSearch(e.target.value)}
-              />
-              
-              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                <AnimatePresence>
-                  {searchTerm && (
-                    <motion.div
-                      initial={{ opacity: 0, scale: 0.8, x: 10 }}
-                      animate={{ opacity: 1, scale: 1, x: 0 }}
-                      exit={{ opacity: 0, scale: 0.8, x: 10 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                    >
+                <motion.div
+                  className="absolute left-4 top-1/4 transform -translate-y-1/2 text-muted-foreground h-5 w-5"
+                  animate={{
+                    scale: searchTerm ? 0.9 : 1,
+                    color: searchTerm ? "#6366f1" : "#64748b"
+                  }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                >
+                  <Search className="h-5 w-5" />
+                </motion.div>
+
+                <Input
+                  id="search-input"
+                  type="text"
+                  placeholder={t('search-manufacturers-placeholder')}
+                  className="pl-14 pr-14 h-18 text-base rounded-2xl border-2 border-transparent focus:border-primary/30 bg-card/60 backdrop-blur-sm shadow-lg transition-all duration-300 hover:shadow-xl"
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  aria-label="Search manufacturers"
+                />
+
+                <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                  <AnimatePresence>
+                    {searchTerm && (
                       <motion.div
-                        variants={buttonVariants}
-                        initial="rest"
-                        whileHover="hover"
-                        whileTap="tap"
+                        initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
                       >
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="hover:bg-muted rounded-full h-12 w-12 shadow-lg hover:shadow-xl"
+                          className="hover:bg-muted rounded-full h-10 w-10"
                           onClick={() => handleSearch("")}
                         >
-                          <X className="h-5 w-5" />
+                          <X className="h-4 w-4" />
                         </Button>
                       </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <motion.div
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-indigo-500/20 -z-10"
+                  animate={{
+                    opacity: searchTerm ? 0.3 : 0,
+                    scale: searchTerm ? 1.02 : 1
+                  }}
+                  transition={{ duration: 0.3 }}
+                />
+              </motion.div>
+              
+              {/* Advanced Search Toggle */}
+              <div className="flex items-center justify-end mt-2">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="advanced-search" className="text-xs text-muted-foreground cursor-pointer">
+                    {useAdvancedSearch ? "Advanced Search: ON" : "Advanced Search: OFF"}
+                  </Label>
+                  <button
+                    id="advanced-search"
+                    onClick={() => setUseAdvancedSearch(!useAdvancedSearch)}
+                    className={cn(
+                      "relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none",
+                      useAdvancedSearch ? "bg-primary" : "bg-muted"
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out",
+                        useAdvancedSearch ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                  {searchTerm && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-muted/50 text-xs px-2 py-1 rounded-md text-muted-foreground"
+                    >
+                      {products.length} results
                     </motion.div>
                   )}
-                </AnimatePresence>
+                </div>
               </div>
-              
-              {/* Search input glow effect */}
-              <motion.div
-                className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-indigo-500/20 -z-10"
-                animate={{
-                  opacity: searchTerm ? 0.3 : 0,
-                  scale: searchTerm ? 1.02 : 1
-                }}
-                transition={{ duration: 0.3 }}
-              />
             </motion.div>
-          </motion.div>
 
           {/* Control Row */}
           <motion.div 
