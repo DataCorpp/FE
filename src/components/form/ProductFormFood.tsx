@@ -821,6 +821,13 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
       newErrors.allergens = "At least one allergen information is required";
     }
 
+    // Media - require at least one image
+    if (!formData.image || (typeof formData.image === 'string' && formData.image.trim() === '')) {
+      if (!images || images.length === 0) {
+        newErrors.image = "At least one product image is required";
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
