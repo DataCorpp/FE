@@ -666,14 +666,26 @@ const Products = () => {
           // If API returned no products but we have a search term, try fetching all products and filter client-side
           if (apiProducts.length === 0 && debouncedSearchTerm.trim()) {
             try {
-              // Try fetching a larger batch without search filters to allow client-side matching
-              let allResponse = await foodProductApi.getFoodProducts({ page: 1, limit: 500 });
-              if (!allResponse.data?.products) {
-                // Some backends may throw 500 for large limits – fallback to default pagination
-                allResponse = await foodProductApi.getFoodProducts();
+              // Fallback strategy: crawl through pages with a modest limit to avoid 500 errors
+              const aggregated: Product[] = [];
+              const fallbackLimit = 50;
+              let currentPage = 1;
+              let fetchedAll = false;
+              while (!fetchedAll && currentPage <= 10) { // safeguard max 10 pages
+                const resp = await foodProductApi.getFoodProducts({ page: currentPage, limit: fallbackLimit });
+                if (resp.data?.products && resp.data.products.length > 0) {
+                  aggregated.push(...(resp.data.products as unknown as Product[]));
+                  const pageCount = resp.data.pages || 1;
+                  currentPage += 1;
+                  if (currentPage > pageCount) {
+                    fetchedAll = true;
+                  }
+                } else {
+                  fetchedAll = true; // No more products or backend returned empty
+                }
               }
-              if (allResponse.data?.products) {
-                apiProducts = allResponse.data.products as unknown as Product[];
+              if (aggregated.length > 0) {
+                apiProducts = aggregated;
               }
             } catch (fallbackErr) {
               console.error('Fallback fetch error:', fallbackErr);
