@@ -402,6 +402,28 @@ function enhancedSearchProducts(products: Product[], query: string): Product[] {
   });
 }
 
+// Helper to fetch all products across multiple pages with safe limits
+async function fetchAllProductsSafe(baseParams: any = {}, maxPages = 20, pageSize = 50): Promise<Product[]> {
+  const aggregated: Product[] = [];
+  let currentPage = 1;
+  let totalPages = 1;
+  try {
+    while (currentPage <= totalPages && currentPage <= maxPages) {
+      const resp = await foodProductApi.getFoodProducts({ ...baseParams, page: currentPage, limit: pageSize });
+      if (resp.data?.products) {
+        aggregated.push(...(resp.data.products as unknown as Product[]));
+        totalPages = resp.data.pages || 1;
+        currentPage += 1;
+      } else {
+        break; // stop if response invalid
+      }
+    }
+  } catch (err) {
+    console.error('fetchAllProductsSafe error:', err);
+  }
+  return aggregated;
+}
+
 const Products = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -516,27 +538,37 @@ const Products = () => {
         // Fetch all products to get unique filter values and total count
         const response = await foodProductApi.getFoodProducts({ limit: 1000 }); // Get more products to extract unique values
         
+        let allProducts: Product[] = [];
         if (response.data?.products) {
-          const allProducts = response.data.products as unknown as Product[];
-          setTotalProductsCount(response.data.total || allProducts.length);
-          
-          // Extract unique values for each filter
-          const uniqueUnitTypes = [...new Set(allProducts.map(p => p.unitType).filter(Boolean))];
-          const uniqueFlavorTypes = [...new Set(allProducts.flatMap(p => p.flavorType || []).filter(Boolean))];
-          const uniqueUsages = [...new Set(allProducts.flatMap(p => p.usage || []).filter(Boolean))];
-          const uniqueManufacturerRegions = [...new Set(allProducts.map(p => p.manufacturerRegion).filter(Boolean))];
-          const uniqueIngredients = [...new Set(allProducts.flatMap(p => p.ingredients || []).filter(Boolean))];
-          const uniqueShelfLives = [...new Set(allProducts.map(p => p.shelfLife).filter(Boolean))];
-          const uniquePackagingSizes = [...new Set(allProducts.map(p => p.packagingSize).filter(Boolean))];
-          
-          setUnitTypeList(uniqueUnitTypes);
-          setFlavorTypeList(uniqueFlavorTypes);
-          setUsageList(uniqueUsages);
-          setManufacturerRegionList(uniqueManufacturerRegions);
-          setIngredientsList(uniqueIngredients);
-          setShelfLifeList(uniqueShelfLives);
-          setPackagingSizeList(uniquePackagingSizes);
+          allProducts = response.data.products as unknown as Product[];
+          // If backend limited, fetch remaining pages too (safe limit)
+          if ((response.data.pages || 1) > 1) {
+            const rest = await fetchAllProductsSafe({}, 20, 50);
+            allProducts = [...allProducts, ...rest];
+          }
+        } else {
+          // fallback to safe fetch all
+          allProducts = await fetchAllProductsSafe({}, 20, 50);
         }
+        
+        setTotalProductsCount(allProducts.length);
+        
+        // Extract unique values for each filter
+        const uniqueUnitTypes = [...new Set(allProducts.map(p => p.unitType).filter(Boolean))];
+        const uniqueFlavorTypes = [...new Set(allProducts.flatMap(p => p.flavorType || []).filter(Boolean))];
+        const uniqueUsages = [...new Set(allProducts.flatMap(p => p.usage || []).filter(Boolean))];
+        const uniqueManufacturerRegions = [...new Set(allProducts.map(p => p.manufacturerRegion).filter(Boolean))];
+        const uniqueIngredients = [...new Set(allProducts.flatMap(p => p.ingredients || []).filter(Boolean))];
+        const uniqueShelfLives = [...new Set(allProducts.map(p => p.shelfLife).filter(Boolean))];
+        const uniquePackagingSizes = [...new Set(allProducts.map(p => p.packagingSize).filter(Boolean))];
+        
+        setUnitTypeList(uniqueUnitTypes);
+        setFlavorTypeList(uniqueFlavorTypes);
+        setUsageList(uniqueUsages);
+        setManufacturerRegionList(uniqueManufacturerRegions);
+        setIngredientsList(uniqueIngredients);
+        setShelfLifeList(uniqueShelfLives);
+        setPackagingSizeList(uniquePackagingSizes);
       } catch (error) {
         console.error('Error fetching filter options:', error);
       }
