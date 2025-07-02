@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { foodProductApi } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-import { advancedSearch, quickSearch } from "@/utils/searchUtils";
+import { advancedSearch, quickSearch, crossFieldSearch } from "@/utils/searchUtils";
 import { Label } from "@/components/ui/label";
 
 // Define the Product interface to match both API data structure and UI needs
@@ -348,43 +348,57 @@ function enhancedSearchProducts(products: Product[], query: string): Product[] {
   const searchTerms = query.toLowerCase().trim().split(/\s+/);
   const fullQuery = query.toLowerCase().trim();
   
-  // Check for full query match first across crucial fields
+  // Step 1: Try to find products that match the exact full query in any field
   const exactMatches = products.filter(product => {
     // Check if any field contains the FULL query string (exact match)
     const nameMatch = (product.name || "").toLowerCase().includes(fullQuery);
     const productNameMatch = (product.productName || "").toLowerCase().includes(fullQuery);
     const manufacturerMatch = (product.manufacturer || "").toLowerCase().includes(fullQuery);
+    const manufacturerNameMatch = (product.manufacturerName || "").toLowerCase().includes(fullQuery);
     const descriptionMatch = (product.description || "").toLowerCase().includes(fullQuery);
     
     // Prioritize exact matches first
-    return nameMatch || productNameMatch || manufacturerMatch || descriptionMatch;
+    return nameMatch || productNameMatch || manufacturerMatch || manufacturerNameMatch || descriptionMatch;
   });
   
   if (exactMatches.length > 0) {
     return exactMatches;
   }
   
-  // Cross-field term matching for multi-term queries
-  // This handles cases like "Soy Sauce Kikko" where "Soy Sauce" is in name and "Kikko" is in manufacturer
-  return products.filter(product => {
-    // Create a combined searchable text from all relevant fields
-    const combinedText = [
-      product.name || "",
-      product.productName || "",
-      product.manufacturer || "",
-      product.manufacturerName || "",
-      product.category || "",
-      product.description || "",
-      ...(product.ingredients || []),
-      ...(product.flavorType || []),
-      ...(product.usage || []),
-      product.packagingSize || "",
-      product.shelfLife || "",
-      product.manufacturerRegion || ""
-    ].join(" ").toLowerCase();
-    
-    // Check if ALL search terms appear in the combined text
-    return searchTerms.every(term => combinedText.includes(term));
+  // Step 2: Try cross-field matching for multi-term queries (terms appearing in different fields)
+  // For example: "Miso Nagano" where "Miso" is in product name and "Nagano" is in manufacturer
+  const searchableFields = [
+    'name', 'productName', 'manufacturer', 'manufacturerName', 'category', 
+    'description', 'ingredients', 'flavorType', 'usage', 'packagingSize', 
+    'shelfLife', 'manufacturerRegion', 'productType'
+  ] as Array<keyof Product>;
+  
+  // Use our crossFieldSearch function for better cross-field matching
+  const crossFieldResults = crossFieldSearch(products, query, searchableFields);
+  
+  if (crossFieldResults.length > 0) {
+    return crossFieldResults;
+  }
+  
+  // Step 3: As a fallback, use fuzzy matching through the advancedSearch function
+  return advancedSearch(products, query, {
+    fields: [
+      { name: 'name',               weight: 4 },
+      { name: 'productName',        weight: 4 },
+      { name: 'manufacturer',       weight: 3 },
+      { name: 'manufacturerName',   weight: 3 },
+      { name: 'category',           weight: 2 },
+      { name: 'description',        weight: 1.5 },
+      { name: 'ingredients',        weight: 1.3 },
+      { name: 'flavorType',         weight: 1.2 },
+      { name: 'usage',              weight: 1.2 },
+      { name: 'packagingSize',      weight: 1 },
+      { name: 'shelfLife',          weight: 1 },
+      { name: 'manufacturerRegion', weight: 1 }
+    ],
+    threshold: 0.15, // Lower threshold for more matches
+    fuzzy: true,     // Enable fuzzy matching
+    crossFieldMatching: true // Enable cross-field matching
   });
 }
 
@@ -650,37 +664,17 @@ const Products = () => {
           let apiProducts = response.data.products as unknown as Product[];
           // Apply client-side ranking / filtering
           if (debouncedSearchTerm.trim()) {
-            // Try enhanced search first, which looks for matches across all fields
-            let enhancedResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+            // Use our enhanced search implementation that combines multiple search strategies
+            apiProducts = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
             
-            // If the enhanced search found matches, use those results
-            if (enhancedResults.length > 0) {
-              apiProducts = enhancedResults;
-            } 
-            // Otherwise fall back to existing search methods
-            else if (useAdvancedSearch) {
-              apiProducts = advancedSearch(apiProducts, debouncedSearchTerm, {
-                fields: [
-                  { name: 'name',              weight: 4 },
-                  { name: 'productName',       weight: 4 },
-                  { name: 'manufacturer',      weight: 3 },
-                  { name: 'category',          weight: 2 },
-                  { name: 'description',       weight: 1.5 },
-                  { name: 'ingredients',       weight: 1.3 },
-                  { name: 'flavorType',        weight: 1.2 },
-                  { name: 'usage',             weight: 1.2 },
-                  { name: 'packagingSize',     weight: 1 },
-                  { name: 'shelfLife',         weight: 1 },
-                  { name: 'manufacturerRegion',weight: 1 }
-                ],
-                threshold: 0.20,
-                exact: false
-              });
-            } else {
+            // If no results found with enhanced search, fall back to basic search
+            if (apiProducts.length === 0 && !useAdvancedSearch) {
+              console.log("Enhanced search found no results, trying basic search...");
               apiProducts = quickSearch(apiProducts, debouncedSearchTerm, [
                 'name',
                 'productName',
                 'manufacturer',
+                'manufacturerName',
                 'category',
                 'description',
                 'ingredients',
@@ -689,7 +683,7 @@ const Products = () => {
                 'packagingSize',
                 'shelfLife',
                 'manufacturerRegion'
-              ]);
+              ], true); // Enable cross-field matching
             }
           }
           console.log(`[SERVER] Fetched ${apiProducts.length} products`);
