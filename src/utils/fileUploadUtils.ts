@@ -1,9 +1,28 @@
 import axios from 'axios';
 import { BACKEND_URL, CONTEXT_PATH } from '@/constants/app.environment';
 
-// Construct API URL from available constants
+// Construct API URL from available constants or environment variables
+// Priority:
+// 1. VITE_API_BASE_URL (recommended) – should include the full base, e.g. "https://api.example.com/api"
+// 2. VITE_API_URL – legacy key, also expected to include the context path
+// 3. BACKEND_URL + CONTEXT_PATH fallback (for older code).
 const apiUrl = (path: string): string => {
-  return `${BACKEND_URL}${CONTEXT_PATH}${path}`;
+  // Read directly from import.meta.env so that the latest .env configuration is respected
+  const envBaseUrl =
+    (typeof import.meta !== 'undefined' && import.meta.env && (
+      (import.meta.env.VITE_API_BASE_URL as string) ||
+      (import.meta.env.VITE_API_URL as string)
+    )) ||
+    '';
+
+  // Determine the base URL to use
+  const baseUrl = envBaseUrl.trim() !== '' ? envBaseUrl : `${BACKEND_URL}${CONTEXT_PATH}`;
+
+  // Normalise slashes to avoid duplicates
+  const trimmedBase = baseUrl.replace(/\/+$/, ''); // remove trailing slashes
+  const trimmedPath = path.replace(/^\/+/, '');    // remove leading slashes
+
+  return `${trimmedBase}/${trimmedPath}`;
 };
 
 // Image upload functionality has been removed
