@@ -666,7 +666,12 @@ const Products = () => {
           // If API returned no products but we have a search term, try fetching all products and filter client-side
           if (apiProducts.length === 0 && debouncedSearchTerm.trim()) {
             try {
-              const allResponse = await foodProductApi.getFoodProducts({ limit: 1000 });
+              // Try fetching a larger batch without search filters to allow client-side matching
+              let allResponse = await foodProductApi.getFoodProducts({ page: 1, limit: 500 });
+              if (!allResponse.data?.products) {
+                // Some backends may throw 500 for large limits – fallback to default pagination
+                allResponse = await foodProductApi.getFoodProducts();
+              }
               if (allResponse.data?.products) {
                 apiProducts = allResponse.data.products as unknown as Product[];
               }
