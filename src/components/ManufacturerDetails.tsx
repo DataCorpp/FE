@@ -170,23 +170,34 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
       setProductsError(null);
       
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/foodproducts?manufacturer=${encodeURIComponent(manufacturer.name)}&limit=100`);
+        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+        // Remove any duplicate '/api' in the URL path
+        const baseUrl = apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
+        const response = await fetch(`${baseUrl}/foodproducts?manufacturer=${encodeURIComponent(manufacturer.name)}&limit=100`);
         
         if (response.ok) {
           const data = await response.json();
           
-          if (data.success && data.foodProducts) {
+          // The backend returns `{ products: [...] }`, but older versions may return `{ foodProducts: [...] }`.
+          const productList = (data.products ?? data.foodProducts) as Array<{
+            name?: string;
+            category?: string;
+          }> | undefined;
+
+          if (Array.isArray(productList) && productList.length > 0) {
             // Group products by category
             const categoryMap = new Map<string, { count: number; products: string[] }>();
             
-            data.foodProducts.forEach((product: any) => {
+            productList.forEach((product) => {
               const category = product.category || 'Uncategorized';
               if (!categoryMap.has(category)) {
                 categoryMap.set(category, { count: 0, products: [] });
               }
               const categoryData = categoryMap.get(category)!;
               categoryData.count++;
-              categoryData.products.push(product.name);
+              if (product.name) {
+                categoryData.products.push(product.name);
+              }
             });
             
             // Convert to array and sort by count

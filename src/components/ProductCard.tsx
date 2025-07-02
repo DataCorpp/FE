@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, useMotionValue, useTransform, AnimatePresence, Variants } from "framer-motion";
 import { 
   CheckCircle2, 
@@ -11,18 +11,14 @@ import {
   Leaf,
   Heart,
   Loader,
-  ArrowUpRight
+  ArrowUpRight,
+  ImageOff
 } from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link, useNavigate } from "react-router-dom";
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { Navigation, Pagination, Autoplay } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/navigation';
-import 'swiper/css/pagination';
 import { useTheme } from "@/contexts/ThemeContext";
 import { useProductFavorites } from "@/contexts/ProductFavoriteContext";
 
@@ -111,23 +107,50 @@ const badgeVariants: Variants = {
   }
 };
 
-// Image hover animation
-const imageVariants: Variants = {
-  initial: { scale: 1 },
-  hover: { 
-    scale: 1.08,
-    transition: { 
-      type: "spring",
-      stiffness: 300,
-      damping: 20
+// Base64 encoded placeholder image for fallback
+const DEFAULT_PLACEHOLDER_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNGMkYyRjIiLz4KICA8cGF0aCBkPSJNODAgNjBIMTIwVjE0MEg4MFY2MFoiIGZpbGw9IiNEOEQ4RDgiLz4KICA8cGF0aCBkPSJNMTEwIDkwQzExMCA5NS41MjI5IDEwNS41MjMgMTAwIDEwMCAxMDBDOTQuNDc3MSAxMDAgOTAgOTUuNTIyOSA5MCA5MEM5MCA4NC40NzcxIDk0LjQ3NzEgODAgMTAwIDgwQzEwNS41MjMgODAgMTEwIDg0LjQ3NzEgMTEwIDkwWiIgZmlsbD0iI0JEQkRCRCIvPgogIDxwYXRoIGQ9Ik0xNDAgMTMwSDYwVjE0MEgxNDBWMTMwWiIgZmlsbD0iI0JEQkRCRCIvPgogIDx0ZXh0IHg9IjEwMCIgeT0iMTcwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM4ODg4ODgiPk5vIGltYWdlIGF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+";
+
+// Helper function to validate image URLs
+const isValidImageUrl = (url: string): boolean => {
+  if (!url) return false;
+  
+  // Check if it's a data URL (e.g. base64 image)
+  if (url.startsWith('data:')) return true;
+  
+  // Check if URL is relative or absolute
+  if (url.startsWith('/')) return true; // Relative URL
+  
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Function to add crossorigin for S3 URLs if needed
+const addCrossOriginToS3Url = (url: string): string => {
+  if (url && (
+    url.includes('amazonaws.com') || 
+    url.includes('cloudfront.net') || 
+    url.includes('s3.')
+  )) {
+    // Try to parse and reconstruct the URL with necessary parameters
+    try {
+      const urlObj = new URL(url);
+      return urlObj.toString();
+    } catch (e) {
+      return url;
     }
   }
+  return url;
 };
 
 const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
   const [isFindingMatch, setIsFindingMatch] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [imgLoadError, setImgLoadError] = useState(false);
   const navigate = useNavigate();
   const { isFavorite, toggleFavorite } = useProductFavorites();
   
@@ -138,6 +161,40 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
   // Transform values for tilt
   const rotateY = useTransform(x, [-100, 100], [-3, 3]);
   const rotateX = useTransform(y, [-100, 100], [3, -3]);
+  
+  // Process image when component mounts or product changes
+  useEffect(() => {
+    // Reset error state when product changes
+    setImgLoadError(false);
+    
+    if (product.image) {
+      // If it's an S3 URL, check for CORS issues
+      if (product.image.includes('amazonaws.com') || 
+          product.image.includes('s3.') || 
+          product.image.includes('cloudfront.net')) {
+            
+        console.info('Using main product image from S3:', product.image);
+        
+        // Preload image to check for errors
+        const testImage = new Image();
+        testImage.onload = () => {
+          // Image loaded successfully
+          setImgLoadError(false);
+        };
+        testImage.onerror = () => {
+          console.warn('Failed to load main product image:', product.image);
+          setImgLoadError(true);
+        };
+        
+        // Add crossOrigin attribute for S3 images
+        testImage.crossOrigin = "anonymous";
+        testImage.src = product.image;
+      }
+    } else {
+      // No image available
+      setImgLoadError(true);
+    }
+  }, [product.image]);
   
   // Handle mouse move for tilt effect
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -177,6 +234,12 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
     }
   };
   
+  // Handle image load error
+  const handleImageError = () => {
+    console.warn('Failed to load product image:', product.image);
+    setImgLoadError(true);
+  };
+  
   // Convert rating to array of stars
   const renderRating = (rating: number) => {
     return (
@@ -199,9 +262,6 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
     );
   };
 
-  // Images array for carousel (use product.images if available, otherwise use single image)
-  const images = product.images?.length ? product.images : [product.image];
-
   // Card fields
   const displayName = product.productName || product.name;
 
@@ -219,38 +279,43 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
       style={{ rotateY, rotateX, perspective: 1000 }}
       layoutId={`product-card-${product._id}`}
     >
-      {/* Modern card, bỏ blur và tăng độ rõ ràng */}
+      {/* Modern card */}
       <div className={cn(
         "rounded-2xl overflow-hidden border shadow-lg h-full flex flex-col transition-colors duration-300",
         theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
       )}>
-        {/* Image Carousel */}
+        {/* Single Image Display */}
         <div className="relative p-3 pt-4">
-          <Swiper
-            modules={[Navigation, Pagination, Autoplay]}
-            spaceBetween={0}
-            slidesPerView={1}
-            pagination={{ clickable: true }}
-            autoplay={isHovered ? { delay: 2000, disableOnInteraction: false } : undefined}
-            className="product-card-swiper rounded-xl overflow-hidden"
-          >
-            {images.map((img, index) => (
-              <SwiperSlide key={index}>
-                <div className="aspect-square rounded-xl flex items-center justify-center p-0 overflow-hidden w-full h-full">
-                  <motion.img
-                    src={img}
-                    alt={`${displayName} - image ${index + 1}`}
-                    className="w-full h-full object-cover bg-white dark:bg-zinc-900"
-                    initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.3 }}
-                    loading="lazy"
-                    whileHover={{ scale: 1.04 }}
-                  />
-                </div>
-              </SwiperSlide>
-            ))}
-          </Swiper>
+          {product.image && !imgLoadError ? (
+            <div className="aspect-square rounded-xl flex items-center justify-center p-0 overflow-hidden w-full h-full bg-white dark:bg-zinc-900">
+              <motion.img
+                src={product.image}
+                alt={displayName}
+                className="w-full h-full object-contain"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                loading="lazy"
+                whileHover={{ scale: 1.04 }}
+                onError={handleImageError}
+              />
+            </div>
+          ) : (
+            <div className="aspect-square rounded-xl flex items-center justify-center p-0 overflow-hidden w-full h-full bg-white dark:bg-zinc-900">
+              <motion.img
+                src={DEFAULT_PLACEHOLDER_IMAGE}
+                alt={`${displayName} - no image available`}
+                className="w-full h-full object-contain"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                <ImageOff className="h-10 w-10 mb-2 opacity-50" />
+                <span className="text-xs">Image not available</span>
+              </div>
+            </div>
+          )}
           
           {/* Sustainable badge with enhanced animation */}
           <AnimatePresence>
@@ -476,12 +541,19 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
               </button>
               {/* Product image */}
               <div className="flex flex-col items-center mb-6">
-                <img
-                  src={product.image}
-                  alt={displayName}
-                  className="w-32 h-32 object-contain rounded-xl shadow mb-2 bg-white dark:bg-zinc-900"
-                  style={{ background: theme === 'dark' ? '#18181b' : '#fff' }}
-                />
+                {!imgLoadError ? (
+                  <img
+                    src={product.image}
+                    alt={displayName}
+                    className="w-32 h-32 object-contain rounded-xl shadow mb-2 bg-white dark:bg-zinc-900"
+                    style={{ background: theme === 'dark' ? '#18181b' : '#fff' }}
+                    onError={handleImageError}
+                  />
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center rounded-xl shadow mb-2 bg-white dark:bg-zinc-900">
+                    <ImageOff className="w-10 h-10 text-muted-foreground/50" />
+                  </div>
+                )}
                 <h2 className="text-2xl font-bold text-center mb-1" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{displayName}</h2>
                 <div className={cn("text-lg font-semibold mb-2", theme === 'dark' ? "text-primary" : "text-primary")}>{product.price} {product.unitType && <span className="text-xs text-foreground/70">/{product.unitType}</span>}</div>
                 <div className="flex items-center gap-2 mb-2">
@@ -551,24 +623,9 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
         )}
       </AnimatePresence>
       
-      {/* CSS for Swiper and button ripple effect */}
+      {/* CSS for button ripple effect */}
       <style>
         {`
-          .product-card-swiper .swiper-pagination-bullet {
-            background-color: var(--primary);
-            opacity: 0.5;
-            width: 6px;
-            height: 6px;
-            transition: all 0.3s ease;
-          }
-          
-          .product-card-swiper .swiper-pagination-bullet-active {
-            opacity: 1;
-            background-color: var(--primary);
-            width: 20px;
-            border-radius: 4px;
-          }
-          
           /* Improved ripple effect for buttons */
           button {
             position: relative;

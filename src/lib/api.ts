@@ -654,6 +654,15 @@ export const foodProductApi = {
   // Get food types (like Soy Sauce, Miso, etc.)
   getFoodTypes: () => {
     return api.get<ApiResponse>('/foodproducts/foodtypes');
+  },
+
+  // Delete image from S3
+  deleteProductImage: (imageUrl: string, productId?: string) => {
+    const params = new URLSearchParams();
+    params.append('url', imageUrl);
+    if (productId) params.append('productId', productId);
+    
+    return api.delete<ApiResponse>(`/foodproducts/image?${params.toString()}`);
   }
 };
 

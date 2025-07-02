@@ -264,6 +264,18 @@ interface UpdateProductResponse {
   [key: string]: unknown;
 }
 
+// Add this function right after the imports
+const deleteImageFromS3 = async (imageUrl: string, productId?: string): Promise<boolean> => {
+  try {
+    // Call the API to delete from S3
+    const response = await foodProductApi.deleteProductImage(imageUrl, productId);
+    return response.data.success;
+  } catch (error) {
+    console.error("Error deleting image from S3:", error);
+    return false;
+  }
+};
+
 const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
   product,
   parentCategory,
@@ -687,20 +699,50 @@ const ProductFormFoodBeverage: React.FC<ProductFormFoodBeverageProps> = ({
     }
   };
 
-  const removeImage = (imageUrl: string) => {
-    // Remove image from images array (database storage)
-    setImages(prev => prev.filter(img => img !== imageUrl));
-    
-    // Remove image from image objects array (display)
-    setImageObjects(prev => prev.filter(img => img.url !== imageUrl));
-    
-    // If it was the main image, update the main image to the first remaining image
-    if (formData.image === imageUrl) {
-      const newImages = images.filter(img => img !== imageUrl);
-      setFormData(prev => ({
-        ...prev,
-        image: newImages.length > 0 ? newImages[0] : ""
-      }));
+  // Replace the removeImage function
+  const removeImage = async (imageUrl: string) => {
+    try {
+      setUploadingImage(true); // Show loading state
+      
+      // Call backend to delete from S3
+      const productId = product && product._id ? product._id.toString() : undefined;
+      const deleted = await deleteImageFromS3(imageUrl, productId);
+      
+      if (deleted) {
+        // Only remove from UI if successfully deleted from S3
+        setImages(prev => prev.filter(img => img !== imageUrl));
+        setImageObjects(prev => prev.filter(img => img.url !== imageUrl));
+        
+        // If it was the main image, update the main image
+        if (formData.image === imageUrl) {
+          const newImages = images.filter(img => img !== imageUrl);
+          setFormData(prev => ({
+            ...prev,
+            image: newImages.length > 0 ? newImages[0] : ""
+          }));
+        }
+        
+        toast({
+          title: "Image Deleted",
+          description: "Image has been successfully removed",
+          variant: "default"
+        });
+      } else {
+        toast({
+          title: "Deletion Failed",
+          description: "Could not delete image. Please try again.",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error removing image:", error);
+      toast({
+        title: "Deletion Failed",
+        description: "Could not delete image. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingImage(false);
     }
   };
 

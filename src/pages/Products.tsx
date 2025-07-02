@@ -70,6 +70,7 @@ interface Product {
   manufacturer: string;
   manufacturerName?: string;
   image: string;
+  images?: string[];   // Add this field to match backend and ProductCard component
   price: string;
   pricePerUnit?: number;
   rating: number;
@@ -95,8 +96,8 @@ interface Product {
 // For product favorites context
 interface ProductFavorites {
   isFavorite: (id: string | number) => boolean;
-  toggleFavorite: (product: any) => void;
-  favorites: any[];
+  toggleFavorite: (product: Product) => void;
+  favorites: Product[];
 }
 
 // Sort options based on actual data
@@ -577,7 +578,22 @@ const Products = () => {
     setIsLoading(true);
     
     try {
-      const params: any = {
+      // Define a proper type for params
+      const params: {
+        page: number;
+        limit: number;
+        search?: string;
+        category?: string;
+        unitType?: string[];
+        flavorType?: string[];
+        usage?: string[];
+        manufacturerRegion?: string[];
+        ingredients?: string[];
+        shelfLife?: string[];
+        packagingSize?: string[];
+        sustainable?: boolean;
+        sortBy?: string;
+      } = {
         page: pagination.page,
         limit: 9,
       };
@@ -651,7 +667,7 @@ const Products = () => {
           // Apply client-side ranking / filtering
           if (debouncedSearchTerm.trim()) {
             // Try enhanced search first, which looks for matches across all fields
-            let enhancedResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+            const enhancedResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
             
             // If the enhanced search found matches, use those results
             if (enhancedResults.length > 0) {
@@ -791,7 +807,7 @@ const Products = () => {
   const handleFindMatching = async (productId: string): Promise<void> => {
     try {
       setIsLoading(true);
-      // @ts-ignore - Using mock method for demonstration
+      // @ts-expect-error - Using mock method for demonstration
       const response = await foodProductApi.findMatchingProducts(productId);
       
       toast({
