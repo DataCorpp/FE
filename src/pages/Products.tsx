@@ -662,36 +662,31 @@ const Products = () => {
         
         if (response.data?.products) {
           let apiProducts = response.data.products as unknown as Product[];
-          // Apply client-side ranking / filtering
-          if (debouncedSearchTerm.trim()) {
-            // Use our enhanced search implementation that combines multiple search strategies
-            apiProducts = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
-            
-            // If no results found with enhanced search, fall back to basic search
-            if (apiProducts.length === 0 && !useAdvancedSearch) {
-              console.log("Enhanced search found no results, trying basic search...");
-              apiProducts = quickSearch(apiProducts, debouncedSearchTerm, [
-                'name',
-                'productName',
-                'manufacturer',
-                'manufacturerName',
-                'category',
-                'description',
-                'ingredients',
-                'flavorType',
-                'usage',
-                'packagingSize',
-                'shelfLife',
-                'manufacturerRegion'
-              ], true); // Enable cross-field matching
+          
+          // If API returned no products but we have a search term, try fetching all products and filter client-side
+          if (apiProducts.length === 0 && debouncedSearchTerm.trim()) {
+            try {
+              const allResponse = await foodProductApi.getFoodProducts({ limit: 1000 });
+              if (allResponse.data?.products) {
+                apiProducts = allResponse.data.products as unknown as Product[];
+              }
+            } catch (fallbackErr) {
+              console.error('Fallback fetch error:', fallbackErr);
             }
           }
-          console.log(`[SERVER] Fetched ${apiProducts.length} products`);
+          
+          // Apply client-side ranking / filtering
+          if (debouncedSearchTerm.trim()) {
+            // Use enhanced search function which combines multiple strategies
+            apiProducts = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+          }
+          
+          console.log(`[SERVER] Fetched ${apiProducts.length} products (after client filtering)`);
           setProducts(apiProducts);
           setPagination({
             page: response.data.page || 1,
             pages: response.data.pages || 1,
-            total: response.data.total || 0,
+            total: response.data.total || apiProducts.length,
           });
         }
       }
