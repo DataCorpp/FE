@@ -14,10 +14,172 @@ interface SearchOptions<T extends SearchableItem> {
   threshold?: number;
   // Whether to use exact matching
   exact?: boolean;
-  // Enable fuzzy matching for minor typos/misspellings
-  fuzzy?: boolean;
-  // Whether to check for terms across different fields
-  crossFieldMatching?: boolean;
+}
+
+/**
+ * Calculates the Levenshtein distance between two strings
+ * This measures how many character edits (insertions, deletions, substitutions)
+ * are needed to transform one string into another
+ * 
+ * @param a First string
+ * @param b Second string
+ * @returns Number representing the edit distance
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+
+  for (let i = 0; i <= a.length; i++) {
+    matrix[0][i] = i;
+  }
+
+  for (let j = 0; j <= b.length; j++) {
+    matrix[j][0] = j;
+  }
+
+  for (let j = 1; j <= b.length; j++) {
+    for (let i = 1; i <= a.length; i++) {
+      const substitutionCost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[j][i] = Math.min(
+        matrix[j][i - 1] + 1, // deletion
+        matrix[j - 1][i] + 1, // insertion
+        matrix[j - 1][i - 1] + substitutionCost // substitution
+      );
+    }
+  }
+
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Computes similarity score between two strings (0-1)
+ * where 1 is perfect match and 0 is completely different
+ * 
+ * @param a First string
+ * @param b Second string
+ * @returns Similarity score between 0 and 1
+ */
+export function stringSimilarity(a: string, b: string): number {
+  if (!a && !b) return 1; // Both empty = perfect match
+  if (!a || !b) return 0; // One empty = no match
+  
+  // Use shorter string as reference for max distance
+  const maxLength = Math.max(a.length, b.length);
+  if (maxLength === 0) return 1;
+  
+  const distance = levenshteinDistance(a.toLowerCase(), b.toLowerCase());
+  return 1 - distance / maxLength;
+}
+
+/**
+ * Fuzzy search that handles typos and partial matches using Levenshtein distance
+ * 
+ * @param items Array of items to search
+ * @param query Search query 
+ * @param fields Fields to search in
+ * @param options Search configuration
+ * @returns Filtered and scored items sorted by relevance
+ */
+export function fuzzySearch<T extends SearchableItem>(
+  items: T[],
+  query: string,
+  fields: ReadonlyArray<keyof T>,
+  options: {
+    threshold?: number;
+    tokenize?: boolean;
+  } = {}
+): T[] {
+  if (!query || !query.trim()) {
+    return items;
+  }
+
+  const { threshold = 0.3, tokenize = true } = options;
+  const searchTerms = tokenize 
+    ? query.toLowerCase().trim().split(/\s+/).filter(t => t.length > 1)
+    : [query.toLowerCase().trim()];
+  
+  if (searchTerms.length === 0) return items;
+  
+  const scoredItems = items.map(item => {
+    // Calculate best score across all searchable fields
+    let itemScore = 0;
+    let matchCount = 0;
+    
+    // For each search term
+    searchTerms.forEach(term => {
+      let bestTermScore = 0;
+      
+      // Check each field for the best match
+      fields.forEach(field => {
+        const fieldValue = item[field];
+        if (!fieldValue) return;
+        
+        // Handle array fields (like ingredients, tags, etc.)
+        if (Array.isArray(fieldValue)) {
+          // Find best match in array
+          fieldValue.forEach(value => {
+            const valueStr = String(value).toLowerCase();
+            
+            // Check for exact containment first (highest priority)
+            if (valueStr.includes(term)) {
+              const score = term.length / valueStr.length * 0.8 + 0.2; // Longer matches relative to field get higher score
+              bestTermScore = Math.max(bestTermScore, score);
+            }
+            // If no exact containment, try similarity
+            else {
+              const score = stringSimilarity(term, valueStr) * 0.7; // Similarity matches get lower weight
+              bestTermScore = Math.max(bestTermScore, score);
+            }
+          });
+        }
+        // Handle string fields
+        else {
+          const fieldValueStr = String(fieldValue).toLowerCase();
+          
+          // Exact match gets highest score
+          if (fieldValueStr === term) {
+            bestTermScore = Math.max(bestTermScore, 1);
+          }
+          // Containment (field contains term) gets high score
+          else if (fieldValueStr.includes(term)) {
+            // Score based on how much of the field the term represents
+            const score = term.length / fieldValueStr.length * 0.7 + 0.3;
+            bestTermScore = Math.max(bestTermScore, score);
+          }
+          // Word boundary match (e.g. term is start of a word)
+          else if (new RegExp(`\\b${term}`, 'i').test(fieldValueStr)) {
+            bestTermScore = Math.max(bestTermScore, 0.8);
+          }
+          // If term is 3+ chars, try character-level similarity
+          else if (term.length >= 3) {
+            const similarity = stringSimilarity(term, fieldValueStr);
+            bestTermScore = Math.max(bestTermScore, similarity * 0.6); // Lower weight for pure similarity
+          }
+        }
+      });
+      
+      // Only count terms that had a decent match
+      if (bestTermScore > threshold) {
+        itemScore += bestTermScore;
+        matchCount++;
+      }
+    });
+    
+    // Calculate final score
+    // If we're searching for multiple terms, we want items matching more terms to rank higher
+    let finalScore = 0;
+    if (matchCount > 0) {
+      // Average score of matched terms, weighted by how many terms matched
+      // This ensures that matching more terms is better than matching fewer terms with higher scores
+      finalScore = (itemScore / matchCount) * (matchCount / searchTerms.length);
+    }
+    
+    return { item, score: finalScore };
+  }).filter(({ score }) => score > threshold);
+  
+  // Sort by score (higher scores first)
+  scoredItems.sort((a, b) => b.score - a.score);
+  
+  return scoredItems.map(({ item }) => item);
 }
 
 /**
@@ -38,13 +200,7 @@ export function advancedSearch<T extends SearchableItem>(
   }
 
   const searchTerms = query.toLowerCase().trim().split(/\s+/);
-  const { 
-    fields, 
-    threshold = 0.2, 
-    exact = false, 
-    fuzzy = true,
-    crossFieldMatching = true 
-  } = options;
+  const { fields, threshold = 0.2, exact = false } = options;
 
   // Calculate total weight (for normalization)
   const totalWeight = fields.reduce((sum, field) => sum + field.weight, 0);
@@ -53,36 +209,6 @@ export function advancedSearch<T extends SearchableItem>(
   const scoredItems = items
     .map(item => {
       let score = 0;
-      
-      if (crossFieldMatching) {
-        // Create a combined text for cross-field search
-        const combinedText = fields
-          .map(field => {
-            const value = item[field.name];
-            if (!value) return '';
-            if (Array.isArray(value)) return value.join(' ').toLowerCase();
-            return String(value).toLowerCase();
-          })
-          .join(' ');
-        
-        // Check if all search terms exist in the combined text (in any order)
-        const allTermsExist = searchTerms.every(term => {
-          // Check for exact match first
-          if (combinedText.includes(term)) return true;
-          
-          // Try fuzzy matching if enabled
-          if (fuzzy && term.length > 3) {
-            return fuzzyMatch(combinedText, term);
-          }
-          
-          return false;
-        });
-        
-        if (allTermsExist) {
-          // Boost score if all terms match across fields
-          score += 0.5;
-        }
-      }
       
       // Calculate score for each search term
       for (const term of searchTerms) {
@@ -93,7 +219,7 @@ export function advancedSearch<T extends SearchableItem>(
           const fieldValue = item[field.name];
           if (!fieldValue) continue;
           
-          const fieldValueStr = processFieldValue(fieldValue).toLowerCase();
+          const fieldValueStr = String(fieldValue).toLowerCase();
           const fieldWeight = field.weight / totalWeight; // Normalize weight
           
           if (exact) {
@@ -106,20 +232,10 @@ export function advancedSearch<T extends SearchableItem>(
             if (fieldValueStr.includes(term)) {
               // Full term match has higher score
               termScore += fieldWeight;
-              
-              // Boost score for exact matches at word boundaries
-              if (new RegExp(`\\b${escapeRegExp(term)}\\b`).test(fieldValueStr)) {
-                termScore += fieldWeight * 0.3;
-              }
             } else {
               // Check for partial matches (at least 3 chars)
               if (term.length >= 3 && fieldValueStr.includes(term.substring(0, Math.ceil(term.length * 0.7)))) {
-                termScore += fieldWeight * 0.6;
-              }
-              
-              // Try fuzzy matching if enabled
-              if (fuzzy && term.length > 3 && fuzzyMatch(fieldValueStr, term)) {
-                termScore += fieldWeight * 0.4;
+                termScore += fieldWeight * 0.7;
               }
             }
           }
@@ -128,20 +244,6 @@ export function advancedSearch<T extends SearchableItem>(
         // Add the term score to the total
         score += termScore / searchTerms.length;
       }
-      
-      // Boost score for items that match more search terms
-      const matchedTermsCount = searchTerms.filter(term => {
-        return fields.some(field => {
-          const fieldValue = item[field.name];
-          if (!fieldValue) return false;
-          
-          const fieldValueStr = processFieldValue(fieldValue).toLowerCase();
-          return fieldValueStr.includes(term);
-        });
-      }).length;
-      
-      const matchRatio = matchedTermsCount / searchTerms.length;
-      score *= (1 + matchRatio * 0.5); // Boost by up to 50% for full matches
       
       return { item, score };
     })
@@ -152,144 +254,42 @@ export function advancedSearch<T extends SearchableItem>(
 }
 
 /**
- * Converts field value to searchable string
- */
-function processFieldValue(value: any): string {
-  if (Array.isArray(value)) {
-    return value.join(' ');
-  }
-  return String(value);
-}
-
-/**
- * Escape special characters for regex
- */
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Simple fuzzy matching for handling typos
- * Uses Levenshtein distance for approximate matching
- */
-function fuzzyMatch(text: string, term: string, maxDistance = 1): boolean {
-  // If the term is very short, only allow exact matches
-  if (term.length <= 3) return text.includes(term);
-  
-  // Split into words for checking term against each word
-  const words = text.split(/\s+/);
-  
-  // Check if any word has a small edit distance from the term
-  for (const word of words) {
-    if (word.length < term.length - 1 || word.length > term.length + 2) {
-      continue; // Skip words with big length difference
-    }
-    
-    // Simple optimization: check if first and last characters match
-    if (word[0] === term[0] || word[word.length - 1] === term[term.length - 1]) {
-      if (levenshteinDistance(word, term) <= maxDistance) {
-        return true;
-      }
-    }
-  }
-  
-  // Also check for the term being embedded in longer words
-  for (const word of words) {
-    if (word.length >= term.length + 2) {
-      for (let i = 0; i <= word.length - term.length; i++) {
-        const substring = word.substring(i, i + term.length);
-        if (levenshteinDistance(substring, term) <= maxDistance) {
-          return true;
-        }
-      }
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Calculate Levenshtein distance between two strings
- * Used for fuzzy matching
- */
-function levenshteinDistance(a: string, b: string): number {
-  const matrix: number[][] = [];
-  
-  // Initialize matrix
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-  
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-  
-  // Fill matrix
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      const cost = a[j - 1] === b[i - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,      // deletion
-        matrix[i][j - 1] + 1,      // insertion
-        matrix[i - 1][j - 1] + cost // substitution
-      );
-    }
-  }
-  
-  return matrix[b.length][a.length];
-}
-
-/**
  * Simple function to determine if an item matches all search terms
  * across specified fields
  */
 export function matchesAllTerms<T extends SearchableItem>(
   item: T,
   searchTerms: string[],
-  fields: Array<keyof T>,
-  crossFieldMatching = true
+  fields: ReadonlyArray<keyof T>
 ): boolean {
   if (!searchTerms.length) return true;
   
-  // Cross-field matching - check if all terms appear somewhere in any field
-  if (crossFieldMatching) {
-    const combinedText = fields
-      .map(field => {
-        const value = item[field];
-        if (!value) return '';
-        if (Array.isArray(value)) return value.join(' ').toLowerCase();
-        return String(value).toLowerCase();
-      })
-      .join(' ');
-    
-    return searchTerms.every(term => combinedText.includes(term));
-  }
-  
-  // Traditional matching - all terms must appear in at least one field
+  // Build a map of lowercase field values once for performance
+  const fieldValues = fields.map(field => String(item[field] ?? "").toLowerCase());
+
   return searchTerms.every(term => {
-    return fields.some(field => {
-      const value = item[field];
-      if (!value) return false;
-      
-      if (Array.isArray(value)) {
-        return value.some(val => 
-          String(val).toLowerCase().includes(term.toLowerCase())
-        );
+    // Allow partial term match (>=3 chars) in addition to full term match
+    return fieldValues.some(value => {
+      if (value.includes(term)) return true; // full term match
+
+      // partial (fuzzy) match – first 70% of the term must appear
+      if (term.length >= 3) {
+        const partial = term.substring(0, Math.ceil(term.length * 0.7));
+        return value.includes(partial);
       }
-      
-      return String(value).toLowerCase().includes(term.toLowerCase());
+      return false;
     });
   });
 }
 
 /**
- * Quick search function that checks if any of the terms match any of the fields
+ * Quick search function that checks if ALL search terms appear in ANY of the provided fields.
+ * Accepts both mutable and readonly arrays for the `fields` parameter.
  */
 export function quickSearch<T extends SearchableItem>(
   items: T[],
   query: string,
-  fields: Array<keyof T>,
-  crossFieldMatching = true
+  fields: ReadonlyArray<keyof T>
 ): T[] {
   if (!query || !query.trim()) {
     return items;
@@ -297,40 +297,289 @@ export function quickSearch<T extends SearchableItem>(
   
   const searchTerms = query.toLowerCase().trim().split(/\s+/);
   
-  return items.filter(item => {
-    return matchesAllTerms(item, searchTerms, fields, crossFieldMatching);
-  });
+  return items.filter(item => matchesAllTerms(item, searchTerms, fields));
 }
 
 /**
- * Advanced cross-field search
- * This handles cases where search terms might be scattered across different fields
- * For example: "Miso Nagano" where "Miso" is in product name and "Nagano" is in manufacturer
+ * Normalizes text by removing accents, replacing special characters and standardizing whitespace
+ * This helps improve matching between texts with different representations of similar characters
+ * 
+ * @param text Text to normalize
+ * @returns Normalized text suitable for comparison
  */
-export function crossFieldSearch<T extends SearchableItem>(
+function normalizeText(text: string): string {
+  if (!text) return '';
+  
+  return text
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[&\/\\#,+()$~%.'":*?<>{}]/g, ' ') // Replace special characters with spaces
+    .replace(/\s+/g, ' ')  // Standardize whitespace
+    .trim();
+}
+
+/**
+ * Generate potential variations of a word to improve fuzzy matching
+ * This includes common typo patterns and phonetic similarities
+ * 
+ * @param word The word to generate variations for
+ * @returns Array of word variations
+ */
+function generateWordVariations(word: string): string[] {
+  if (!word || word.length <= 2) return [word];
+  const variations: string[] = [word];
+  
+  // Handle common character swaps and simple typos
+  if (word.length > 2) {
+    // Character swaps (e.g. "sauce" -> "suace")
+    for (let i = 0; i < word.length - 1; i++) {
+      const swapped = word.substring(0, i) + 
+                      word.charAt(i + 1) + 
+                      word.charAt(i) + 
+                      word.substring(i + 2);
+      variations.push(swapped);
+    }
+    
+    // Missing character (e.g. "sauce" -> "saue")
+    for (let i = 0; i < word.length; i++) {
+      const missing = word.substring(0, i) + word.substring(i + 1);
+      if (missing.length >= 3) variations.push(missing);
+    }
+    
+    // Extra common character (e.g. "sauce" -> "sauuce")
+    for (let i = 0; i < word.length; i++) {
+      const extra = word.substring(0, i + 1) + word.charAt(i) + word.substring(i + 1);
+      variations.push(extra);
+    }
+  }
+  
+  // Handle common phonetic replacements
+  const phonetics: Record<string, string[]> = {
+    'ph': ['f'],
+    'f': ['ph'],
+    'sh': ['ch', 's'],
+    'ch': ['sh', 'k'],
+    'c': ['k', 's'],
+    'k': ['c'],
+    's': ['c', 'z'],
+    'z': ['s'],
+    'j': ['g', 'y'],
+    'g': ['j'],
+    'y': ['i'],
+    'i': ['y'],
+    'kk': ['cc', 'ck'],
+    'cc': ['kk'],
+    'ck': ['kk', 'cc'],
+  };
+  
+  // Apply phonetic replacements
+  for (const [pattern, replacements] of Object.entries(phonetics)) {
+    if (word.includes(pattern)) {
+      for (const replacement of replacements) {
+        const phoneticVar = word.replace(pattern, replacement);
+        variations.push(phoneticVar);
+      }
+    }
+  }
+  
+  return [...new Set(variations)]; // Remove duplicates
+}
+
+/**
+ * Enhanced fuzzy search that handles messy user input including:
+ * - Text normalization (accents, special chars)
+ * - Word order invariance
+ * - Cross-field matching
+ * - Word variations for common typos
+ * - Better handling of multi-term queries
+ * 
+ * @param items Array of items to search
+ * @param query Search query 
+ * @param fields Fields to search in
+ * @param options Search configuration
+ * @returns Filtered and scored items sorted by relevance
+ */
+export function enhancedFuzzySearch<T extends SearchableItem>(
   items: T[],
   query: string,
-  fields: Array<keyof T>
+  fields: ReadonlyArray<keyof T>,
+  options: {
+    threshold?: number;
+    boostExact?: boolean;
+    maxResults?: number;
+  } = {}
 ): T[] {
   if (!query || !query.trim()) {
     return items;
   }
+
+  const { 
+    threshold = 0.15, 
+    boostExact = true,
+    maxResults = 200
+  } = options;
+
+  // Normalize the query and prepare tokens
+  const normalizedQuery = normalizeText(query);
+  const originalTokens = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
   
-  const searchTerms = query.toLowerCase().trim().split(/\s+/);
+  if (originalTokens.length === 0) return items;
   
-  return items.filter(item => {
-    // Create a combined text from all relevant fields
-    const combinedText = fields
-      .map(field => {
-        const value = item[field];
-        if (!value) return '';
-        if (Array.isArray(value)) return value.join(' ').toLowerCase();
-        return String(value).toLowerCase();
-      })
-      .join(' ');
-    
-    // Check if all search terms exist in the combined text (in any order)
-    return searchTerms.every(term => combinedText.includes(term));
+  // Generate token variations to improve matching
+  const tokenMap = new Map<string, string[]>();
+  const allTokens: string[] = [];
+  
+  // For each original token, create variations and track the parent
+  originalTokens.forEach(token => {
+    const variations = generateWordVariations(token);
+    tokenMap.set(token, variations);
+    allTokens.push(...variations);
   });
+  
+  // Function to calculate a field's searchable text once (for performance)
+  const getSearchableText = (item: T, field: keyof T): string => {
+    const value = item[field];
+    if (!value) return '';
+    
+    if (Array.isArray(value)) {
+      return normalizeText(value.join(' '));
+    }
+    return normalizeText(String(value));
+  };
+  
+  // Calculate combined field text for each item once
+  const itemSearchableText = items.map(item => {
+    const fieldTexts: Record<string, string> = {};
+    const combinedText: string[] = [];
+    
+    fields.forEach(field => {
+      const text = getSearchableText(item, field);
+      fieldTexts[field as string] = text;
+      combinedText.push(text);
+    });
+    
+    return {
+      item,
+      fieldTexts,
+      combinedText: combinedText.join(' ')
+    };
+  });
+  
+  // Score each item
+  const scoredItems = itemSearchableText.map(({ item, fieldTexts, combinedText }) => {
+    // First check if the full query appears exactly anywhere
+    const hasExactMatch = boostExact && combinedText.includes(normalizedQuery);
+    
+    // Track matched tokens per field and overall
+    const tokenMatches = new Map<string, number>();
+    let totalTokenMatches = 0;
+    let longestSequenceMatch = 0;
+    let currentSequence = 0;
+    
+    // Check for matches of each token (including variations)
+    originalTokens.forEach(originalToken => {
+      let bestScore = 0;
+      
+      // Check if any variation of this token matches
+      const variations = tokenMap.get(originalToken) || [originalToken];
+      
+      for (const variation of variations) {
+        // Get proximity bonus if a token is near another
+        if (combinedText.includes(variation)) {
+          // Direct match - full token value
+          bestScore = Math.max(bestScore, 1);
+          
+          // If this token continues the sequence of matched tokens
+          if (originalTokens.indexOf(originalToken) === currentSequence) {
+            currentSequence++;
+            longestSequenceMatch = Math.max(longestSequenceMatch, currentSequence);
+          } else {
+            currentSequence = 0;
+          }
+          
+          totalTokenMatches++;
+          break; // No need to check other variations of this token
+        } else {
+          // Check for partial match (beginning of a longer word)
+          const regex = new RegExp(`\\b${variation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\w*`, 'i');
+          if (regex.test(combinedText)) {
+            bestScore = Math.max(bestScore, 0.9);
+            totalTokenMatches++;
+            break;
+          }
+          
+          // Check for substring match
+          if (combinedText.includes(variation)) {
+            bestScore = Math.max(bestScore, 0.8);
+            totalTokenMatches++;
+            break;
+          }
+          
+          // Use Levenshtein for more distant matches
+          if (variation.length >= 3) {
+            // Find closest word in text
+            const words = combinedText.split(/\s+/);
+            for (const word of words) {
+              if (Math.abs(word.length - variation.length) <= 2) {
+                const similarity = stringSimilarity(variation, word);
+                if (similarity > 0.8) {
+                  bestScore = Math.max(bestScore, 0.7 * similarity);
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Store best match score for this token
+      if (bestScore > 0) {
+        tokenMatches.set(originalToken, bestScore);
+      }
+    });
+    
+    // Calculate final score
+    let score = 0;
+    
+    // Boost for sequence matches (tokens in the correct order)
+    const sequenceBoost = longestSequenceMatch > 1 ? 
+      (longestSequenceMatch / originalTokens.length) * 0.3 : 0;
+    
+    // 1. If all tokens matched, give a high score
+    if (tokenMatches.size === originalTokens.length) {
+      // Perfect match - all tokens found
+      score = originalTokens
+        .map(t => tokenMatches.get(t) || 0)
+        .reduce((sum, val) => sum + val, 0) / originalTokens.length;
+      
+      // Boost for perfect sequence matches
+      score += sequenceBoost;
+    } 
+    // 2. If partial match, use proportion of matched tokens
+    else if (tokenMatches.size > 0) {
+      // Get average score of matched tokens
+      const matchedTokensScore = Array.from(tokenMatches.values())
+        .reduce((sum, val) => sum + val, 0) / tokenMatches.size;
+      
+      // Weight by proportion of tokens matched
+      score = matchedTokensScore * (tokenMatches.size / originalTokens.length);
+      
+      // Boost for sequence matches
+      score += sequenceBoost;
+    }
+    
+    // 3. Exact match bonus
+    if (hasExactMatch) {
+      score = Math.min(1, score + 0.3); // Cap at 1.0
+    }
+    
+    return { item, score };
+  });
+
+  // Filter and sort
+  return scoredItems
+    .filter(({ score }) => score >= threshold)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults)
+    .map(({ item }) => item);
 }
  

@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import ManufacturerDetails from "@/components/ManufacturerDetails";
 import { cn } from "@/lib/utils";
 import { createClampedBlurVariants } from "@/hooks/use-safe-blur";
-import { advancedSearch, quickSearch } from "@/utils/searchUtils";
+import { enhancedFuzzySearch, quickSearch } from "@/utils/searchUtils";
 
 // API configuration - Fixed to match backend API structure
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
@@ -358,18 +358,17 @@ const Manufacturers = () => {
     // Search filter - use either advanced or quick search based on setting
     if (searchTerm && searchTerm.trim()) {
       if (useAdvancedSearch) {
-        // Use advanced search with weighted fields for better relevance
-        filtered = advancedSearch(filtered, searchTerm, {
-          fields: [
-            { name: 'name', weight: 2.5 },           // Name has highest weight
-            { name: 'description', weight: 1.5 },    // Description is important
-            { name: 'industry', weight: 2.0 },       // Industry is very relevant
-            { name: 'location', weight: 1.0 },       // Location has standard weight
-            { name: 'certification', weight: 1.0 }   // Certification has standard weight
-          ],
-          threshold: 0.2,  // Minimum score to include result
-          exact: false     // Allow partial matches
-        });
+        // Use enhanced fuzzy search for robust, cross-field matching that tolerates messy user input
+        filtered = enhancedFuzzySearch(
+          filtered,
+          searchTerm,
+          ['name', 'description', 'industry', 'location', 'certification'],
+          {
+            threshold: 0.15,  // More permissive threshold for fuzzy matching
+            boostExact: true,
+            maxResults: 500   // Plenty of headroom for client-side filtering
+          }
+        );
       } else {
         // Use simple multi-term search (all terms must match at least one field)
         filtered = quickSearch(filtered, searchTerm, [
