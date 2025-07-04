@@ -38,6 +38,7 @@ const PostProject: React.FC = () => {
               setSelectedProduct={setSelectedProduct}
               selectedSupplierType={selectedSupplierType}
               setSelectedSupplierType={setSelectedSupplierType}
+              onViewAllProjects={() => setStep(3)}
             />
           )}
           {step === 2 && (
