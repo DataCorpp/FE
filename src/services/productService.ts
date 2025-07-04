@@ -147,12 +147,23 @@ export interface ApiResponse<T> {
 }
 
 class ProductService {
-  // Prefer the new VITE_API_BASE_URL env var (matches Docker / prod config). Fallback to the old one or localhost for dev.
-  private baseUrl = (
-    import.meta.env.VITE_API_BASE_URL ||
-    import.meta.env.VITE_API_URL ||
-    'http://localhost:3000/api'
-  ) + '/products';
+  // Build root API URL once, then always append `/products`.
+  // 1) Lấy biến môi trường ưu tiên (VITE_API_BASE_URL, VITE_API_URL) hoặc mặc định localhost.
+  // 2) Loại bỏ dấu gạch chéo cuối cùng và chuỗi `/products` nếu người dùng lỡ thêm vào .env
+  //    để tránh tạo URL dạng ".../products/products".
+  private baseUrl = (() => {
+    const rawRoot =
+      import.meta.env.VITE_API_BASE_URL ||
+      import.meta.env.VITE_API_URL ||
+      "http://localhost:3000/api";
+
+    // Bỏ slash cuối và đuôi "/products" nếu có
+    const sanitizedRoot = rawRoot
+      .replace(/\/+$/, "")        // ---
+      .replace(/\/products$/i, "");
+
+    return `${sanitizedRoot}/products`;
+  })();
 
   // Helper function to get headers for session-based authentication
   private getAuthHeaders() {
@@ -165,20 +176,11 @@ class ProductService {
   private handleApiError(error: { status?: number; response?: { status?: number; data?: { message?: string } } }, operation: string): never {
     console.error(`${operation} error:`, error);
     
-    // Nếu là lỗi xác thực và không phải là cập nhật sản phẩm thực phẩm
+    // Nếu là lỗi xác thực (401) và không phải update product ➜ KHÔNG redirect
     if ((error.response?.status === 401 || error.status === 401) && 
         !operation.toLowerCase().includes('update product')) {
-      console.error('Authentication failed - redirecting to login');
-      // Redirect to login page for any authentication failure
-      window.location.href = '/auth';
-      throw new Error('Your session has expired. Please login again.');
-    }
-    
-    // Nếu là lỗi xác thực khi cập nhật sản phẩm, chỉ trả về lỗi không chuyển hướng
-    if ((error.response?.status === 401 || error.status === 401) && 
-        operation.toLowerCase().includes('update product')) {
-      console.warn('Authentication error in product update - bypassing redirect');
-      throw new Error('Authentication required but bypassing redirect for product update');
+      console.warn('Authentication failed – returning UNAUTH');
+      throw new Error('UNAUTH');
     }
     
     if (error.response?.status === 403 || error.status === 403) {
@@ -193,10 +195,25 @@ class ProductService {
   }
 
   // Get all products for the authenticated manufacturer
-  async getProducts(productType?: string): Promise<ApiResponse<Product[]>> {
+  async getProducts(productType?: string, manufacturerName?: string, userId?: string): Promise<ApiResponse<Product[]>> {
     try {
-      const queryParam = productType ? `?productType=${productType}` : '';
-      const response = await fetch(`${this.baseUrl}${queryParam}`, {
+      // Build query parameters
+      const queryParams = [];
+      if (productType) {
+        queryParams.push(`type=${encodeURIComponent(productType)}`);
+      }
+      if (manufacturerName) {
+        queryParams.push(`manufacturer=${encodeURIComponent(manufacturerName)}`);
+      }
+      if (userId) {
+        queryParams.push(`user=${encodeURIComponent(userId)}`);
+      }
+      
+      // Construct URL with query parameters
+      const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
+      console.log(`Fetching products with query: ${queryString || 'no filters'}`);
+      
+      const response = await fetch(`${this.baseUrl}${queryString}`, {
         headers: this.getAuthHeaders(),
         credentials: 'include', // Include cookies for session-based auth
       });
@@ -218,7 +235,9 @@ class ProductService {
       const products: unknown = Array.isArray(data)
         ? data
         : (data && (data as { products?: unknown }).products) || [];
-
+      
+      console.log(`Received ${Array.isArray(products) ? products.length : 0} products from API`);
+      
       return {
         success: true,
         data: (Array.isArray(products) ? products : []) as Product[],

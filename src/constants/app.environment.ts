@@ -22,8 +22,4 @@ const BACKEND_URL =
   'http://localhost:3000';
 const CONTEXT_PATH = getEnvVariable('VITE_CONTEXT_PATH', '/api');
 
-// Log for debugging
-console.log('Using BACKEND_URL:', BACKEND_URL);
-console.log('Using CONTEXT_PATH:', CONTEXT_PATH);
-
 export { BACKEND_URL, CONTEXT_PATH };

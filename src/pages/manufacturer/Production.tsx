@@ -603,17 +603,76 @@ export const Production = () => {
 
       setIsLoading(true);
       try {
-        // Sử dụng productService để lấy danh sách sản phẩm (đã xử lý session và lỗi phổ biến)
-        const result = await productService.getProducts();
+        // Always attempt to load products – even if auth state is not yet ready
+
+        setIsLoading(true);
+
+        let manufacturerName = '';
+
+        // 1️⃣ Prefer company name from UserContext if available
+        if (isAuthenticated && role === "manufacturer" && user?.companyName) {
+          manufacturerName = user.companyName.trim();
+        }
+
+        // 2️⃣ Fallback: call /users/profile if still unknown (may fail if not authenticated yet)
+        if (!manufacturerName) {
+          try {
+            const userResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/users/profile`, {
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            });
+
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              manufacturerName = (userData.companyName || '').trim();
+              console.log('Filtering products by manufacturer (via profile):', manufacturerName);
+            }
+          } catch (profileErr) {
+            console.warn('Profile fetch failed, proceeding without manufacturer filter');
+          }
+        }
+
+        // Luôn lấy tất cả product rồi lọc client-side theo user ID để tránh mismatch tên hãng
+        const result = await productService.getProducts(undefined, undefined, user?.id);
+
+        // If nothing is returned, retry **once** without the manufacturer filter to avoid missing data due to mismatched names
+        let fetchedData = result.data;
+        if (result.success && (fetchedData?.length ?? 0) === 0 && manufacturerName) {
+          console.warn('No products found with manufacturer filter, retrying without filter');
+          const fallbackResult = await productService.getProducts();
+          if (fallbackResult.success) {
+            fetchedData = fallbackResult.data;
+          }
+        }
 
         if (!result.success) {
           // Nếu lỗi mạng hoặc server mới hiển thị toast, còn lỗi 404 (không có sản phẩm) sẽ được hàm getProducts trả về success=true với mảng rỗng
           throw new Error(result.error || 'Failed to fetch products');
         }
 
-        type MinimalProduct = { _id: string; productName: string; manufacturerName: string; type: string };
-        const basicProducts = (result.data || []) as unknown as MinimalProduct[];
-        
+        type MinimalProduct = { _id: string; productName: string; manufacturerName: string; type: string; user?: string };
+
+        let basicProducts = (fetchedData || []) as unknown as MinimalProduct[];
+
+        // Lọc sản phẩm thuộc về manufacturer hiện tại.
+        if (role === "manufacturer") {
+          const companyKey = (user?.companyName || "").trim().toLowerCase();
+
+          basicProducts = basicProducts.filter((p) => {
+            // 1) Nếu backend có trường user thì ưu tiên so sánh theo userId
+            if (user?.id && p.user) {
+              return p.user === user.id;
+            }
+
+            // 2) Fallback so sánh theo manufacturerName (không phân biệt hoa thường, trim)
+            return (
+              p.manufacturerName?.trim().toLowerCase() === companyKey
+            );
+          });
+        }
+
         if (basicProducts.length > 0) {
           // For each product, fetch detailed information from respective collection
           const productsWithDetails = await Promise.all(
@@ -649,7 +708,7 @@ export const Production = () => {
                     category: productDetails.category || 'Food Products',
                     description: productDetails.description || '',
                     pricePerUnit: productDetails.pricePerUnit || 0,
-                                         image: productDetails.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
+                                     image: productDetails.image || '/4301793_article_good_manufacture_merchandise_production_icon.svg',
                     productType: productRef.type === 'food' ? 'Food Product' : productRef.type,
                     
                     // Production fields from FoodProduct
@@ -1504,39 +1563,8 @@ type UpdateProductData = Product;
         console.log('Handling deletion of temporary product:', deleteId);
       }
       
-      // Check if user is authenticated (JWT token OR session-based)
-      const token = localStorage.getItem('auth_token');
-      const user = localStorage.getItem('user');
-      
-      let hasValidAuth = false;
-      
-      // Check JWT token validity
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          const currentTime = Date.now() / 1000;
-          if (payload.exp && payload.exp > currentTime) {
-            hasValidAuth = true;
-          } else {
-            localStorage.removeItem('auth_token');
-          }
-        } catch (error) {
-          localStorage.removeItem('auth_token');
-        }
-      }
-      
-      // Check session-based auth
-      if (!hasValidAuth && user) {
-        try {
-          JSON.parse(user); // Validate user data
-          hasValidAuth = true;
-        } catch (error) {
-          localStorage.removeItem('user');
-        }
-      }
-      
-      // Skip auth check for temporary products
-      if (!deleteId.startsWith('temp_') && !hasValidAuth) {
+      // Skip auth check for temporary products; otherwise rely on context-auth flag
+      if (!deleteId.startsWith('temp_') && !isAuthenticated) {
         toast({
           title: "Authentication Required",
           description: "Please login again to continue.",
@@ -1771,33 +1799,41 @@ type UpdateProductData = Product;
             </div>
 
             {/* Products Content */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <ProductsTab
-                products={filteredAndSortedProducts}
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                categoryFilter={categoryFilter}
-                setCategoryFilter={setCategoryFilter}
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
-                categories={categories}
-                availableStatuses={availableStatuses}
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                isReverseSorted={isReverseSorted}
-                setIsReverseSorted={setIsReverseSorted}
-                openEditDialog={openEditDialog}
-                openDeleteDialog={openDeleteDialog}
-                viewProductDetails={viewProductDetails}
-                getProductTypeBadge={getProductTypeBadge}
-                getProductStatus={getProductStatus}
-                newlyCreatedProductId={newlyCreatedProductId}
-              />
-            </motion.div>
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse" role="status">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div key={idx} className="h-64 bg-muted/40 rounded-lg" />
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <ProductsTab
+                  products={filteredAndSortedProducts}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                  categoryFilter={categoryFilter}
+                  setCategoryFilter={setCategoryFilter}
+                  statusFilter={statusFilter}
+                  setStatusFilter={setStatusFilter}
+                  categories={categories}
+                  availableStatuses={availableStatuses}
+                  sortBy={sortBy}
+                  setSortBy={setSortBy}
+                  isReverseSorted={isReverseSorted}
+                  setIsReverseSorted={setIsReverseSorted}
+                  openEditDialog={openEditDialog}
+                  openDeleteDialog={openDeleteDialog}
+                  viewProductDetails={viewProductDetails}
+                  getProductTypeBadge={getProductTypeBadge}
+                  getProductStatus={getProductStatus}
+                  newlyCreatedProductId={newlyCreatedProductId}
+                />
+              </motion.div>
+            )}
           </div>
         </motion.div>
       </MotionConfig>

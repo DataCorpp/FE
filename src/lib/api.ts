@@ -5,10 +5,6 @@ import { ProductApiData } from '@/types/product';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 const AI_API_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:5000/api';
 
-// Add console logs for debugging
-console.log('API Base URL:', API_BASE_URL);
-console.log('AI API Base URL:', AI_API_BASE_URL);
-
 // Type definitions
 export interface ApiResponse<T = Record<string, unknown>> {
   success?: boolean;
@@ -254,6 +250,12 @@ api.interceptors.response.use(
     // Nếu không phải lỗi 401 (Unauthorized), trả về lỗi bình thường
     if (!error.response || error.response.status !== 401) {
       return Promise.reject(error);
+    }
+    
+    // ⚠️ Silent fail for session check (/users/me)
+    if (error.config?.url?.includes('/users/me')) {
+      // Do not log to console, simply resolve with null-like data
+      return Promise.resolve({ data: null });
     }
     
     // Nếu đây là lỗi 401 từ endpoint cập nhật sản phẩm, bỏ qua xác thực

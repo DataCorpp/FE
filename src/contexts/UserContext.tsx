@@ -95,45 +95,66 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<UserRole>("manufacturer");
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-
-
-  // Check session on app load
+  // Check session on app load (call /users/me once)
   useEffect(() => {
-    authApi.getCurrentUser()
-      .then(res => {
-        const responseData = res.data as Record<string, unknown>;
-        const userData: UserData = {
-          id: responseData._id as string,
-          name: responseData.name as string,
-          email: responseData.email as string,
-          companyName: (responseData.companyName as string) || "Demo Company",
-          role: responseData.role as UserRole,
-          profileComplete: (responseData.profileComplete as boolean) || false,
-          createdAt: (responseData.createdAt as string) || new Date().toISOString(),
-          lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
-          notifications: (responseData.notifications as number) || 0,
-          avatar: (responseData.avatar as string) || "",
-          status: (responseData.status as "online" | "away" | "busy") || "online",
-          emailVerified: true,
-          phone: responseData.phone as string,
-          website: responseData.website as string,
-          address: responseData.address as string,
-          description: responseData.description as string,
-          manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
-          brandSettings: responseData.brandSettings as BrandSettings,
-          retailerSettings: responseData.retailerSettings as RetailerSettings,
-        };
-        setUser(userData);
-        setRole(userData.role);
-        setIsAuthenticated(true);
-        setIsLoading(false);
-      })
-      .catch(() => {
+    let isMounted = true;
+
+    const fetchSession = async () => {
+      try {
+        const res = await authApi.getCurrentUser(); // -> /users/me
+
+        if (!isMounted) return; // Component unmounted while waiting
+
+        const data = res.data as Record<string, unknown> | undefined;
+
+        if (data && data._id) {
+          // Build UserData object
+          const sessionUser: UserData = {
+            id: data._id as string,
+            name: data.name as string,
+            email: data.email as string,
+            companyName: (data.companyName as string) || "Demo Company",
+            role: data.role as UserRole,
+            profileComplete: (data.profileComplete as boolean) || false,
+            createdAt: (data.createdAt as string) || new Date().toISOString(),
+            lastLogin: (data.lastLogin as string) || new Date().toISOString(),
+            notifications: (data.notifications as number) || 0,
+            avatar: (data.avatar as string) || "",
+            status: (data.status as "online" | "away" | "busy") || "online",
+            emailVerified: true,
+            phone: data.phone as string,
+            website: data.website as string,
+            address: data.address as string,
+            description: data.description as string,
+            manufacturerSettings: data.manufacturerSettings as ManufacturerSettings,
+            brandSettings: data.brandSettings as BrandSettings,
+            retailerSettings: data.retailerSettings as RetailerSettings,
+          };
+
+          setUser(sessionUser);
+          setRole(sessionUser.role);
+          setIsAuthenticated(true);
+        } else {
+          // No valid session data
+          setUser(null);
+          setRole("manufacturer");
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        // Any error -> treat as no active session, but DON'T redirect
         setUser(null);
         setRole("manufacturer");
         setIsAuthenticated(false);
-        setIsLoading(false);
-      });
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<void> => {
