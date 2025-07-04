@@ -561,6 +561,9 @@ const Products = () => {
     toggleFavorite
   } = useProductFavorites();
 
+  // Stores the complete dataset fetched for generating filters so that counts are accurate
+  const [filterSourceProducts, setFilterSourceProducts] = useState<Product[]>([]);
+
   // Page title effect
   useEffect(() => {
     document.title = "Browse Products - CPG Matchmaker";
@@ -627,38 +630,49 @@ const Products = () => {
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        // Avoid using limit parameter completely as it seems to cause 500 errors
-        // Instead, get products without specifying limit and process on client side
-        console.log('Fetching filter options without limit parameter...');
-        const response = await foodProductApi.getFoodProducts({
-          // No limit parameter to avoid server errors
-          // Just get default pagination from API
-        });
-        console.log('Filter options fetched successfully:', response?.data?.total || 'unknown');
-        
-        if (response.data?.products) {
-          const allProducts = response.data.products as unknown as Product[];
-          setTotalProductsCount(response.data.total || allProducts.length);
-          
-          // Extract unique values for each filter
-          const uniqueUnitTypes = [...new Set(allProducts.map(p => p.unitType).filter(Boolean))];
-          const uniqueFlavorTypes = [...new Set(allProducts.flatMap(p => p.flavorType || []).filter(Boolean))];
-          const uniqueUsages = [...new Set(allProducts.flatMap(p => p.usage || []).filter(Boolean))];
-          const uniqueManufacturerRegions = [...new Set(allProducts.map(p => p.manufacturerRegion).filter(Boolean))];
-          const uniqueIngredients = [...new Set(allProducts.flatMap(p => p.ingredients || []).filter(Boolean))];
-          const uniqueShelfLives = [...new Set(allProducts.map(p => p.shelfLife).filter(Boolean))];
-          const uniquePackagingSizes = [...new Set(allProducts.map(p => p.packagingSize).filter(Boolean))];
-          
-          setUnitTypeList(uniqueUnitTypes);
-          setFlavorTypeList(uniqueFlavorTypes);
-          setUsageList(uniqueUsages);
-          setManufacturerRegionList(uniqueManufacturerRegions);
-          setIngredientsList(uniqueIngredients);
-          setShelfLifeList(uniqueShelfLives);
-          setPackagingSizeList(uniquePackagingSizes);
+        console.log('[FILTER] Fetching all products for building filter lists…');
+        const PAGE_LIMIT = 100;
+        let currentPage = 1;
+        let fetchedProducts: Product[] = [];
+        let totalPages = 1;
+
+        // Paginate until we have retrieved every page
+        while (currentPage <= totalPages) {
+          const resp = await foodProductApi.getFoodProducts({ page: currentPage, limit: PAGE_LIMIT });
+          if (resp.data?.products) {
+            fetchedProducts = fetchedProducts.concat(resp.data.products as unknown as Product[]);
+            totalPages = resp.data.pages || 1;
+            currentPage += 1;
+          } else {
+            break; // safety – stop if no products returned
+          }
         }
+
+        console.log(`[FILTER] Retrieved ${fetchedProducts.length} products to generate filter data.`);
+
+        // Save full list for accurate counting
+        setFilterSourceProducts(fetchedProducts);
+
+        setTotalProductsCount(fetchedProducts.length);
+
+        // Extract unique values for each filter
+        const uniqueUnitTypes = [...new Set(fetchedProducts.map(p => p.unitType).filter(Boolean))];
+        const uniqueFlavorTypes = [...new Set(fetchedProducts.flatMap(p => p.flavorType || []).filter(Boolean))];
+        const uniqueUsages = [...new Set(fetchedProducts.flatMap(p => p.usage || []).filter(Boolean))];
+        const uniqueManufacturerRegions = [...new Set(fetchedProducts.map(p => p.manufacturerRegion).filter(Boolean))];
+        const uniqueIngredients = [...new Set(fetchedProducts.flatMap(p => p.ingredients || []).filter(Boolean))];
+        const uniqueShelfLives = [...new Set(fetchedProducts.map(p => p.shelfLife).filter(Boolean))];
+        const uniquePackagingSizes = [...new Set(fetchedProducts.map(p => p.packagingSize).filter(Boolean))];
+
+        setUnitTypeList(uniqueUnitTypes);
+        setFlavorTypeList(uniqueFlavorTypes);
+        setUsageList(uniqueUsages);
+        setManufacturerRegionList(uniqueManufacturerRegions);
+        setIngredientsList(uniqueIngredients);
+        setShelfLifeList(uniqueShelfLives);
+        setPackagingSizeList(uniquePackagingSizes);
       } catch (error) {
-        console.error('Error fetching filter options:', error);
+        console.error('[FILTER] Error fetching filter options:', error);
       }
     };
 
@@ -728,8 +742,16 @@ const Products = () => {
         sortBy?: string;
       } = {
         page: pagination.page,
-        limit: PAGE_SIZE // Always request 9 items per page from server
+        limit: PAGE_SIZE // default page size
       };
+      
+      // If searching, request a bigger slice of data so client-side ranking has
+      // more context. 100 items is a safe upper-bound for typical datasets and
+      // avoids large payloads.
+      if (debouncedSearchTerm.trim()) {
+        params.limit = 100;
+        params.page = 1; // always start from first page for search pool
+      }
       
       if (debouncedSearchTerm) {
         params.search = debouncedSearchTerm;
@@ -889,7 +911,10 @@ const Products = () => {
               const fullResponse = await foodProductApi.getFoodProducts({
                 ...params,
                 search: undefined,
-                limit: PAGE_SIZE
+                // Increase limit so we have enough data to perform a meaningful
+                // client-side fuzzy search. 100 is a good balance between
+                // network payload and relevance.
+                limit: 100
               });
               
               if (fullResponse.data?.products?.length > apiProducts.length) {
@@ -2477,7 +2502,9 @@ const Products = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {categoryList.map((category) => {
-                        const count = products.filter(p => p.category === category || category === "All Categories").length;
+                        const count = category === "All Categories"
+                          ? filterSourceProducts.length
+                          : filterSourceProducts.filter(p => p.category === category).length;
                         return (
                           <SelectItem key={category} value={category}>
                             <div className="flex justify-between items-center w-full">
@@ -2503,7 +2530,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {unitTypeList.map((type) => {
-                      const count = products.filter(p => p.unitType === type).length;
+                      const count = filterSourceProducts.filter(p => p.unitType === type).length;
                       const isSelected = selectedUnitTypes.includes(type);
                       return (
                         <div key={type} className="flex items-center justify-between">
@@ -2532,7 +2559,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {flavorTypeList.map((type) => {
-                      const count = products.filter(p => p.flavorType?.includes(type)).length;
+                      const count = filterSourceProducts.filter(p => p.flavorType?.includes(type)).length;
                       const isSelected = selectedFlavorTypes.includes(type);
                       return (
                         <div key={type} className="flex items-center justify-between">
@@ -2561,7 +2588,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {usageList.map((usage) => {
-                      const count = products.filter(p => p.usage?.includes(usage)).length;
+                      const count = filterSourceProducts.filter(p => p.usage?.includes(usage)).length;
                       const isSelected = selectedUsages.includes(usage);
                       return (
                         <div key={usage} className="flex items-center justify-between">
@@ -2590,7 +2617,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {manufacturerRegionList.map((region) => {
-                      const count = products.filter(p => p.manufacturerRegion === region).length;
+                      const count = filterSourceProducts.filter(p => p.manufacturerRegion === region).length;
                       const isSelected = selectedManufacturerRegions.includes(region);
                       return (
                         <div key={region} className="flex items-center justify-between">
@@ -2619,7 +2646,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {ingredientsList.slice(0, 20).map((ingredient) => {
-                      const count = products.filter(p => p.ingredients?.includes(ingredient)).length;
+                      const count = filterSourceProducts.filter(p => p.ingredients?.includes(ingredient)).length;
                       const isSelected = selectedIngredients.includes(ingredient);
                       return (
                         <div key={ingredient} className="flex items-center justify-between">
@@ -2648,7 +2675,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {shelfLifeList.map((shelfLife) => {
-                      const count = products.filter(p => p.shelfLife === shelfLife).length;
+                      const count = filterSourceProducts.filter(p => p.shelfLife === shelfLife).length;
                       const isSelected = selectedShelfLives.includes(shelfLife);
                       return (
                         <div key={shelfLife} className="flex items-center justify-between">
@@ -2677,7 +2704,7 @@ const Products = () => {
                   </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {packagingSizeList.map((size) => {
-                      const count = products.filter(p => p.packagingSize === size).length;
+                      const count = filterSourceProducts.filter(p => p.packagingSize === size).length;
                       const isSelected = selectedPackagingSizes.includes(size);
                       return (
                         <div key={size} className="flex items-center justify-between">

@@ -9,6 +9,7 @@ interface Props {
   setSelectedProduct: (p: ProductCategory | null) => void;
   selectedSupplierType?: SupplierType;
   setSelectedSupplierType?: (s: SupplierType) => void;
+  onViewAllProjects?: () => void;
 }
 
 // Static supplier types (these are business logic constants)
@@ -25,7 +26,8 @@ const Step1_SelectProduct: React.FC<Props> = ({
   selectedProduct, 
   setSelectedProduct,
   selectedSupplierType: propSelectedSupplierType,
-  setSelectedSupplierType: propSetSelectedSupplierType
+  setSelectedSupplierType: propSetSelectedSupplierType,
+  onViewAllProjects
 }) => {
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -571,6 +573,28 @@ const Step1_SelectProduct: React.FC<Props> = ({
             />
             {selectedProduct ? "Next" : "Select a category to continue"}
           </motion.button>
+
+          {/* Or View All Projects Button */}
+          <div className="flex flex-col items-center mt-2">
+            <div className="flex items-center w-full my-2">
+              <div className="flex-grow border-t border-border/60"></div>
+              <span className="mx-3 text-xs text-muted-foreground">or</span>
+              <div className="flex-grow border-t border-border/60"></div>
+            </div>
+            <motion.button
+              type="button"
+              className="w-full py-2 px-4 rounded bg-muted/80 hover:bg-muted/60 text-primary font-semibold transition-all border border-border/60 shadow-sm flex items-center justify-center gap-2"
+              onClick={() => onViewAllProjects && onViewAllProjects()}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.7 }}
+              whileHover={{ scale: 1.03, boxShadow: "0 2px 8px rgba(var(--primary-rgb), 0.08)" }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="mr-2 text-primary"><path d="M3 6h18M3 12h18M3 18h18" /></svg>
+              View All Projects
+            </motion.button>
+          </div>
         </div>
       </div>
       

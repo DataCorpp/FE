@@ -114,16 +114,21 @@ const MatchCriteria: React.FC<{
   matches: boolean, 
   isDarkMode: boolean,
   importance?: 'high' | 'medium' | 'low',
-  tooltip?: string
+  tooltip?: string,
+  unavailable?: boolean
 }> = ({ 
   criteria, 
   matches, 
   isDarkMode,
   importance = 'medium',
-  tooltip
+  tooltip,
+  unavailable = false
 }) => {
   // Get background color based on match status and importance
   const getBgColor = () => {
+    if (unavailable) {
+      return isDarkMode ? 'bg-slate-800/20' : 'bg-slate-100/80';
+    }
     if (matches) {
       if (importance === 'high') {
         return isDarkMode ? 'bg-green-900/20' : 'bg-green-50';
@@ -138,7 +143,15 @@ const MatchCriteria: React.FC<{
 
   const content = (
     <div className={`flex items-center gap-2 py-1 px-2 rounded-md transition-colors ${getBgColor()}`}>
-      {matches ? (
+      {unavailable ? (
+        <motion.div
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Info className={isDarkMode ? 'text-slate-400' : 'text-slate-600'} size={16} />
+        </motion.div>
+      ) : matches ? (
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -155,10 +168,10 @@ const MatchCriteria: React.FC<{
           <X className={isDarkMode ? 'text-red-400' : 'text-red-600'} size={16} />
         </motion.div>
       )}
-      <span className={`text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+      <span className={`text-sm ${unavailable ? (isDarkMode ? 'text-slate-400' : 'text-slate-500') : (isDarkMode ? 'text-slate-300' : 'text-slate-700')}`}>
         {criteria}
       </span>
-      {importance === 'high' && (
+      {importance === 'high' && !unavailable && (
         <Badge variant="outline" className={`ml-auto text-[10px] py-0 h-4 ${isDarkMode ? 'border-slate-700 text-slate-400' : 'border-slate-200 text-slate-500'}`}>
           Critical
         </Badge>
@@ -239,12 +252,32 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
   const [isLoading, setIsLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
+  // Track data changes to provide visual feedback
+  const [dataChanged, setDataChanged] = useState(false);
+  
   // Focus search input when component mounts
   useEffect(() => {
     if (searchInputRef.current) {
       searchInputRef.current.focus();
     }
   }, []);
+  
+  // Reset expanded manufacturer when data changes
+  useEffect(() => {
+    // Show brief loading animation when data changes
+    if (manufacturers && manufacturers.length > 0) {
+      setDataChanged(true);
+      setIsLoading(true);
+      
+      // Short timeout to provide visual feedback of data refresh
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        setDataChanged(false);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [manufacturers, projectDetails]);
 
   // Helper to render nested match detail values safely
   const formatMatchValue = (val: any) => {
@@ -266,7 +299,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
   };
   
   // Toggle selection of a manufacturer for comparison
-  const toggleManufacturerSelection = (manufacturerId: string) => {
+  const toggleManufacturerSelection = useCallback((manufacturerId: string) => {
     setSelectedManufacturers(prev => {
       if (prev.includes(manufacturerId)) {
         return prev.filter(id => id !== manufacturerId);
@@ -278,24 +311,24 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
         return prev;
       }
     });
-  };
+  }, []);
   
   // Toggle sort direction
-  const toggleSortDirection = () => {
+  const toggleSortDirection = useCallback(() => {
     setSortDirection(prev => prev === "asc" ? "desc" : "asc");
-  };
+  }, []);
   
   // Handle sort change
-  const handleSortChange = (option: SortOption) => {
+  const handleSortChange = useCallback((option: SortOption) => {
     if (sortBy === option) {
       toggleSortDirection();
     } else {
       setSortBy(option);
       setSortDirection("desc");
     }
-  };
+  }, [sortBy, toggleSortDirection]);
   
-  // Filter and sort manufacturers
+  // Filter and sort manufacturers - memoized to prevent unnecessary recalculations
   const filteredAndSortedManufacturers = useMemo(() => {
     // Start with search filter
     let result = manufacturers.filter(manufacturer => {
@@ -394,44 +427,44 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
     });
   }, [manufacturers, searchTerm, sortBy, sortDirection, filterOption, contactStatus, selectedManufacturers, activeTab]);
 
-  // Function to contact a manufacturer
+  // Function to contact a manufacturer - with optimistic UI update
   const handleContactManufacturer = async (manufacturerId: string, message: string) => {
     if (!projectDetails?.id) return;
+    
+    // Optimistically update the UI
+    setContactStatus(prev => ({
+      ...prev,
+      [manufacturerId]: 'contacted'
+    }));
+    
     try {
       const response = await projectApi.contactManufacturer(String(projectDetails.id), manufacturerId, { message });
       console.log('Contact manufacturer response:', response);
-
-      // Update contact status for this manufacturer
-      setContactStatus(prev => ({
-        ...prev,
-        [manufacturerId]: 'contacted'
-      }));
-
-      // Optionally update manufacturer list status locally
-      // Success toast/notification can be placed here
+      // Success feedback can be added here
     } catch (error) {
       console.error('Error contacting manufacturer:', error);
+      // Revert optimistic update on error
+      setContactStatus(prev => ({
+        ...prev,
+        [manufacturerId]: prev[manufacturerId] || 'pending'
+      }));
       // Error notification would go here
     }
   };
 
   // Toggle manufacturer details
-  const toggleManufacturerDetails = (manufacturerId: string) => {
-    if (expandedManufacturer === manufacturerId) {
-      setExpandedManufacturer(null);
-    } else {
-      setExpandedManufacturer(manufacturerId);
-    }
-  };
+  const toggleManufacturerDetails = useCallback((manufacturerId: string) => {
+    setExpandedManufacturer(prev => prev === manufacturerId ? null : manufacturerId);
+  }, []);
 
   // Open contact form for a manufacturer
-  const openContactForm = (manufacturer: any) => {
+  const openContactForm = useCallback((manufacturer: any) => {
     setSelectedManufacturer(manufacturer);
     setContactFormVisible(true);
-  };
+  }, []);
 
   // Get manufacturer status label
-  const getStatusLabel = (status?: string) => {
+  const getStatusLabel = useCallback((status?: string) => {
     switch (status) {
       case 'contacted':
         return 'Contacted';
@@ -442,10 +475,10 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
       default:
         return 'Not Contacted';
     }
-  };
+  }, []);
 
   // Get manufacturer status color
-  const getStatusColor = (status?: string) => {
+  const getStatusColor = useCallback((status?: string) => {
     switch (status) {
       case 'contacted':
         return isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-700';
@@ -456,10 +489,10 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
       default:
         return isDarkMode ? 'bg-slate-800 text-slate-300' : 'bg-slate-100 text-slate-700';
     }
-  };
+  }, [isDarkMode]);
 
   // Function to get match quality text based on score
-  const getMatchQualityText = (score?: number) => {
+  const getMatchQualityText = useCallback((score?: number) => {
     if (!score && score !== 0) return 'Unknown';
     if (score >= 80) return 'Excellent Match';
     if (score >= 70) return 'Very Good Match';
@@ -467,10 +500,10 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
     if (score >= 50) return 'Moderate Match';
     if (score >= 40) return 'Fair Match';
     return 'Basic Match';
-  };
+  }, []);
 
   // Function to get match quality color based on score
-  const getMatchQualityColor = (score?: number) => {
+  const getMatchQualityColor = useCallback((score?: number) => {
     if (!score && score !== 0) return isDarkMode ? 'text-gray-400' : 'text-gray-500';
     if (score >= 80) return isDarkMode ? 'text-green-300' : 'text-green-600';
     if (score >= 70) return isDarkMode ? 'text-green-400' : 'text-green-500';
@@ -478,7 +511,15 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
     if (score >= 50) return isDarkMode ? 'text-blue-400' : 'text-blue-500';
     if (score >= 40) return isDarkMode ? 'text-yellow-300' : 'text-yellow-600';
     return isDarkMode ? 'text-gray-400' : 'text-gray-500';
-  };
+  }, [isDarkMode]);
+
+  // Reset filters
+  const handleResetFilters = useCallback(() => {
+    setSearchTerm("");
+    setFilterOption("all");
+    setSortBy("matchScore");
+    setSortDirection("desc");
+  }, []);
 
   // Check if we have manufacturers
   if (!manufacturers || manufacturers.length === 0) {
@@ -586,12 +627,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
               <Button
                 variant="outline"
                 size="icon"
-                onClick={() => {
-                  setSearchTerm("");
-                  setFilterOption("all");
-                  setSortBy("matchScore");
-                  setSortDirection("desc");
-                }}
+                onClick={handleResetFilters}
                 title="Reset filters"
               >
                 <RefreshCw size={16} />
@@ -631,10 +667,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
             variant="outline"
             size="sm"
             className="gap-2"
-            onClick={() => {
-              setSearchTerm("");
-              setFilterOption("all");
-            }}
+            onClick={handleResetFilters}
           >
             <RefreshCw size={14} />
             Reset Filters
@@ -687,12 +720,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
             <Button
               variant="outline"
               size="icon"
-              onClick={() => {
-                setSearchTerm("");
-                setFilterOption("all");
-                setSortBy("matchScore");
-                setSortDirection("desc");
-              }}
+              onClick={handleResetFilters}
               title="Reset filters"
             >
               <RefreshCw size={16} />
@@ -1391,14 +1419,11 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                           
                           <MatchCriteria 
                             criteria="Has required certifications" 
-                            matches={
-                              projectDetails?.certification?.length > 0 ? 
-                              manufacturer.matchDetails?.certifications?.score > 10 : 
-                              true
-                            } 
+                            matches={(manufacturer.matchDetails?.certifications?.score ?? 0) > 10} 
                             isDarkMode={isDarkMode}
                             importance="high"
                             tooltip="The manufacturer has the certifications required for your product"
+                            unavailable={!manufacturer.matchDetails?.certifications}
                           />
                           
                           <MatchCriteria 
@@ -1425,6 +1450,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                               isDarkMode={isDarkMode}
                               importance="medium"
                               tooltip="Manufacturer can provide your required packaging types"
+                              unavailable={!manufacturer.matchDetails?.packaging}
                             />
                           )}
                           
@@ -1436,6 +1462,7 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                               isDarkMode={isDarkMode}
                               importance="medium"
                               tooltip="Manufacturer's products meet your allergen requirements"
+                              unavailable={!manufacturer.matchDetails?.allergen}
                             />
                           )}
                         </div>
@@ -1497,21 +1524,31 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                                   });
                                 }
                                 
-                                // Packaging - new from backend
+                                // Packaging - improved display
                                 if (manufacturer.matchDetails.packaging) {
                                   details.push({
                                     label: 'Packaging',
                                     value: manufacturer.matchDetails.packaging.details || 
                                            'Packaging compatibility information not available'
                                   });
+                                } else if (projectDetails?.packaging?.length > 0) {
+                                  details.push({
+                                    label: 'Packaging',
+                                    value: 'Packaging data unavailable'
+                                  });
                                 }
                                 
-                                // Allergen - new from backend
+                                // Allergen - improved display
                                 if (manufacturer.matchDetails.allergen) {
                                   details.push({
                                     label: 'Allergen',
                                     value: manufacturer.matchDetails.allergen.details || 
                                            'Allergen compatibility information not available'
+                                  });
+                                } else if (projectDetails?.allergen?.length > 0) {
+                                  details.push({
+                                    label: 'Allergen',
+                                    value: 'Allergen data unavailable'
                                   });
                                 }
                                 
@@ -1547,7 +1584,11 @@ const ProjectManufacturers: React.FC<ProjectManufacturersProps> = ({ manufacture
                               return details.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-start py-1 border-b border-dashed last:border-0 dark:border-slate-700 border-slate-200">
                                   <span className={`text-xs flex-shrink-0 mr-2 ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>{item.label}</span>
-                                  <span className={`text-xs font-medium text-right break-words ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>{item.value}</span>
+                                  <span className={`text-xs font-medium text-right break-words ${
+                                    item.value === 'Packaging data unavailable' || item.value === 'Allergen data unavailable' ? 
+                                    (isDarkMode ? 'text-amber-400' : 'text-amber-600') : 
+                                    (isDarkMode ? 'text-slate-300' : 'text-slate-700')
+                                  }`}>{item.value}</span>
                                 </div>
                               ));
                             })()}
