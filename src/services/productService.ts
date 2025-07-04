@@ -213,10 +213,16 @@ class ProductService {
       }
       
       const data = await response.json();
-      return { 
-        success: true, 
-        data: Array.isArray(data) ? data : [],
-        message: 'Products fetched successfully'
+      // The backend may return either an array of products or an object
+      // containing a `products` array plus pagination fields. Normalise it here.
+      const products: unknown = Array.isArray(data)
+        ? data
+        : (data && (data as { products?: unknown }).products) || [];
+
+      return {
+        success: true,
+        data: (Array.isArray(products) ? products : []) as Product[],
+        message: 'Products fetched successfully',
       };
     } catch (error) {
       console.error('Error fetching products:', error);
@@ -244,10 +250,14 @@ class ProductService {
       }
       
       const data = await response.json();
-      return { 
-        success: true, 
-        data: Array.isArray(data) ? data : [],
-        message: 'Products fetched successfully'
+      const products: unknown = Array.isArray(data)
+        ? data
+        : (data && (data as { products?: unknown }).products) || [];
+
+      return {
+        success: true,
+        data: (Array.isArray(products) ? products : []) as Product[],
+        message: 'Products fetched successfully',
       };
     } catch (error) {
       console.error('Error fetching products by type:', error);

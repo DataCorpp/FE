@@ -55,7 +55,7 @@ import { RadioGroup } from "@radix-ui/react-dropdown-menu";
 import { RadioGroupItem } from "@radix-ui/react-radio-group";
 import { toBaseProduct, toFormData } from "@/utils/productAdapters";
 import { uploadImage, validateImageFile, refreshSignedUrl } from "@/utils/fileUploadUtils";
-import { createFoodProduct, FoodProductFormData } from '@/services/foodProductService';
+import foodProductService, { createFoodProduct, FoodProductFormData } from '@/services/foodProductService';
 import { syncProductFromApiResponse } from "@/utils/productAdapters";
 
 // ProductImage component to handle signed URLs
@@ -633,11 +633,15 @@ export const Production = () => {
                   const productDetails = detailsData.productDetails;
                   const productRef = detailsData.productReference;
                   
+                  // Determine correct primary ID depending on product type
+                  const primaryId = productRef.type === 'food' && productDetails?._id ? productDetails._id : basicProduct._id;
+                  
                   // Transform combined data to match UI expectations
-                  const transformedProduct: Product = {
+                  const transformedProduct: Product & { productReferenceId?: string } = {
                     // Use reference data for basic info
-                    id: parseInt(basicProduct._id.slice(-8), 16),
-                    _id: basicProduct._id,
+                    id: parseInt(primaryId.slice(-8), 16),
+                    _id: primaryId,
+                    productReferenceId: basicProduct._id,
                     name: basicProduct.productName || productRef.productName,
                     brand: basicProduct.manufacturerName || productRef.manufacturerName,
                     
@@ -1360,25 +1364,60 @@ type UpdateProductData = Product;
         } : {}),
       };
       
-      // Use the product service to update product
-      const response = await productService.updateProduct(updatedProduct._id, productData);
+      // Use appropriate service based on product type
+      let response: { success: boolean; data?: unknown; error?: string };
+      if (updatedProduct.productType === 'Food Product') {
+        // Build minimal payload for food product update (backend expects flattened fields)
+        const foodUpdatePayload = {
+          productName: productData.name,
+          category: productData.category,
+          flavorType: updatedProduct.flavorType || updatedProduct.foodProductData?.flavorType || [],
+          ingredients: updatedProduct.ingredients || updatedProduct.foodProductData?.ingredients || [],
+          usage: updatedProduct.usage || updatedProduct.foodProductData?.usage || [],
+          packagingSize: updatedProduct.packagingSize || updatedProduct.foodProductData?.packagingSize || '',
+          shelfLife: updatedProduct.shelfLife || updatedProduct.foodProductData?.shelfLife || '',
+          manufacturerName: user?.companyName || 'Unknown',
+          manufacturerRegion: updatedProduct.manufacturerRegion,
+          packagingType: updatedProduct.packagingType,
+          storageInstruction: updatedProduct.storageInstruction,
+          pricePerUnit: updatedProduct.pricePerUnit,
+        } as Record<string, unknown>;
+
+        try {
+          const apiRes = await foodProductService.updateFoodProduct(updatedProduct._id as string, foodUpdatePayload);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          response = { success: true, data: (apiRes as any).data ?? apiRes };
+        } catch (err: unknown) {
+          const errorMsg = err instanceof Error ? err.message : 'Failed to update product';
+          response = { success: false, error: errorMsg };
+        }
+      } else {
+        response = await productService.updateProduct(updatedProduct._id as string, productData);
+      }
       
       console.log('Update response:', response);
       
       if (response.success) {
-        // Get updated product from API response or use our local updated version with API fields
-        const updatedProductFromApi = response.data || updatedProduct;
-        
-        // Create a merged product
+        // Updated data returned from API (may be partial) – fallback to the data we just submitted
+        const updatedProductFromApi = (response.data as Record<string, unknown>) || {};
+
+        /*
+         * Merge priority (left-to-right):
+         * 1. original product (unchanged fields)
+         * 2. the data we just attempted to update (productData / foodUpdatePayload)
+         * 3. data actually returned by API (authoritative)
+         */
         const mergedProduct = {
           ...updatedProduct,
+          ...(updatedProduct.productType === 'Food Product' ? {
+            // spread foodUpdatePayload if we used it
+            ...((updatedProduct.productType === 'Food Product' && typeof productData === 'object') ? productData : {}),
+          } : productData),
           ...updatedProductFromApi,
-        };
+        } as Product;
         
         // Update local state with merged data to ensure all changes are reflected
-        setProducts(products.map((p) => 
-          p._id === updatedProduct._id ? mergedProduct : p
-        ));
+        setProducts(prev => prev.map(p => p._id === updatedProduct._id ? mergedProduct : p));
         
         console.log('Product updated successfully via API');
         
@@ -1508,8 +1547,19 @@ type UpdateProductData = Product;
         return;
       }
       
-      // Use the product service to delete product
-      const response = await productService.deleteProduct(deleteId);
+      // Use appropriate service for deletion
+      let response: { success: boolean; error?: string };
+      if (product.productType === 'Food Product') {
+        try {
+          await foodProductService.deleteFoodProduct(deleteId);
+          response = { success: true };
+        } catch (err: unknown) {
+          const errorMsg = err instanceof Error ? err.message : 'Failed to delete product';
+          response = { success: false, error: errorMsg };
+        }
+      } else {
+        response = await productService.deleteProduct(deleteId);
+      }
       
       if (response.success) {
         // Remove product from local state using both possible IDs
