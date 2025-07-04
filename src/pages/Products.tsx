@@ -58,7 +58,7 @@ import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
 import { foodProductApi } from "@/lib/api";
 import ProductCard from "@/components/ProductCard";
-import { advancedSearch, quickSearch } from "@/utils/searchUtils";
+import { advancedSearch, quickSearch, fuzzySearch, enhancedFuzzySearch } from "@/utils/searchUtils";
 import { Label } from "@/components/ui/label";
 
 // Define the Product interface to match both API data structure and UI needs
@@ -341,53 +341,180 @@ function useDebounce<T>(value: T, delay = 500): T {
   return debounced;
 }
 
-// Helper function for enhanced product search
+// Helper function for intelligent product search using enhanced fuzzy matching
 function enhancedSearchProducts(products: Product[], query: string): Product[] {
   if (!query || !query.trim()) return products;
   
-  // Split query into terms and prepare for matching
-  const searchTerms = query.toLowerCase().trim().split(/\s+/);
-  const fullQuery = query.toLowerCase().trim();
+  // Define searchable fields with priority
+  const searchFields: (keyof Product)[] = [
+    'name', 
+    'productName', 
+    'manufacturer', 
+    'manufacturerName', 
+    'category', 
+    'description', 
+    'ingredients', 
+    'flavorType', 
+    'usage', 
+    'packagingSize', 
+    'shelfLife', 
+    'manufacturerRegion'
+  ];
   
-  // Check for full query match first across crucial fields
-  const exactMatches = products.filter(product => {
-    // Check if any field contains the FULL query string (exact match)
-    const nameMatch = (product.name || "").toLowerCase().includes(fullQuery);
-    const productNameMatch = (product.productName || "").toLowerCase().includes(fullQuery);
-    const manufacturerMatch = (product.manufacturer || "").toLowerCase().includes(fullQuery);
-    const descriptionMatch = (product.description || "").toLowerCase().includes(fullQuery);
-    
-    // Prioritize exact matches first
-    return nameMatch || productNameMatch || manufacturerMatch || descriptionMatch;
-  });
+  console.log(`[SEARCH] Performing enhanced search for query: "${query}" across ${products.length} products`);
   
-  if (exactMatches.length > 0) {
-    return exactMatches;
+  // Normalize the query for more consistent matching
+  const normalizeText = (text: string): string => {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[&/\\#,+()$~%.'":*?<>{}]/g, ' ') // Replace special characters with spaces
+      .replace(/\s+/g, ' ')  // Standardize whitespace
+      .trim();
+  };
+  
+  const normalizedQuery = normalizeText(query);
+  const queryTokens = normalizedQuery.split(/\s+/).filter(t => t.length >= 2);
+  
+  // If no valid tokens, return original products
+  if (queryTokens.length === 0) return products;
+  
+  // Use our enhanced fuzzy search with text normalization
+  try {
+    // First try enhancedFuzzySearch if available
+    if (typeof enhancedFuzzySearch === 'function') {
+      const enhancedResults = enhancedFuzzySearch(products, query, searchFields, {
+        threshold: 0.15,
+        boostExact: true,
+        maxResults: 100
+      });
+      
+      if (enhancedResults.length > 0) {
+        console.log(`[SEARCH] Enhanced fuzzy search found ${enhancedResults.length} results`);
+        return enhancedResults;
+      }
+    }
+  } catch (e) {
+    console.warn('[SEARCH] Enhanced search failed:', e);
   }
   
-  // Cross-field term matching for multi-term queries
-  // This handles cases like "Soy Sauce Kikko" where "Soy Sauce" is in name and "Kikko" is in manufacturer
-  return products.filter(product => {
-    // Create a combined searchable text from all relevant fields
-    const combinedText = [
-      product.name || "",
-      product.productName || "",
-      product.manufacturer || "",
-      product.manufacturerName || "",
-      product.category || "",
-      product.description || "",
-      ...(product.ingredients || []),
-      ...(product.flavorType || []),
-      ...(product.usage || []),
-      product.packagingSize || "",
-      product.shelfLife || "",
-      product.manufacturerRegion || ""
-    ].join(" ").toLowerCase();
-    
-    // Check if ALL search terms appear in the combined text
-    return searchTerms.every(term => combinedText.includes(term));
+  // If enhancedFuzzySearch not available or found no results, use regular fuzzy search
+  console.log(`[SEARCH] Enhanced search unavailable or found no results, trying regular fuzzy search`);
+  const fuzzyResults = fuzzySearch(products, query, searchFields, {
+    threshold: 0.2,
+    tokenize: true
   });
+  
+  // Apply additional ranking to the fuzzy results
+  if (fuzzyResults.length > 1) {
+    const qLower = query.toLowerCase();
+    const firstToken = qLower.split(/\s+/)[0];
+    const tokens = qLower.split(/\s+/);
+
+    // Helper function to count token matches across key fields
+    const tokenMatchCount = (item: Product) => {
+      const fieldsToCheck = [item.name, item.productName, item.manufacturer, item.manufacturerName];
+      const combined = fieldsToCheck.filter(Boolean).join(" ").toLowerCase();
+      return tokens.reduce((acc, t) => acc + (combined.includes(t) ? 1 : 0), 0);
+    };
+
+    fuzzyResults.sort((a, b) => {
+      const aName = ((a.name ?? a.productName) ?? "").toLowerCase();
+      const bName = ((b.name ?? b.productName) ?? "").toLowerCase();
+
+      // 1) Exact phrase in name/productName
+      const aExact = aName.includes(qLower);
+      const bExact = bName.includes(qLower);
+      if (aExact !== bExact) return aExact ? -1 : 1;
+
+      // 2) Token coverage across name+manufacturer - more matches are better
+      const aTokens = tokenMatchCount(a);
+      const bTokens = tokenMatchCount(b);
+      if (aTokens !== bTokens) return bTokens - aTokens;
+
+      // 3) Name starts with first token
+      const aStarts = aName.startsWith(firstToken);
+      const bStarts = bName.startsWith(firstToken);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+
+      // 4) Name matches a key phrase from the query (e.g. "soy sauce" within "kikkoman soy sauce")
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const phrase = `${tokens[i]} ${tokens[i + 1]}`;
+        const aContainsPhrase = aName.includes(phrase);
+        const bContainsPhrase = bName.includes(phrase);
+        if (aContainsPhrase !== bContainsPhrase) return aContainsPhrase ? -1 : 1;
+      }
+
+      return 0;
+    });
+  }
+  
+  // If fuzzy search found too few results, fall back to more basic search
+  if (fuzzyResults.length < 3 && products.length > 10) {
+    console.log(`[SEARCH] Fuzzy search returned only ${fuzzyResults.length} results, trying fallback search`);
+    
+    // Fallback to simpler search with lower threshold
+    const fallbackResults = quickSearch(products, query, searchFields);
+    
+    if (fallbackResults.length > fuzzyResults.length) {
+      console.log(`[SEARCH] Fallback search found ${fallbackResults.length} results`);
+      return fallbackResults;
+    }
+  }
+  
+  console.log(`[SEARCH] Returning ${fuzzyResults.length} search results`);
+  return fuzzyResults;
 }
+
+// Helper function to apply sorting client-side
+function applySorting(products: Product[], sortOption: string): Product[] {
+  if (!products || products.length === 0) return [];
+  if (sortOption === 'relevance') return products; // Keep existing order for relevance
+  
+  const sorted = [...products];
+  
+  switch(sortOption) {
+    case 'name-asc':
+      sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      break;
+    case 'name-desc':
+      sorted.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+      break;
+    case 'price-asc':
+      sorted.sort((a, b) => {
+        const aPrice = Number(a.pricePerUnit || a.price?.replace(/[^0-9.]/g, '') || 0);
+        const bPrice = Number(b.pricePerUnit || b.price?.replace(/[^0-9.]/g, '') || 0);
+        return aPrice - bPrice;
+      });
+      break;
+    case 'price-desc':
+      sorted.sort((a, b) => {
+        const aPrice = Number(a.pricePerUnit || a.price?.replace(/[^0-9.]/g, '') || 0);
+        const bPrice = Number(b.pricePerUnit || b.price?.replace(/[^0-9.]/g, '') || 0);
+        return bPrice - aPrice;
+      });
+      break;
+    case 'rating-desc':
+      sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      break;
+    case 'newest':
+      sorted.sort((a, b) => {
+        const aDate = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bDate = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bDate - aDate;
+      });
+      break;
+    default:
+      // Default to name-asc
+      sorted.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  }
+  
+  return sorted;
+}
+
+// Page size constant
+const PAGE_SIZE = 9;
 
 const Products = () => {
   const { t } = useTranslation();
@@ -500,8 +627,14 @@ const Products = () => {
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        // Fetch all products to get unique filter values and total count
-        const response = await foodProductApi.getFoodProducts({ limit: 1000 }); // Get more products to extract unique values
+        // Avoid using limit parameter completely as it seems to cause 500 errors
+        // Instead, get products without specifying limit and process on client side
+        console.log('Fetching filter options without limit parameter...');
+        const response = await foodProductApi.getFoodProducts({
+          // No limit parameter to avoid server errors
+          // Just get default pagination from API
+        });
+        console.log('Filter options fetched successfully:', response?.data?.total || 'unknown');
         
         if (response.data?.products) {
           const allProducts = response.data.products as unknown as Product[];
@@ -595,7 +728,7 @@ const Products = () => {
         sortBy?: string;
       } = {
         page: pagination.page,
-        limit: 9,
+        limit: PAGE_SIZE // Always request 9 items per page from server
       };
       
       if (debouncedSearchTerm) {
@@ -638,9 +771,8 @@ const Products = () => {
         params.sustainable = true;
       }
       
-      if (sortBy !== "name-asc") {
-        params.sortBy = sortBy;
-      }
+      // Remove sortBy parameter from API calls to avoid 500 errors
+      // We'll handle sorting client-side
       
       if (showFavoritesOnly) {
         const favorites = favoritedProducts.map(fav => fav._id || fav.id);
@@ -652,7 +784,10 @@ const Products = () => {
             product => favorites.some(fav => safeId(fav) === safeId(product._id))
           );
 
-          setProducts(filteredProducts);
+          // Apply client-side sorting
+          const sortedProducts = applySorting(filteredProducts, sortBy);
+
+          setProducts(sortedProducts);
           setPagination({
             page: response.data.page || 1,
             pages: response.data.pages || 1,
@@ -666,55 +801,180 @@ const Products = () => {
           let apiProducts = response.data.products as unknown as Product[];
           // Apply client-side ranking / filtering
           if (debouncedSearchTerm.trim()) {
-            // Try enhanced search first, which looks for matches across all fields
-            const enhancedResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+            console.log(`[SEARCH] Processing search for "${debouncedSearchTerm}" on ${apiProducts.length} products`);
             
-            // If the enhanced search found matches, use those results
-            if (enhancedResults.length > 0) {
-              apiProducts = enhancedResults;
+            const searchFields = [
+              'name', 'productName', 'manufacturer', 'manufacturerName', 'category',
+              'description', 'ingredients', 'flavorType', 'usage',
+              'packagingSize', 'shelfLife', 'manufacturerRegion'
+            ] as (keyof Product)[];
+            
+            // Try our enhanced search first - it handles messy input, typos, and word order changes
+            if (useAdvancedSearch) {
+              console.log(`[SEARCH] Using enhanced search for "${debouncedSearchTerm}"`);
+              // Direct call to enhancedSearchProducts which internally uses enhancedFuzzySearch
+              const searchResults = enhancedSearchProducts(apiProducts, debouncedSearchTerm);
+              
+              // If we got reasonable results, use them
+              if (searchResults.length > 0) {
+                console.log(`[SEARCH] Enhanced search found ${searchResults.length} results`);
+                apiProducts = searchResults;
+              } 
+              // If no results, try the standard fallback approach
+              else {
+                console.log(`[SEARCH] Enhanced search found no results, trying advanced weighted search`);
+                apiProducts = advancedSearch(apiProducts, debouncedSearchTerm, {
+                  fields: [
+                    { name: 'name',              weight: 4 },
+                    { name: 'productName',       weight: 4 },
+                    { name: 'manufacturer',      weight: 3 },
+                    { name: 'category',          weight: 2 },
+                    { name: 'description',       weight: 1.5 },
+                    { name: 'ingredients',       weight: 1.3 },
+                    { name: 'flavorType',        weight: 1.2 },
+                    { name: 'usage',             weight: 1.2 },
+                    { name: 'packagingSize',     weight: 1 },
+                    { name: 'shelfLife',         weight: 1 },
+                    { name: 'manufacturerRegion',weight: 1 }
+                  ],
+                  threshold: 0.15, // Lower threshold to find more matches
+                  exact: false
+                });
+              }
             } 
-            // Otherwise fall back to existing search methods
-            else if (useAdvancedSearch) {
-              apiProducts = advancedSearch(apiProducts, debouncedSearchTerm, {
-                fields: [
-                  { name: 'name',              weight: 4 },
-                  { name: 'productName',       weight: 4 },
-                  { name: 'manufacturer',      weight: 3 },
-                  { name: 'category',          weight: 2 },
-                  { name: 'description',       weight: 1.5 },
-                  { name: 'ingredients',       weight: 1.3 },
-                  { name: 'flavorType',        weight: 1.2 },
-                  { name: 'usage',             weight: 1.2 },
-                  { name: 'packagingSize',     weight: 1 },
-                  { name: 'shelfLife',         weight: 1 },
-                  { name: 'manufacturerRegion',weight: 1 }
-                ],
-                threshold: 0.20,
-                exact: false
+            // If not using advanced search, fallback to basic fuzzy search
+            else {
+              console.log(`[SEARCH] Using basic fuzzy search for "${debouncedSearchTerm}"`);
+              const fuzzyResults = fuzzySearch(apiProducts, debouncedSearchTerm, searchFields, { 
+                threshold: 0.25, 
+                tokenize: true 
               });
-            } else {
-              apiProducts = quickSearch(apiProducts, debouncedSearchTerm, [
-                'name',
-                'productName',
-                'manufacturer',
-                'category',
-                'description',
-                'ingredients',
-                'flavorType',
-                'usage',
-                'packagingSize',
-                'shelfLife',
-                'manufacturerRegion'
-              ]);
+              
+              console.log(`[SEARCH] Basic fuzzy search found ${fuzzyResults.length} results`);
+              
+              if (fuzzyResults.length > 0) {
+                apiProducts = fuzzyResults;
+              } else {
+                // Final fallback to basic search with very low threshold
+                console.log(`[SEARCH] Falling back to quickSearch with lower threshold`);
+                apiProducts = quickSearch(apiProducts, debouncedSearchTerm, searchFields);
+              }
             }
           }
-          console.log(`[SERVER] Fetched ${apiProducts.length} products`);
+
+          // Apply client-side sorting unless it's already sorted by relevance
+          if (sortBy !== 'relevance' || !debouncedSearchTerm.trim()) {
+            apiProducts = applySorting(apiProducts, sortBy);
+          }
+
+          console.log(`[SERVER] Fetched ${apiProducts.length} products (page ${pagination.page})`);
+
           setProducts(apiProducts);
+
+          // Calculate total pages based on server total and PAGE_SIZE
+          const serverTotal = response.data.total || apiProducts.length;
+          const totalPages = Math.max(1, Math.ceil(serverTotal / PAGE_SIZE));
+
           setPagination({
-            page: response.data.page || 1,
-            pages: response.data.pages || 1,
-            total: response.data.total || 0,
+            page: pagination.page,
+            pages: totalPages,
+            total: serverTotal,
           });
+          
+          // If server search returned very few results, try client-side with more data
+          if (apiProducts.length < 3 && debouncedSearchTerm.trim()) {
+            console.log('[CLIENT] Few results, attempting secondary client-side search');
+            try {
+              // Make a second request without search params to get more data
+              const fullResponse = await foodProductApi.getFoodProducts({
+                ...params,
+                search: undefined,
+                limit: PAGE_SIZE
+              });
+              
+              if (fullResponse.data?.products?.length > apiProducts.length) {
+                const moreProducts = fullResponse.data.products as unknown as Product[];
+                console.log(`[CLIENT] Got ${moreProducts.length} more products for client-side search`);
+                
+                // Apply fuzzy search to larger dataset
+                const searchFields = [
+                  'name', 'productName', 'manufacturer', 'manufacturerName', 'category',
+                  'description', 'ingredients', 'flavorType', 'usage',
+                  'packagingSize', 'shelfLife', 'manufacturerRegion'
+                ] as (keyof Product)[];
+                
+                // Use either enhanced search or regular fuzzy search based on settings
+                let betterResults;
+                if (useAdvancedSearch) {
+                  console.log(`[CLIENT] Using enhanced fuzzy search for better results`);
+                  betterResults = enhancedFuzzySearch(moreProducts, debouncedSearchTerm, searchFields, {
+                    threshold: 0.15,
+                    boostExact: true,
+                    maxResults: 100
+                  });
+                } else {
+                  console.log(`[CLIENT] Using basic fuzzy search`);
+                  betterResults = fuzzySearch(moreProducts, debouncedSearchTerm, searchFields, { 
+                    threshold: 0.2, 
+                    tokenize: true 
+                  });
+                }
+                
+                // Apply the same ranking algorithm to secondary search results
+                if (betterResults.length > 1) {
+                  const qLower = debouncedSearchTerm.toLowerCase();
+                  const tokens = qLower.split(/\s+/);
+                  const firstToken = tokens[0];
+
+                  const tokenMatches = (item: Product) => {
+                    const fields = [item.name, item.productName, item.manufacturer, item.manufacturerName];
+                    const combined = fields.filter(Boolean).join(" ").toLowerCase();
+                    return tokens.reduce((acc, t) => acc + (combined.includes(t) ? 1 : 0), 0);
+                  };
+
+                  betterResults.sort((a, b) => {
+                    const aName = ((a.name ?? a.productName) ?? "").toLowerCase();
+                    const bName = ((b.name ?? b.productName) ?? "").toLowerCase();
+
+                    // 1) Exact phrase in name/productName
+                    const aExact = aName.includes(qLower);
+                    const bExact = bName.includes(qLower);
+                    if (aExact !== bExact) return aExact ? -1 : 1;
+
+                    // 2) Token coverage across name+manufacturer
+                    const aTokens = tokenMatches(a);
+                    const bTokens = tokenMatches(b);
+                    if (aTokens !== bTokens) return bTokens - aTokens;
+
+                    // 3) Name starts with first token
+                    const aStarts = aName.startsWith(firstToken);
+                    const bStarts = bName.startsWith(firstToken);
+                    if (aStarts !== bStarts) return aStarts ? -1 : 1;
+
+                    return 0;
+                  });
+                }
+                
+                if (betterResults.length > apiProducts.length) {
+                  console.log(`[CLIENT] Found better results: ${betterResults.length}`);
+                  
+                  // Apply client-side sorting unless it's already sorted by relevance
+                  const sortedResults = sortBy !== 'relevance' ? 
+                    applySorting(betterResults, sortBy) : 
+                    betterResults;
+                    
+                  setProducts(sortedResults);
+                  setPagination({
+                    page: 1,
+                    pages: 1,
+                    total: betterResults.length
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn('[CLIENT] Secondary search failed:', err);
+            }
+          }
         }
       }
     } catch (error) {
@@ -784,6 +1044,16 @@ const Products = () => {
   const handleSearch = (value: string) => {
     setSearchTerm(value);
     setPagination(prev => ({ ...prev, page: 1 }));
+
+    // When a user types something, switch to relevance sort automatically
+    // unless they have chosen a different explicit sort (other than name-asc/relevance)
+    setSortBy(prevSort => {
+      if (value.trim()) {
+        return prevSort === "name-asc" || prevSort === "relevance" ? "relevance" : prevSort;
+      }
+      // Reset to name-asc when clearing search
+      return prevSort === "relevance" ? "name-asc" : prevSort;
+    });
   };
 
   // Toggle favorites view

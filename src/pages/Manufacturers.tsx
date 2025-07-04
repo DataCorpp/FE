@@ -40,7 +40,7 @@ import { toast } from "sonner";
 import ManufacturerDetails from "@/components/ManufacturerDetails";
 import { cn } from "@/lib/utils";
 import { createClampedBlurVariants } from "@/hooks/use-safe-blur";
-import { advancedSearch, quickSearch } from "@/utils/searchUtils";
+import { enhancedFuzzySearch, quickSearch } from "@/utils/searchUtils";
 
 // API configuration - Fixed to match backend API structure
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
@@ -262,6 +262,14 @@ const staggerContainerVariants = {
   }
 };
 
+// Add these new interfaces for categorized filters
+interface CategoryItem {
+  id: string;
+  label: string;
+  count: number;
+  originalValues: string[];
+}
+
 const Manufacturers = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -288,8 +296,9 @@ const Manufacturers = () => {
   
   // Available filter options from API
   const [industries, setIndustries] = useState<string[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
-  const [certifications, setCertifications] = useState<string[]>([]);
+  // Replace string arrays with categorized arrays
+  const [locations, setLocations] = useState<CategoryItem[]>([]);
+  const [certifications, setCertifications] = useState<CategoryItem[]>([]);
   const [loadingFilters, setLoadingFilters] = useState(false);
   
   // UI states
@@ -351,25 +360,127 @@ const Manufacturers = () => {
     }
   }, []);
 
-  // Apply filters function
+  // Helper function to categorize certifications
+  const categorizeCertifications = useCallback((rawCertifications: string[]): CategoryItem[] => {
+    // Common certification categories
+    const categories: Record<string, { pattern: RegExp, label: string }> = {
+      organic: { pattern: /organic|usda|eco/i, label: "Organic" },
+      iso9001: { pattern: /iso\s*9001|iso9001/i, label: "ISO 9001" },
+      iso14001: { pattern: /iso\s*14001|iso14001/i, label: "ISO 14001" },
+      kosher: { pattern: /kosher/i, label: "Kosher" },
+      halal: { pattern: /halal/i, label: "Halal" },
+      haccp: { pattern: /haccp/i, label: "HACCP" },
+      gmp: { pattern: /gmp|good\s*manufacturing\s*practice/i, label: "GMP" },
+      fda: { pattern: /fda|food\s*and\s*drug/i, label: "FDA" },
+      fairtrade: { pattern: /fair\s*trade|fairtrade/i, label: "Fair Trade" },
+      nonGMO: { pattern: /non\s*gmo|no\s*gmo/i, label: "Non-GMO" },
+      glutenFree: { pattern: /gluten\s*free/i, label: "Gluten Free" },
+      vegan: { pattern: /vegan/i, label: "Vegan" },
+      sustainable: { pattern: /sustainable|sustainability/i, label: "Sustainable" }
+    };
+
+    // Initialize result with "Other" category
+    const result: Record<string, CategoryItem> = {
+      other: {
+        id: "other",
+        label: "Other",
+        count: 0,
+        originalValues: []
+      }
+    };
+
+    // Initialize all categories with zero count
+    Object.keys(categories).forEach(key => {
+      result[key] = {
+        id: key,
+        label: categories[key].label,
+        count: 0,
+        originalValues: []
+      };
+    });
+
+    // Categorize each certification
+    rawCertifications.forEach(cert => {
+      let matched = false;
+      for (const [key, category] of Object.entries(categories)) {
+        if (category.pattern.test(cert)) {
+          result[key].count++;
+          result[key].originalValues.push(cert);
+          matched = true;
+          break;
+        }
+      }
+      
+      if (!matched) {
+        result.other.count++;
+        result.other.originalValues.push(cert);
+      }
+    });
+
+    // Convert to array and remove empty categories
+    return Object.values(result)
+      .filter(item => item.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, []);
+
+  // Helper function to categorize locations by specific city/country (second last part of address)
+  const categorizeLocations = useCallback((rawLocations: string[]): CategoryItem[] => {
+    const locationCounts: Record<string, { count: number; addresses: string[] }> = {};
+
+    rawLocations.forEach((location) => {
+      if (!location) return;
+
+      const parts = location.split(',').map((p) => p.trim()).filter(Boolean);
+      let city = '';
+      if (parts.length >= 2) {
+        // Use the second last part (e.g., 123 St, Tokyo, Japan -> Tokyo)
+        city = parts[parts.length - 2];
+      } else {
+        // Fallback to the only/last part
+        city = parts[parts.length - 1] || location;
+      }
+
+      if (!city) return;
+
+      if (!locationCounts[city]) {
+        locationCounts[city] = {
+          count: 1,
+          addresses: [location],
+        };
+      } else {
+        locationCounts[city].count += 1;
+        locationCounts[city].addresses.push(location);
+      }
+    });
+
+    const locationItems: CategoryItem[] = Object.entries(locationCounts).map(([city, data]) => ({
+      id: city,
+      label: city,
+      count: data.count,
+      originalValues: data.addresses,
+    }));
+
+    return locationItems.sort((a, b) => b.count - a.count);
+  }, []);
+
+  // Apply filters function - update to work with categories
   const applyFilters = useCallback((manufacturersList: Manufacturer[]) => {
     let filtered = manufacturersList;
 
     // Search filter - use either advanced or quick search based on setting
     if (searchTerm && searchTerm.trim()) {
       if (useAdvancedSearch) {
-        // Use advanced search with weighted fields for better relevance
-        filtered = advancedSearch(filtered, searchTerm, {
-          fields: [
-            { name: 'name', weight: 2.5 },           // Name has highest weight
-            { name: 'description', weight: 1.5 },    // Description is important
-            { name: 'industry', weight: 2.0 },       // Industry is very relevant
-            { name: 'location', weight: 1.0 },       // Location has standard weight
-            { name: 'certification', weight: 1.0 }   // Certification has standard weight
-          ],
-          threshold: 0.2,  // Minimum score to include result
-          exact: false     // Allow partial matches
-        });
+        // Use enhanced fuzzy search for robust, cross-field matching that tolerates messy user input
+        filtered = enhancedFuzzySearch(
+          filtered,
+          searchTerm,
+          ['name', 'description', 'industry', 'location', 'certification'],
+          {
+            threshold: 0.15,  // More permissive threshold for fuzzy matching
+            boostExact: true,
+            maxResults: 500   // Plenty of headroom for client-side filtering
+          }
+        );
       } else {
         // Use simple multi-term search (all terms must match at least one field)
         filtered = quickSearch(filtered, searchTerm, [
@@ -385,19 +496,29 @@ const Manufacturers = () => {
       );
     }
 
-    // Location filter
+    // Location filter - updated to work with categorized locations
     if (selectedLocation !== "all") {
+      const locationCategory = locations.find(cat => cat.id === selectedLocation);
+      if (locationCategory) {
       filtered = filtered.filter(manufacturer => 
-        manufacturer.location === selectedLocation
+          locationCategory.originalValues.some(location => 
+            manufacturer.location.includes(location)
+          )
       );
+      }
     }
 
-    // Certification filter
+    // Certification filter - updated to work with categorized certifications
     if (selectedCertification !== "all") {
+      const certCategory = certifications.find(cat => cat.id === selectedCertification);
+      if (certCategory) {
       filtered = filtered.filter(manufacturer => 
         manufacturer.certification && 
-        manufacturer.certification.toLowerCase().includes(selectedCertification.toLowerCase())
+          certCategory.originalValues.some(cert => 
+            manufacturer.certification.toLowerCase().includes(cert.toLowerCase())
+          )
       );
+      }
     }
 
     // Establishment year range filter
@@ -417,9 +538,9 @@ const Manufacturers = () => {
     }
 
     return filtered;
-  }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites, useAdvancedSearch]);
+  }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites, useAdvancedSearch, locations, certifications]);
 
-  // Load filter options
+  // Load filter options - updated to use categorization
   const loadFilterOptions = useCallback(async () => {
     try {
       setLoadingFilters(true);
@@ -440,14 +561,14 @@ const Manufacturers = () => {
           )] as string[];
           setIndustries(uniqueIndustries);
           
-          // Extract unique locations
+          // Extract unique locations and categorize them
           const uniqueLocations = [...new Set(
             manufacturersData
               .map((m: ApiManufacturer) => m.address)
               .filter((location: string) => location && location.trim())
               .sort()
           )] as string[];
-          setLocations(uniqueLocations);
+          setLocations(categorizeLocations(uniqueLocations));
           
           // Extract unique certifications - handle both single and multiple certs
           const uniqueCertifications = [...new Set(
@@ -462,7 +583,7 @@ const Manufacturers = () => {
               })
               .sort()
           )] as string[];
-          setCertifications(uniqueCertifications);
+          setCertifications(categorizeCertifications(uniqueCertifications));
           
           // Calculate establishment year range from actual data
           const establishYears = manufacturersData
@@ -477,13 +598,6 @@ const Manufacturers = () => {
               setEstablishYearRange([Math.max(minYear, 1500), Math.min(maxYear, new Date().getFullYear())]);
             }
           }
-          
-          // console.log('Filter options loaded:', {
-          //   industries: uniqueIndustries.length,
-          //   locations: uniqueLocations.length,
-          //   certifications: uniqueCertifications.length,
-          //   establishYearRange: [minYear, maxYear]
-          // });
         }
       }
       
@@ -496,7 +610,7 @@ const Manufacturers = () => {
     } finally {
       setLoadingFilters(false);
     }
-  }, []);
+  }, [categorizeLocations, categorizeCertifications]);
 
   // Load manufacturers from API
   const loadManufacturers = useCallback(async () => {
@@ -717,6 +831,152 @@ const Manufacturers = () => {
 
   const displayedManufacturers = getPaginatedResults();
 
+  // Update the Location Filter UI to show individual locations with counts
+  const LocationFilter = (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-primary" />
+        Location
+        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </Label>
+      <Select 
+        value={selectedLocation} 
+        onValueChange={setSelectedLocation}
+        disabled={loadingFilters}
+      >
+        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
+          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Locations"} />
+        </SelectTrigger>
+        <SelectContent className="rounded-xl max-h-60 overflow-y-auto">
+          <SelectItem value="all">
+            All Locations ({manufacturers.length})
+          </SelectItem>
+          
+          {/* Show individual locations with counts */}
+          {locations.map((locationCategory) => (
+            <SelectItem 
+              key={locationCategory.id} 
+              value={locationCategory.id} 
+              className="hover:bg-primary/10"
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div>
+                  <span className="font-medium">{locationCategory.label}</span>
+                </div>
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  {locationCategory.count}
+                </Badge>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {/* Show address details when a location is selected */}
+      {selectedLocation !== "all" && (
+        <div className="bg-muted/40 rounded-xl p-3 text-xs">
+          <p className="text-muted-foreground mb-2 flex items-center gap-1">
+            <MapPin className="h-3 w-3" />
+            <span>Manufacturers in this location:</span>
+          </p>
+          <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
+            {locations.find(l => l.id === selectedLocation)?.originalValues.slice(0, 5).map((address, idx) => (
+              <div key={idx} className="flex items-start gap-1.5 bg-muted/30 px-2 py-1 rounded-md">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary/70 mt-1"></div>
+                <span className="leading-tight">{address}</span>
+              </div>
+            ))}
+            {(locations.find(l => l.id === selectedLocation)?.originalValues.length || 0) > 5 && (
+              <div className="text-muted-foreground italic text-center pt-1">
+                And {(locations.find(l => l.id === selectedLocation)?.originalValues.length || 0) - 5} more addresses...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Update the Certification Filter UI with improved categorization
+  const CertificationFilter = (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium flex items-center gap-2">
+        <Award className="h-4 w-4 text-primary" />
+        Certification
+        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </Label>
+      <Select 
+        value={selectedCertification} 
+        onValueChange={setSelectedCertification}
+        disabled={loadingFilters}
+      >
+        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
+          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Certifications"} />
+        </SelectTrigger>
+        <SelectContent className="rounded-xl max-h-60">
+          <SelectItem value="all">
+            All Certifications ({manufacturers.length})
+          </SelectItem>
+          
+          {/* Display certification categories with counts */}
+          {certifications.map((certCategory) => (
+            <SelectItem 
+              key={certCategory.id} 
+              value={certCategory.id} 
+              className="hover:bg-primary/10"
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5">
+                  {certCategory.id === 'organic' && <div className="h-2.5 w-2.5 rounded-full bg-green-500"></div>}
+                  {certCategory.id === 'iso9001' && <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>}
+                  {certCategory.id === 'iso14001' && <div className="h-2.5 w-2.5 rounded-full bg-cyan-500"></div>}
+                  {certCategory.id === 'kosher' && <div className="h-2.5 w-2.5 rounded-full bg-amber-500"></div>}
+                  {certCategory.id === 'halal' && <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>}
+                  {certCategory.id === 'haccp' && <div className="h-2.5 w-2.5 rounded-full bg-rose-500"></div>}
+                  {certCategory.id === 'gmp' && <div className="h-2.5 w-2.5 rounded-full bg-purple-500"></div>}
+                  {certCategory.id === 'fda' && <div className="h-2.5 w-2.5 rounded-full bg-red-500"></div>}
+                  {certCategory.id === 'fairtrade' && <div className="h-2.5 w-2.5 rounded-full bg-teal-500"></div>}
+                  {certCategory.id === 'nonGMO' && <div className="h-2.5 w-2.5 rounded-full bg-lime-500"></div>}
+                  {certCategory.id === 'glutenFree' && <div className="h-2.5 w-2.5 rounded-full bg-yellow-500"></div>}
+                  {certCategory.id === 'vegan' && <div className="h-2.5 w-2.5 rounded-full bg-green-600"></div>}
+                  {certCategory.id === 'sustainable' && <div className="h-2.5 w-2.5 rounded-full bg-sky-500"></div>}
+                  {certCategory.id === 'other' && <div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div>}
+                  
+                  <span className="truncate font-medium">{certCategory.label}</span>
+                </div>
+                <Badge variant="secondary" className="ml-2 text-xs flex-shrink-0">
+                  {certCategory.count}
+                </Badge>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {selectedCertification !== "all" && (
+        <div className="bg-muted/40 rounded-xl p-3 text-xs">
+          <p className="text-muted-foreground mb-2 flex items-center gap-1">
+            <Award className="h-3 w-3" />
+            <span>Includes manufacturers with:</span>
+          </p>
+          <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
+            {certifications.find(c => c.id === selectedCertification)?.originalValues.slice(0, 5).map((cert, idx) => (
+              <div key={idx} className="flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-md">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary/70"></div>
+                <span className="truncate font-medium">{cert}</span>
+              </div>
+            ))}
+            {(certifications.find(c => c.id === selectedCertification)?.originalValues.length || 0) > 5 && (
+              <div className="text-muted-foreground italic text-center pt-1">
+                And {(certifications.find(c => c.id === selectedCertification)?.originalValues.length || 0) - 5} more...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background/98 to-muted/10">
@@ -997,18 +1257,87 @@ const Manufacturers = () => {
                   
                   <div className="space-y-6">
                     {/* Filter Summary */}
-                    <div className="bg-muted/30 rounded-xl p-4 space-y-2">
+                    <div className="bg-muted/30 rounded-xl p-4 space-y-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
                         <Package className="h-4 w-4 text-primary" />
-                        Filter Summary
+                        <span>Filter Summary</span>
                       </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <div>Total: {manufacturers.length} manufacturers</div>
-                        <div>Filtered: {filteredManufacturers.length} results</div>
-                        <div>Industries: {industries.length}</div>
-                        <div>Locations: {locations.length}</div>
-                        <div>Certifications: {certifications.length}</div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Total</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {manufacturers.length}
+                          </Badge>
                       </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Filtered</span>
+                          <Badge variant="outline" className={cn(
+                            "font-semibold", 
+                            filteredManufacturers.length < manufacturers.length 
+                              ? "bg-primary/10 text-primary border-primary/20" 
+                              : "bg-background/50"
+                          )}>
+                            {filteredManufacturers.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Industries</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {industries.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Locations</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {locations.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 col-span-2">
+                          <span className="text-muted-foreground">Certifications</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {certifications.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {/* Active filters summary */}
+                      {hasActiveFilters && (
+                        <div className="border-t border-muted pt-2 mt-1">
+                          <div className="text-xs font-medium mb-1.5 text-muted-foreground">Active Filters:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedIndustry !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Building className="h-3 w-3" />
+                                <span>{selectedIndustry}</span>
+                              </Badge>
+                            )}
+                            {selectedLocation !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <MapPin className="h-3 w-3" />
+                                <span>{locations.find(l => l.id === selectedLocation)?.label}</span>
+                              </Badge>
+                            )}
+                            {selectedCertification !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Award className="h-3 w-3" />
+                                <span>{certifications.find(c => c.id === selectedCertification)?.label}</span>
+                              </Badge>
+                            )}
+                            {(establishYearRange[0] > 1500 || establishYearRange[1] < new Date().getFullYear()) && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>{establishYearRange[0]} - {establishYearRange[1]}</span>
+                              </Badge>
+                            )}
+                            {showFavoritesOnly && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Heart className="h-3 w-3 fill-current" />
+                                <span>Favorites</span>
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Industry Filter */}
@@ -1047,79 +1376,11 @@ const Manufacturers = () => {
                       </Select>
                     </div>
                     
-                    {/* Location Filter */}
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-primary" />
-                        Location
-                        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                      </Label>
-                      <Select 
-                        value={selectedLocation} 
-                        onValueChange={setSelectedLocation}
-                        disabled={loadingFilters}
-                      >
-                        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
-                          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Locations"} />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl">
-                          <SelectItem value="all">
-                            All Locations ({manufacturers.length})
-                          </SelectItem>
-                          {locations.map((location) => {
-                            const count = manufacturers.filter(m => m.location === location).length;
-                            return (
-                              <SelectItem key={location} value={location} className="hover:bg-primary/10">
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{location}</span>
-                                  <Badge variant="secondary" className="ml-2 text-xs">
-                                    {count}
-                                  </Badge>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Location Filter - Using the updated component */}
+                    {LocationFilter}
                     
-                    {/* Certification Filter */}
-                    <div className="space-y-3">
-                      <Label className="text-sm font-medium flex items-center gap-2">
-                        <Award className="h-4 w-4 text-primary" />
-                        Certification
-                        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                      </Label>
-                      <Select 
-                        value={selectedCertification} 
-                        onValueChange={setSelectedCertification}
-                        disabled={loadingFilters}
-                      >
-                        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
-                          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Certifications"} />
-                        </SelectTrigger>
-                        <SelectContent className="rounded-xl max-h-60">
-                          <SelectItem value="all">
-                            All Certifications ({manufacturers.length})
-                          </SelectItem>
-                          {certifications.map((certification) => {
-                            const count = manufacturers.filter(m => 
-                              m.certification && m.certification.toLowerCase().includes(certification.toLowerCase())
-                            ).length;
-                            return (
-                              <SelectItem key={certification} value={certification} className="hover:bg-primary/10">
-                                <div className="flex items-center justify-between w-full">
-                                  <span className="truncate">{certification}</span>
-                                  <Badge variant="secondary" className="ml-2 text-xs flex-shrink-0">
-                                    {count}
-                                  </Badge>
-                                </div>
-                              </SelectItem>
-                            );
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Certification Filter - Using the updated component */}
+                    {CertificationFilter}
                     
                     {/* Establishment Year Range */}
                     <div className="space-y-3">

@@ -28,11 +28,13 @@ import {
   ShoppingCart,
   TrendingUp,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ImageIcon
 } from "lucide-react";
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
 import { useManufacturerCompare } from "@/contexts/ManufacturerCompareContext";
 import { cn } from "@/lib/utils";
+import { foodProductApi } from "@/lib/api";
 
 // Updated interface to match actual database fields only
 interface Manufacturer {
@@ -52,11 +54,14 @@ interface Manufacturer {
   description?: string;
 }
 
-// Product category interface
+// Updated ProductCategory interface to include image URLs
 interface ProductCategory {
   category: string;
   count: number;
-  products: string[];
+  products: Array<{
+    name: string;
+    image?: string;
+  }>;
 }
 
 interface ManufacturerDetailsProps {
@@ -170,34 +175,26 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
       setProductsError(null);
       
       try {
-        const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
-        // Remove any duplicate '/api' in the URL path
-        const baseUrl = apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
-        const response = await fetch(`${baseUrl}/foodproducts?manufacturer=${encodeURIComponent(manufacturer.name)}&limit=100`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          
-          // The backend returns `{ products: [...] }`, but older versions may return `{ foodProducts: [...] }`.
-          const productList = (data.products ?? data.foodProducts) as Array<{
-            name?: string;
-            category?: string;
-          }> | undefined;
+        const response = await foodProductApi.getFoodProducts({ manufacturer: [manufacturer.name], limit: 100 });
 
-          if (Array.isArray(productList) && productList.length > 0) {
+        if (response.status === 200) {
+          const data = response.data;
+          if (data && data.products) {
             // Group products by category
-            const categoryMap = new Map<string, { count: number; products: string[] }>();
+            const categoryMap = new Map<string, { count: number; products: Array<{name: string; image?: string}> }>();
             
-            productList.forEach((product) => {
+            (data.products as any[]).forEach((product: any) => {
               const category = product.category || 'Uncategorized';
               if (!categoryMap.has(category)) {
                 categoryMap.set(category, { count: 0, products: [] });
               }
               const categoryData = categoryMap.get(category)!;
               categoryData.count++;
-              if (product.name) {
-                categoryData.products.push(product.name);
-              }
+              // Store product name and image URL if available
+              categoryData.products.push({
+                name: product.name,
+                image: product.image || product.imageUrl || product.thumbnail
+              });
             });
             
             // Convert to array and sort by count
@@ -205,7 +202,7 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
               .map(([category, data]) => ({
                 category,
                 count: data.count,
-                products: data.products.slice(0, 5) // Limit to first 5 products for display
+                products: data.products.slice(0, 6) // Show 6 products per category for better grid layout
               }))
               .sort((a, b) => b.count - a.count);
             
@@ -275,6 +272,11 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
 
   // Calculate total products
   const totalProducts = productCategories.reduce((sum, cat) => sum + cat.count, 0);
+
+  // Add a new function to handle image errors
+  const handleProductImageError = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    event.currentTarget.src = '/placeholder.jpg'; // Fallback image
+  };
 
   return (
     <AnimatePresence>
@@ -622,17 +624,33 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                                         {category.count} products
                                       </Badge>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                       {category.products.map((product, idx) => (
                                         <div
                                           key={idx}
-                                          className="text-sm text-muted-foreground bg-background/50 rounded-md p-3 border hover:bg-background/80 transition-colors break-words"
+                                          className="text-sm text-muted-foreground bg-background/80 rounded-md border hover:bg-background transition-colors overflow-hidden flex flex-col"
                                         >
-                                          {product}
+                                          <div className="h-36 bg-muted/50 relative overflow-hidden p-2 flex items-center justify-center">
+                                            {product.image ? (
+                                              <img
+                                                src={product.image}
+                                                alt={product.name}
+                                                className="max-w-full max-h-32 object-contain transition-transform hover:scale-102"
+                                                onError={handleProductImageError}
+                                              />
+                                            ) : (
+                                              <div className="w-full h-full flex items-center justify-center bg-muted/30">
+                                                <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div className="p-3 flex-1 flex flex-col justify-between">
+                                            <p className="font-medium line-clamp-2 break-words">{product.name}</p>
+                                          </div>
                                         </div>
                                       ))}
                                       {category.count > category.products.length && (
-                                        <div className="text-sm text-primary bg-primary/5 rounded-md p-3 border-primary/20 border flex items-center justify-center hover:bg-primary/10 transition-colors">
+                                        <div className="text-sm text-primary bg-primary/5 rounded-md border-primary/20 border flex items-center justify-center h-36 md:h-auto hover:bg-primary/10 transition-colors">
                                           +{category.count - category.products.length} more products
                                         </div>
                                       )}

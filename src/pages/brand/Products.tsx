@@ -698,11 +698,9 @@ const BrandProducts = () => {
   // Render product cards
   const renderProducts = () => {
     return filteredProducts.map((product) => (
-      <motion.div
+      <div
         key={product.id}
         className="relative bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden"
-        whileHover={{ y: -5 }}
-        transition={{ duration: 0.2 }}
       >
         <div 
           className="cursor-pointer" 
@@ -756,7 +754,7 @@ const BrandProducts = () => {
             Edit
           </button>
         </div>
-      </motion.div>
+      </div>
     ));
   };
 
@@ -897,11 +895,8 @@ const BrandProducts = () => {
             {filteredProducts.length > 0 ? (
               <>
             {filteredProducts.map((product) => (
-                  <motion.div
+                  <div
                     key={product.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
                   >
                     <Card className={cn(
                       "overflow-hidden transition-all duration-200 h-full flex flex-col",
@@ -1003,7 +998,7 @@ const BrandProducts = () => {
                         </div>
                 </CardFooter>
               </Card>
-                  </motion.div>
+                  </div>
                 ))}
               </>
             ) : (

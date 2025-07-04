@@ -22,6 +22,47 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useProductFavorites } from "@/contexts/ProductFavoriteContext";
 
+// Define currency symbols for price formatting
+const CURRENCY_SYMBOLS = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+  CNY: "¥",
+  KRW: "₩",
+  VND: "₫",
+  THB: "฿",
+  DEFAULT: "$"
+};
+
+// Price formatter function for different currencies
+const formatPrice = (priceInput: string | number, currencyCode?: string): string => {
+  // Convert number to string for consistent processing
+  const priceStr = typeof priceInput === 'number' ? priceInput.toString() : priceInput;
+
+  // Check if price already has a currency symbol
+  const hasCurrencySymbol = /^[^\d\s.,]+/.test(priceStr);
+  if (hasCurrencySymbol) {
+    return priceStr; // Return as is if already has a symbol
+  }
+
+  // Default to USD if not specified
+  const symbol = currencyCode
+    ? CURRENCY_SYMBOLS[currencyCode as keyof typeof CURRENCY_SYMBOLS] || CURRENCY_SYMBOLS.DEFAULT
+    : CURRENCY_SYMBOLS.DEFAULT;
+
+  // Handle different currency formatting
+  if (currencyCode === 'JPY' || currencyCode === 'KRW' || currencyCode === 'VND') {
+    // These currencies typically don't use decimal points
+    const numericValue = parseFloat(priceStr.replace(/[^\d.-]/g, ''));
+    return `${symbol}${Math.round(numericValue).toLocaleString()}`;
+  }
+
+  // Default behaviour: 2 decimal places
+  const numericValue = parseFloat(priceStr.replace(/[^\d.-]/g, ''));
+  return `${symbol}${numericValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
 // Define the Product interface with all required fields
 interface Product {
   _id: string;
@@ -33,7 +74,9 @@ interface Product {
   manufacturerRegion?: string;
   image: string;
   images?: string[];
-  price: string;
+  price: string | number;
+  priceCurrency?: string;
+  currency?: string;
   pricePerUnit?: number;
   rating: number;
   productType: string;
@@ -162,39 +205,9 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
   const rotateY = useTransform(x, [-100, 100], [-3, 3]);
   const rotateX = useTransform(y, [-100, 100], [3, -3]);
   
-  // Process image when component mounts or product changes
-  useEffect(() => {
-    // Reset error state when product changes
-    setImgLoadError(false);
-    
-    if (product.image) {
-      // If it's an S3 URL, check for CORS issues
-      if (product.image.includes('amazonaws.com') || 
-          product.image.includes('s3.') || 
-          product.image.includes('cloudfront.net')) {
-            
-        console.info('Using main product image from S3:', product.image);
-        
-        // Preload image to check for errors
-        const testImage = new Image();
-        testImage.onload = () => {
-          // Image loaded successfully
-          setImgLoadError(false);
-        };
-        testImage.onerror = () => {
-          console.warn('Failed to load main product image:', product.image);
-          setImgLoadError(true);
-        };
-        
-        // Add crossOrigin attribute for S3 images
-        testImage.crossOrigin = "anonymous";
-        testImage.src = product.image;
-      }
-    } else {
-      // No image available
-      setImgLoadError(true);
-    }
-  }, [product.image]);
+  // Use priceCurrency if present, otherwise fallback to currency field
+  const currencyCode = (product as any).priceCurrency || (product as any).currency;
+  const formattedPrice = formatPrice(product.price, currencyCode);
   
   // Handle mouse move for tilt effect
   const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -365,7 +378,7 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      toggleFavorite(product);
+                      toggleFavorite({ ...product, price: String(product.price) } as any);
                     }}
                   >
                     <Heart 
@@ -403,15 +416,20 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
             </h3>
           </div>
           
-          {/* Price info with enhanced visual hierarchy */}
+          {/* Price info with enhanced visual hierarchy and formatted currency */}
           <div className="flex justify-between items-end mb-3">
             <div>
               <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-                {product.price}
+                {formattedPrice}
                 <span className="text-xs text-foreground/70 ml-1">
                   {product.unitType && `/${product.unitType}`}
                 </span>
               </p>
+              {currencyCode && (
+                <p className="text-xs text-muted-foreground">
+                  {currencyCode}
+                </p>
+              )}
             </div>
             <motion.div
               whileHover={{ scale: 1.1 }}
@@ -555,7 +573,12 @@ const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
                   </div>
                 )}
                 <h2 className="text-2xl font-bold text-center mb-1" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{displayName}</h2>
-                <div className={cn("text-lg font-semibold mb-2", theme === 'dark' ? "text-primary" : "text-primary")}>{product.price} {product.unitType && <span className="text-xs text-foreground/70">/{product.unitType}</span>}</div>
+                <div className={cn("text-lg font-semibold mb-2", theme === 'dark' ? "text-primary" : "text-primary")}>
+                  {formattedPrice} {product.unitType && <span className="text-xs text-foreground/70">/{product.unitType}</span>}
+                </div>
+                {currencyCode && (
+                  <Badge variant="outline" className="mb-2">{currencyCode}</Badge>
+                )}
                 <div className="flex items-center gap-2 mb-2">
                   <Badge>{product.category}</Badge>
                   {product.flavorType && product.flavorType.length > 0 && (
