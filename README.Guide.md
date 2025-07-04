@@ -169,3 +169,24 @@ After submitting:
 ---
 
 This guide provides a basic overview of the CPG Platform. For more detailed information or assistance, please contact support through the help section.
+
+### Adding or Editing Japanese Language in the Platform
+
+To add or refine Japanese translations:
+
+1. Open the file: `src/lib/i18n.ts`
+2. Locate the `resources` object.
+3. Find the `ja` key (for Japanese). If it does not exist, add it.
+4. Add or edit translation keys/values under `ja.translation`.
+5. Example:
+   ```ts
+   ja: {
+     translation: {
+       language: "言語",
+       english: "英語",
+       japanese: "日本語",
+       // ... more translations
+     }
+   }
+   ```
+6. Save the file and reload the site to see your changes.
