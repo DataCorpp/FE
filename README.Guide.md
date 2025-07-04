@@ -122,11 +122,11 @@ The Post Project workflow helps you connect with suitable manufacturers by defin
 
 1. Navigate to the \Post Project\ section
 2. Choose the supplier type you are looking for:
- - Manufacturer
- - Packaging Supplier
- - Ingredient Supplier
- - Secondary Packager
- - Packaging Services
+ - Manufacturer (Available)
+ - Packaging Supplier (Unavailable)
+ - Ingredient Supplier (Unavailable)
+ - Secondary Packager( Unavailable)
+ - Packaging Services (Unavailable)
 3. Select a product category by typing in the search field
 4. Click \Next\ when you have selected your category
 
