@@ -34,11 +34,14 @@ import {
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
 import { useManufacturerCompare } from "@/contexts/ManufacturerCompareContext";
 import { cn } from "@/lib/utils";
-import { foodProductApi } from "@/lib/api";
+import { foodProductApi, productApi } from "@/lib/api";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Updated interface to match actual database fields only
 interface Manufacturer {
-  id: number;
+  _id: string;            // Mongo ObjectId of the user (manufacturer)
+  id: number;             // local numeric id used for UI keys
   name: string;
   location: string;
   logo: string;
@@ -62,6 +65,22 @@ interface ProductCategory {
     name: string;
     image?: string;
   }>;
+}
+
+// Define minimal type for food product response to avoid 'any'
+interface FoodProductItem {
+  category?: string;
+  name?: string;
+  image?: string;
+  imageUrl?: string;
+  thumbnail?: string;
+}
+
+// Minimal parent product reference (from /api/products)
+interface ProductRef {
+  type?: string;
+  productId?: string;
+  productName?: string;
 }
 
 interface ManufacturerDetailsProps {
@@ -175,24 +194,54 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
       setProductsError(null);
       
       try {
-        const response = await foodProductApi.getFoodProducts({ manufacturer: [manufacturer.name], limit: 100 });
+        // Step 1: fetch product references (parent collection) by user id
+        const response = await productApi.getProducts({ limit: 100, user: manufacturer._id } as any);
+
+        /*
+          The parent collection only stores basic fields (type, productId, etc.).
+          For each reference we still need full details from its child collection
+          (e.g. FoodProduct) to obtain category, image, etc.  We therefore do an
+          extra round-trip for each reference.  Since the list is capped at 100
+          items and runs only when the modal opens, the performance impact is
+          acceptable.  If necessary we can optimise later with a dedicated
+          backend endpoint that performs the join server-side.
+        */
 
         if (response.status === 200) {
           const data = response.data;
-          if (data && data.products) {
+          if (data && data.products && Array.isArray(data.products)) {
+            const parentProducts = data.products as ProductRef[];
+
+            // Fetch child-collection details in parallel (only for type === 'food')
+            const detailPromises = parentProducts.map((ref): Promise<any> | null => {
+              if (ref.type === 'food' && ref.productId) {
+                return foodProductApi.getFoodProductById(ref.productId);
+              }
+              return Promise.resolve(null);
+            });
+
+            const detailResponses = await Promise.all(detailPromises.filter(Boolean) as Promise<any>[]);
+
+            const productsArray: FoodProductItem[] = detailResponses
+              .filter((resp): resp is { status: number; data: any } => resp !== null && resp?.status === 200)
+              .map((resp) => {
+                // BE may wrap details inside productDetails or return raw object
+                const raw = resp!.data;
+                return raw.productDetails ? raw.productDetails : raw;
+              });
+
             // Group products by category
             const categoryMap = new Map<string, { count: number; products: Array<{name: string; image?: string}> }>();
-            
-            (data.products as any[]).forEach((product: any) => {
+
+            productsArray.forEach((product) => {
               const category = product.category || 'Uncategorized';
               if (!categoryMap.has(category)) {
                 categoryMap.set(category, { count: 0, products: [] });
               }
               const categoryData = categoryMap.get(category)!;
               categoryData.count++;
-              // Store product name and image URL if available
               categoryData.products.push({
-                name: product.name,
+                name: product.name || 'Unnamed',
                 image: product.image || product.imageUrl || product.thumbnail
               });
             });
@@ -223,7 +272,7 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
     };
 
     loadProductCategories();
-  }, [isOpen, manufacturer.name]);
+  }, [isOpen, manufacturer._id]);
 
   const handleImageError = () => {
     setImageError(true);
@@ -282,7 +331,7 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
     <AnimatePresence>
       {isOpen && (
         <Dialog open={isOpen} onOpenChange={onClose}>
-          <DialogContent className="max-w-6xl max-h-[95vh] overflow-hidden p-0 bg-gradient-to-br from-background via-background/98 to-muted/5">
+          <DialogContent className="max-w-6xl w-full h-[95vh] flex flex-col overflow-hidden p-0 bg-gradient-to-br from-background via-background/98 to-muted/5">
             <motion.div
               variants={modalVariants}
               initial="hidden"
@@ -507,7 +556,7 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                       </div>
 
                       {/* Quick Actions (Full Width) */}
-                      <motion.div variants={itemVariants} className="lg:col-span-3">
+                      {/* <motion.div variants={itemVariants} className="lg:col-span-3">
                         <Card className="bg-gradient-to-r from-card to-muted/20">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -548,7 +597,7 @@ const ManufacturerDetails: React.FC<ManufacturerDetailsProps> = ({
                                 </div>
                             </CardContent>
                         </Card>
-                      </motion.div>
+                      </motion.div> */}
                     </motion.div>
                   </TabsContent>
 

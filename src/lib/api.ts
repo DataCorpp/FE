@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosError, AxiosResponse } from 'axios';
+import qs from 'qs';
 import { ProductApiData } from '@/types/product';
 
 // Use hardcoded URLs if environment variables are not available
@@ -236,6 +237,8 @@ export interface AnalyticsResponse {
 export const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
+  // Serialize array parameters as repeated keys (e.g. manufacturer=Kikkoman&manufacturer=Yamasa)
+  paramsSerializer: params => qs.stringify(params, { arrayFormat: 'repeat' }),
   headers: {
     'Content-Type': 'application/json'
   }
@@ -493,6 +496,7 @@ export const productApi = {
   },
 };
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // API for FoodProduct management
 export const foodProductApi = {
   // Get all food products with filters and search
@@ -511,6 +515,7 @@ export const foodProductApi = {
     inStockOnly?: boolean;
     newArrivalsOnly?: boolean;
     manufacturer?: string[];
+    manufacturerId?: string;
   }) => {
     return api.get<ApiResponse>('/foodproducts', { params });
   },

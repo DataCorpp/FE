@@ -83,7 +83,8 @@ export interface ApiManufacturer {
 
 // Simplified interface for UI components - only using actual DB fields
 interface Manufacturer {
-  id: number;
+  _id: string;            // Mongo ObjectId of the user (manufacturer)
+  id: number;             // local numeric id for UI keys
   name: string;
   location: string;
   logo: string;
@@ -317,6 +318,7 @@ const Manufacturers = () => {
   // Function to convert API manufacturer to UI format - using User model fields
   const convertApiToUI = useCallback((apiManufacturer: ApiManufacturer): Manufacturer => {
     return {
+      _id: apiManufacturer._id,
       id: parseInt(apiManufacturer._id.slice(-8), 16) || Math.random(), // Use last 8 chars of ObjectId
       name: apiManufacturer.companyName || apiManufacturer.name,
       location: apiManufacturer.address || "Not specified",

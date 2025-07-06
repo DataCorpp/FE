@@ -325,32 +325,30 @@ const UserManagement = () => {
     setCurrentPage(1);
   };
 
-  // Simulating a loading state when page changes
+  // Recalculate filtered list when data arrives (no page reset)
   useEffect(() => {
-    setLoading(true);
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [currentPage]);
+    setFilteredUsers(getFilteredUsers(users, searchQuery, roleFilter, statusFilter));
+  }, [users]);
 
-  // Update the useEffect that filters users
+  // When filter inputs change, reset to page 1 and apply filters
   useEffect(() => {
-    const filtered = getFilteredUsers(users, searchQuery, roleFilter, statusFilter);
-    setFilteredUsers(filtered);
-    // Reset to page 1 when filters change
     setCurrentPage(1);
-  }, [users, searchQuery, roleFilter, statusFilter]);
+    setFilteredUsers(getFilteredUsers(users, searchQuery, roleFilter, statusFilter));
+  }, [searchQuery, roleFilter, statusFilter]);
 
   // Pagination logic
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
-  // Use filtered users for the current page display
-  const currentUsers = filteredUsers.length > 0 
-    ? filteredUsers.slice(indexOfFirstUser, indexOfLastUser)
-    : [];
-    
-  // Use totalUsers (from API) for total pages calculation if available
+
+  // Detect if backend already paginated (totalUsers > length of list on any page beyond 1)
+  const backendPaginated = totalUsers > filteredUsers.length;
+
+  // Determine users to display
+  const currentUsers = backendPaginated
+    ? filteredUsers // already correct page from API
+    : filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
+
+  // Calculate total pages (prefer backend total)
   const totalPages = Math.ceil((totalUsers > 0 ? totalUsers : filteredUsers.length) / usersPerPage);
 
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
@@ -980,7 +978,8 @@ const UserManagement = () => {
     );
   }
 
-  if (authLoading || isLoading) {
+  // Show full-page spinner only while authenticating; otherwise keep the table-level spinner
+  if (authLoading) {
     return <AdminLoadingSpinner message="Loading user data..." fullPage={true} />;
   }
 
@@ -1102,7 +1101,7 @@ const UserManagement = () => {
 
         <div className="border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
-            {loading ? (
+            {isLoading ? (
               <AdminLoadingSpinner message="Loading..." size="sm" />
             ) : (
               <Table>
@@ -1440,6 +1439,7 @@ const UserManagement = () => {
             
             <div className="flex items-center space-x-2">
               <Button 
+                type="button"
                 variant="outline" 
                 size="sm" 
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -1459,6 +1459,7 @@ const UserManagement = () => {
                 const pageNumber = i + 1;
                 return (
                   <Button
+                    type="button"
                     key={pageNumber}
                     variant={currentPage === pageNumber ? "default" : "outline"}
                     size="sm"
@@ -1481,6 +1482,7 @@ const UserManagement = () => {
               })}
               
               <Button 
+                type="button"
                 variant="outline" 
                 size="sm" 
                 onClick={() => setCurrentPage(prev => Math.min(totalPages || Math.ceil(filteredUsers.length / usersPerPage), prev + 1))}
