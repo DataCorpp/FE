@@ -1,0 +1,122 @@
+:root {
+  /* Primary brand colors */
+  --primary-rgb: 0, 112, 243;
+  --primary-light-rgb: 59, 130, 246;
+  --primary-dark-rgb: 30, 64, 175;
+  
+  /* Neutral colors */
+  --border-rgb: 226, 232, 240;
+  --muted-rgb: 241, 245, 249;
+  --foreground-rgb: 15, 23, 42;
+  --background-rgb: 255, 255, 255;
+  
+  /* Status colors */
+  --success-rgb: 34, 197, 94;
+  --warning-rgb: 245, 158, 11;
+  --error-rgb: 239, 68, 68;
+  --info-rgb: 59, 130, 246;
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  
+  /* Animation durations */
+  --duration-fast: 0.15s;
+  --duration-normal: 0.3s;
+  --duration-slow: 0.5s;
+}
+
+.dark {
+  /* Primary brand colors in dark mode */
+  --primary-rgb: 59, 130, 246;
+  --primary-light-rgb: 96, 165, 250;
+  --primary-dark-rgb: 30, 64, 175;
+  
+  /* Neutral colors in dark mode */
+  --border-rgb: 51, 65, 85;
+  --muted-rgb: 30, 41, 59;
+  --foreground-rgb: 241, 245, 249;
+  --background-rgb: 15, 23, 42;
+  
+  /* Custom background colors for dark mode */
+  --slate-850-rgb: 15, 23, 42;
+  --slate-800-rgb: 30, 41, 59;
+  --slate-700-rgb: 51, 65, 85;
+  
+  /* Shadows in dark mode */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -4px rgba(0, 0, 0, 0.2);
+}
+
+/* Helper classes for dark mode */
+.dark .bg-slate-850 {
+  background-color: rgb(var(--slate-850-rgb));
+}
+
+/* Hide scrollbars globally while maintaining scroll functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Apply no-scrollbar to common scrollable elements */
+.overflow-auto,
+.overflow-y-auto,
+.overflow-x-auto,
+select,
+textarea,
+.dropdown-content,
+[role="listbox"],
+[role="menu"] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.overflow-auto::-webkit-scrollbar,
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar,
+select::-webkit-scrollbar,
+textarea::-webkit-scrollbar,
+.dropdown-content::-webkit-scrollbar,
+[role="listbox"]::-webkit-scrollbar,
+[role="menu"]::-webkit-scrollbar {
+  display: none;
+}
+
+/* Animation utility classes */
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--muted-rgb), 0) 0%,
+    rgba(var(--muted-rgb), 0.2) 20%,
+    rgba(var(--muted-rgb), 0.5) 60%,
+    rgba(var(--muted-rgb), 0)
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Responsive design helpers */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+} 

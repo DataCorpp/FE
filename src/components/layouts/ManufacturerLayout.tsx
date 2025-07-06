@@ -579,7 +579,7 @@ const ManufacturerLayout: FC<ManufacturerLayoutProps> = ({ children }) => {
                       initial={{ scale: 0.8 }}
                       animate={{ scale: 1 }}
                       transition={{ duration: 0.2 }}
-                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                      className="absolute left-3 top-1/4 transform -translate-y-1/2 text-muted-foreground"
                     >
                       <Search className="h-4 w-4" />
                     </motion.div>

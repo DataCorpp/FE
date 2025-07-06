@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Navbar from "@/components/Navbar";
@@ -12,29 +12,19 @@ import {
   Filter, 
   MapPin, 
   X, 
-  SlidersHorizontal, 
   Heart,
-  Scale,
   ArrowUpDown,
-  Star,
   Calendar,
   Building,
-  Trash2,
-  Mail,
   Building2,
   Award,
-  Package,
-  Clock,
-  Users,
-  Factory,
-  Globe2,
-  ShieldCheck,
-  Microscope,
-  Paintbrush,
-  Tag,
-  Store,
-  Settings2,
-  ChevronUp
+  ChevronUp,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  Grid3X3,
+  List,
+  Package
 } from "lucide-react";
 import {
   Select,
@@ -43,326 +33,281 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-  SheetFooter,
-} from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useManufacturerFavorites } from "@/contexts/ManufacturerFavoriteContext";
-import { useManufacturerCompare } from "@/contexts/ManufacturerCompareContext";
-import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import ManufacturerDetails from "@/components/ManufacturerDetails";
 import { cn } from "@/lib/utils";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon } from "lucide-react";
+import { createClampedBlurVariants } from "@/hooks/use-safe-blur";
+import { enhancedFuzzySearch, quickSearch } from "@/utils/searchUtils";
 
+// API configuration - Fixed to match backend API structure
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+
+// Updated interface to match User model from backend exactly
+export interface ApiManufacturer {
+  _id: string;
+  name: string;
+  email: string;
+  companyName: string;
+  role: string;
+  status: string;
+  profileComplete: boolean;
+  lastLogin: string;
+  phone?: string;
+  website?: string;
+  websiteUrl?: string;
+  address?: string;
+  description?: string;
+  companyDescription?: string;
+  industry?: string;
+  certificates?: string | string[];
+  avatar?: string;
+  establish?: number;
+  connectionPreferences?: {
+    connectWith: string[];
+    industryInterests: string[];
+    interests: string[];
+    lookingFor: string[];
+  };
+  manufacturerSettings?: {
+    productionCapacity: number;
+    certifications: string[];
+    preferredCategories: string[];
+    minimumOrderValue: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Simplified interface for UI components - only using actual DB fields
 interface Manufacturer {
-  id: number;
+  _id: string;            // Mongo ObjectId of the user (manufacturer)
+  id: number;             // local numeric id for UI keys
   name: string;
   location: string;
   logo: string;
-  categories: string[];
-  certifications: string[];
-  minOrderSize: string;
+  industry: string;
+  certification: string;
   establishedYear: number;
-  rating: number;
+  contact: {
+    email: string;
+    phone?: string;
+    website?: string;
+  };
+  description?: string;
 }
 
-// Mock manufacturer data - in a real app, this would come from an API
-const mockManufacturers: Manufacturer[] = [
-  {
-    id: 1,
-    name: "Nature's Best Foods",
-    location: "Portland, Oregon",
-    logo: "/placeholder.svg",
-    categories: ["Snacks", "Breakfast Foods"],
-    certifications: ["Organic", "Non-GMO", "Gluten-Free"],
-    minOrderSize: "1,000 units",
-    establishedYear: 2008,
-    rating: 4.8
-  },
-  {
-    id: 2,
-    name: "Pure Foods Co.",
-    location: "Austin, Texas",
-    logo: "/placeholder.svg",
-    categories: ["Spreads", "Condiments"],
-    certifications: ["Organic", "Non-GMO"],
-    minOrderSize: "5,000 units",
-    establishedYear: 2012,
-    rating: 4.5
-  },
-  {
-    id: 3,
-    name: "Mountain Roasters",
-    location: "Seattle, Washington",
-    logo: "/placeholder.svg",
-    categories: ["Beverages"],
-    certifications: ["Fair Trade", "Organic"],
-    minOrderSize: "2,500 units",
-    establishedYear: 2005,
-    rating: 4.9
-  },
-  {
-    id: 4,
-    name: "Fitness Nutrition",
-    location: "Los Angeles, California",
-    logo: "/placeholder.svg",
-    categories: ["Protein Products", "Health Foods"],
-    certifications: ["Gluten-Free", "High-Protein"],
-    minOrderSize: "10,000 units",
-    establishedYear: 2015,
-    rating: 4.2
-  },
-  {
-    id: 5,
-    name: "Clear Springs Beverage Co.",
-    location: "Denver, Colorado",
-    logo: "/placeholder.svg",
-    categories: ["Beverages", "Water"],
-    certifications: ["BPA-Free"],
-    minOrderSize: "25,000 units",
-    establishedYear: 2010,
-    rating: 4.6
-  },
-  {
-    id: 6,
-    name: "Harvest Farms Products",
-    location: "Chicago, Illinois",
-    logo: "/placeholder.svg",
-    categories: ["Snacks", "Dried Goods"],
-    certifications: ["Organic", "No Added Sugar"],
-    minOrderSize: "3,000 units",
-    establishedYear: 2007,
-    rating: 4.7
-  }
-];
-
-// Category options
-const categories = [
-  "All Categories",
-  "Beverages",
-  "Breakfast Foods",
-  "Condiments",
-  "Dried Goods",
-  "Health Foods",
-  "Protein Products",
-  "Snacks",
-  "Spreads",
-  "Water"
-];
-
-// Certification options
-const certifications = [
-  "Organic",
-  "Non-GMO",
-  "Gluten-Free",
-  "Fair Trade",
-  "No Added Sugar",
-  "High-Protein",
-  "BPA-Free"
-];
-
-// Locations
-const locations = [
-  "All Locations",
-  "Portland, Oregon",
-  "Austin, Texas",
-  "Seattle, Washington",
-  "Los Angeles, California",
-  "Denver, Colorado",
-  "Chicago, Illinois"
-];
-
-// Sort options
+// Sort options based on actual data
 const sortOptions = [
-  { value: "relevance", label: "Relevance" },
-  { value: "rating-desc", label: "Highest Rating" },
-  { value: "rating-asc", label: "Lowest Rating" },
-  { value: "established-desc", label: "Newest First" },
-  { value: "established-asc", label: "Oldest First" },
   { value: "name-asc", label: "Name A-Z" },
-  { value: "name-desc", label: "Name Z-A" }
+  { value: "name-desc", label: "Name Z-A" },
+  { value: "establish-desc", label: "Newest First" },
+  { value: "establish-asc", label: "Oldest First" },
+  { value: "industry-asc", label: "Industry A-Z" },
+  { value: "location-asc", label: "Location A-Z" }
 ];
 
-// Enhanced animation variants with smoother physics
+// Enhanced animation variants with improved physics
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.05,
-      ease: "easeOut"
+      staggerChildren: 0.04,
+      delayChildren: 0.08,
+      ease: [0.23, 1, 0.32, 1],
+      duration: 0.6
     }
   }
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 15 },
+  hidden: { 
+    opacity: 0, 
+    y: 32, 
+    scale: 0.94,
+    ...createClampedBlurVariants('md', 'none').hidden
+  },
   visible: {
     opacity: 1,
     y: 0,
+    scale: 1,
+    ...createClampedBlurVariants('md', 'none').visible,
     transition: {
       type: "spring",
-      stiffness: 300,
-      damping: 25,
-      duration: 0.3
+      stiffness: 260,
+      damping: 22,
+      mass: 0.9,
+      duration: 0.8,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
+    }
+  },
+  hover: {
+    y: -12,
+    scale: 1.03,
+    filter: "blur(0px)", // Explicitly set to avoid interpolation issues
+    transition: {
+      type: "spring",
+      stiffness: 400,
+      damping: 18,
+      mass: 0.6
     }
   }
 };
 
-const fadeIn = {
-  hidden: { opacity: 0 },
+const headerVariants = {
+  hidden: { 
+    opacity: 0, 
+    y: -32,
+    scale: 0.96
+  },
   visible: { 
     opacity: 1, 
-    transition: { 
-      duration: 0.3,
-      ease: "easeOut"
+    y: 0,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 300,
+      damping: 20,
+      duration: 0.8,
+      ease: [0.23, 1, 0.32, 1]
     } 
   }
 };
 
-const staggerContainer = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.1,
-      ease: "easeOut"
-    }
-  }
-};
-
-// New animation variants for modern UI
-const cardHoverAnimation = {
-  rest: { 
-    scale: 1,
-    y: 0,
-    boxShadow: "0px 4px 10px rgba(0, 0, 0, 0.05)",
-    transition: {
-      type: "spring",
-      stiffness: 400,
-      damping: 40
-    }
+const filterVariants = {
+  hidden: { 
+    opacity: 0, 
+    x: -32, 
+    scale: 0.92,
+    ...createClampedBlurVariants('md', 'none').hidden
   },
-  hover: { 
-    scale: 1.02,
-    y: -5,
-    boxShadow: "0px 10px 25px rgba(0, 0, 0, 0.1)",
-    transition: {
-      type: "spring",
-      stiffness: 400,
-      damping: 17
-    }
-  },
-  tap: { 
-    scale: 0.98,
-    transition: {
-      type: "spring",
-      stiffness: 400,
-      damping: 10
-    }
-  }
-};
-
-const buttonAnimation = {
-  rest: { scale: 1 },
-  hover: { 
-    scale: 1.05,
-    transition: {
-      type: "spring",
-      stiffness: 400,
-      damping: 10
-    }
-  },
-  tap: { scale: 0.95 }
-};
-
-const badgeAnimation = {
-  rest: { scale: 1, backgroundColor: "transparent" },
-  hover: { 
-    scale: 1.05,
-    backgroundColor: "var(--primary-light)",
-    transition: {
-      duration: 0.2
-    }
-  },
-  tap: { scale: 0.95 }
-};
-
-// Page transitions for smoother navigation
-const pageTransition = {
-  hidden: { opacity: 0, y: 20 },
   visible: { 
     opacity: 1, 
-    y: 0, 
+    x: 0,
+    scale: 1,
+    ...createClampedBlurVariants('md', 'none').visible,
     transition: { 
       type: "spring", 
-      stiffness: 300, 
-      damping: 30,
-      duration: 0.4 
+      stiffness: 280,
+      damping: 24,
+      mass: 0.8,
+      duration: 0.7,
+      // Prevent overshoot that could cause negative values
+      restDelta: 0.001,
+      restSpeed: 0.001
     } 
   },
   exit: { 
     opacity: 0, 
-    y: 20, 
+    x: -32,
+    scale: 0.92,
+    ...createClampedBlurVariants('md', 'none').hidden,
     transition: { 
-      duration: 0.2 
+      duration: 0.4,
+      ease: [0.4, 0, 0.2, 1]
     } 
   }
 };
 
+// Add search bar focus and hover animation variants
+const searchBarVariants = {
+  unfocused: {
+    scale: 1,
+    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+    transition: { type: "spring", stiffness: 300, damping: 30 }
+  },
+  focused: {
+    scale: 1.02,
+    boxShadow: "0 8px 30px rgba(0,0,0,0.12)",
+    transition: { type: "spring", stiffness: 300, damping: 30 }
+  }
+};
+
+// Add new smooth transition variants
+const smoothFadeVariants = {
+  hidden: { 
+    opacity: 0,
+    y: 16
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      ease: [0.23, 1, 0.32, 1]
+    }
+  },
+  exit: {
+    opacity: 0,
+    y: -16,
+    transition: {
+      duration: 0.3,
+      ease: [0.4, 0, 0.2, 1]
+    }
+  }
+};
+
+const staggerContainerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.03,
+      delayChildren: 0.05
+    }
+  }
+};
+
+// Add these new interfaces for categorized filters
+interface CategoryItem {
+  id: string;
+  label: string;
+  count: number;
+  originalValues: string[];
+}
+
 const Manufacturers = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
+  
+  // State for manufacturers data
+  const [apiManufacturers, setApiManufacturers] = useState<ApiManufacturer[]>([]);
+  const [manufacturers, setManufacturers] = useState<Manufacturer[]>([]);
+  const [filteredManufacturers, setFilteredManufacturers] = useState<Manufacturer[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [totalCount, setTotalCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  
+  // Filter and search states
   const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
-  const [originalManufacturers] = useState<Manufacturer[]>(mockManufacturers);
-  const [manufacturers, setManufacturers] = useState<Manufacturer[]>(mockManufacturers);
   const [showFilters, setShowFilters] = useState(false);
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [activeCategory, setActiveCategory] = useState("All Categories");
-  const [activeLocation, setActiveLocation] = useState("All Locations");
-  const [selectedCertifications, setSelectedCertifications] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState("relevance");
-  const [ratingRange, setRatingRange] = useState([0, 5]);
-  const [yearRange, setYearRange] = useState([2000, new Date().getFullYear()]);
+  const [selectedIndustry, setSelectedIndustry] = useState<string>("all");
+  const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  const [selectedCertification, setSelectedCertification] = useState<string>("all");
+  const [establishYearRange, setEstablishYearRange] = useState([1500, new Date().getFullYear()]);
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [useAdvancedSearch, setUseAdvancedSearch] = useState(true); // Default to advanced search
+  
+  // Available filter options from API
+  const [industries, setIndustries] = useState<string[]>([]);
+  // Replace string arrays with categorized arrays
+  const [locations, setLocations] = useState<CategoryItem[]>([]);
+  const [certifications, setCertifications] = useState<CategoryItem[]>([]);
+  const [loadingFilters, setLoadingFilters] = useState(false);
+  
+  // UI states
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const { favorites, toggleFavorite } = useManufacturerFavorites();
-  const { compareItems, toggleCompare, clearCompare } = useManufacturerCompare();
-  const [showCompareSheet, setShowCompareSheet] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const { favorites } = useManufacturerFavorites();
   const [selectedManufacturer, setSelectedManufacturer] = useState<Manufacturer | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showFavoritesSheet, setShowFavoritesSheet] = useState(false);
-  const [locationFilter, setLocationFilter] = useState<string[]>([]);
-  const [establishedYearRange, setEstablishedYearRange] = useState([1950, 2024]);
-  const [minOrderRange, setMinOrderRange] = useState([0, 10000]);
-  const [ratingFilter, setRatingFilter] = useState(0);
-  const [leadTimeFilter, setLeadTimeFilter] = useState<string[]>([]);
-  const [specialCertifications, setSpecialCertifications] = useState<string[]>([]);
-  const [revenueRange, setRevenueRange] = useState([1, 100]);
-  const [employeeRange, setEmployeeRange] = useState([10, 1000]);
-  const [capacityRange, setCapacityRange] = useState([1000, 100000]);
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
-  const [selectedStandards, setSelectedStandards] = useState<string[]>([]);
-  const [hasRandD, setHasRandD] = useState(false);
-  const [hasPrivateLabel, setHasPrivateLabel] = useState(false);
-  const [hasOEM, setHasOEM] = useState(false);
-  const [hasDesign, setHasDesign] = useState(false);
-  const [hasTradeShows, setHasTradeShows] = useState(false);
-  const [hasSamples, setHasSamples] = useState(false);
-
-  // Add new state for scroll-to-top button
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   // Page title effect
@@ -370,7 +315,431 @@ const Manufacturers = () => {
     document.title = "Manufacturers - CPG Matchmaker";
   }, []);
 
-  // Update search params and check for manufacturer ID
+  // Function to convert API manufacturer to UI format - using User model fields
+  const convertApiToUI = useCallback((apiManufacturer: ApiManufacturer): Manufacturer => {
+    return {
+      _id: apiManufacturer._id,
+      id: parseInt(apiManufacturer._id.slice(-8), 16) || Math.random(), // Use last 8 chars of ObjectId
+      name: apiManufacturer.companyName || apiManufacturer.name,
+      location: apiManufacturer.address || "Not specified",
+      logo: apiManufacturer.avatar || "/placeholder-logo.png",
+      industry: apiManufacturer.industry || "Not specified",
+      certification: apiManufacturer.manufacturerSettings?.certifications?.join("; ") || 
+                     (apiManufacturer.certificates ? 
+                       (Array.isArray(apiManufacturer.certificates) ? 
+                         apiManufacturer.certificates.join("; ") : 
+                         apiManufacturer.certificates) : 
+                       "Not specified"),
+      establishedYear: apiManufacturer.establish || new Date(apiManufacturer.createdAt).getFullYear(),
+      contact: {
+        email: apiManufacturer.email,
+        phone: apiManufacturer.phone,
+        website: apiManufacturer.websiteUrl || apiManufacturer.website
+      },
+      description: apiManufacturer.companyDescription || apiManufacturer.description
+    };
+  }, []);
+
+  // Apply sorting function - moved before loadManufacturers to fix hoisting issue
+  const applySorting = useCallback((data: Manufacturer[], sortOption: string): Manufacturer[] => {
+    const sortedData = [...data];
+    
+    switch (sortOption) {
+      case 'name-asc':
+        return sortedData.sort((a, b) => a.name.localeCompare(b.name));
+      case 'name-desc':
+        return sortedData.sort((a, b) => b.name.localeCompare(a.name));
+      case 'establish-asc':
+        return sortedData.sort((a, b) => a.establishedYear - b.establishedYear);
+      case 'establish-desc':
+        return sortedData.sort((a, b) => b.establishedYear - a.establishedYear);
+      case 'industry-asc':
+        return sortedData.sort((a, b) => a.industry.localeCompare(b.industry));
+      case 'location-asc':
+        return sortedData.sort((a, b) => a.location.localeCompare(b.location));
+      default:
+        return sortedData;
+    }
+  }, []);
+
+  // Helper function to categorize certifications
+  const categorizeCertifications = useCallback((rawCertifications: string[]): CategoryItem[] => {
+    // Common certification categories
+    const categories: Record<string, { pattern: RegExp, label: string }> = {
+      organic: { pattern: /organic|usda|eco/i, label: "Organic" },
+      iso9001: { pattern: /iso\s*9001|iso9001/i, label: "ISO 9001" },
+      iso14001: { pattern: /iso\s*14001|iso14001/i, label: "ISO 14001" },
+      kosher: { pattern: /kosher/i, label: "Kosher" },
+      halal: { pattern: /halal/i, label: "Halal" },
+      haccp: { pattern: /haccp/i, label: "HACCP" },
+      gmp: { pattern: /gmp|good\s*manufacturing\s*practice/i, label: "GMP" },
+      fda: { pattern: /fda|food\s*and\s*drug/i, label: "FDA" },
+      fairtrade: { pattern: /fair\s*trade|fairtrade/i, label: "Fair Trade" },
+      nonGMO: { pattern: /non\s*gmo|no\s*gmo/i, label: "Non-GMO" },
+      glutenFree: { pattern: /gluten\s*free/i, label: "Gluten Free" },
+      vegan: { pattern: /vegan/i, label: "Vegan" },
+      sustainable: { pattern: /sustainable|sustainability/i, label: "Sustainable" }
+    };
+
+    // Initialize result with "Other" category
+    const result: Record<string, CategoryItem> = {
+      other: {
+        id: "other",
+        label: "Other",
+        count: 0,
+        originalValues: []
+      }
+    };
+
+    // Initialize all categories with zero count
+    Object.keys(categories).forEach(key => {
+      result[key] = {
+        id: key,
+        label: categories[key].label,
+        count: 0,
+        originalValues: []
+      };
+    });
+
+    // Categorize each certification
+    rawCertifications.forEach(cert => {
+      let matched = false;
+      for (const [key, category] of Object.entries(categories)) {
+        if (category.pattern.test(cert)) {
+          result[key].count++;
+          result[key].originalValues.push(cert);
+          matched = true;
+          break;
+        }
+      }
+      
+      if (!matched) {
+        result.other.count++;
+        result.other.originalValues.push(cert);
+      }
+    });
+
+    // Convert to array and remove empty categories
+    return Object.values(result)
+      .filter(item => item.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }, []);
+
+  // Helper function to categorize locations by specific city/country (second last part of address)
+  const categorizeLocations = useCallback((rawLocations: string[]): CategoryItem[] => {
+    const locationCounts: Record<string, { count: number; addresses: string[] }> = {};
+
+    rawLocations.forEach((location) => {
+      if (!location) return;
+
+      const parts = location.split(',').map((p) => p.trim()).filter(Boolean);
+      let city = '';
+      if (parts.length >= 2) {
+        // Use the second last part (e.g., 123 St, Tokyo, Japan -> Tokyo)
+        city = parts[parts.length - 2];
+      } else {
+        // Fallback to the only/last part
+        city = parts[parts.length - 1] || location;
+      }
+
+      if (!city) return;
+
+      if (!locationCounts[city]) {
+        locationCounts[city] = {
+          count: 1,
+          addresses: [location],
+        };
+      } else {
+        locationCounts[city].count += 1;
+        locationCounts[city].addresses.push(location);
+      }
+    });
+
+    const locationItems: CategoryItem[] = Object.entries(locationCounts).map(([city, data]) => ({
+      id: city,
+      label: city,
+      count: data.count,
+      originalValues: data.addresses,
+    }));
+
+    return locationItems.sort((a, b) => b.count - a.count);
+  }, []);
+
+  // Apply filters function - update to work with categories
+  const applyFilters = useCallback((manufacturersList: Manufacturer[]) => {
+    let filtered = manufacturersList;
+
+    // Search filter - use either advanced or quick search based on setting
+    if (searchTerm && searchTerm.trim()) {
+      if (useAdvancedSearch) {
+        // Use enhanced fuzzy search for robust, cross-field matching that tolerates messy user input
+        filtered = enhancedFuzzySearch(
+          filtered,
+          searchTerm,
+          ['name', 'description', 'industry', 'location', 'certification'],
+          {
+            threshold: 0.15,  // More permissive threshold for fuzzy matching
+            boostExact: true,
+            maxResults: 500   // Plenty of headroom for client-side filtering
+          }
+        );
+      } else {
+        // Use simple multi-term search (all terms must match at least one field)
+        filtered = quickSearch(filtered, searchTerm, [
+          'name', 'description', 'industry', 'location', 'certification'
+        ]);
+      }
+    }
+
+    // Industry filter
+    if (selectedIndustry !== "all") {
+      filtered = filtered.filter(manufacturer => 
+        manufacturer.industry === selectedIndustry
+      );
+    }
+
+    // Location filter - updated to work with categorized locations
+    if (selectedLocation !== "all") {
+      const locationCategory = locations.find(cat => cat.id === selectedLocation);
+      if (locationCategory) {
+      filtered = filtered.filter(manufacturer => 
+          locationCategory.originalValues.some(location => 
+            manufacturer.location.includes(location)
+          )
+      );
+      }
+    }
+
+    // Certification filter - updated to work with categorized certifications
+    if (selectedCertification !== "all") {
+      const certCategory = certifications.find(cat => cat.id === selectedCertification);
+      if (certCategory) {
+      filtered = filtered.filter(manufacturer => 
+        manufacturer.certification && 
+          certCategory.originalValues.some(cert => 
+            manufacturer.certification.toLowerCase().includes(cert.toLowerCase())
+          )
+      );
+      }
+    }
+
+    // Establishment year range filter
+    if (establishYearRange[0] > 1500 || establishYearRange[1] < new Date().getFullYear()) {
+      filtered = filtered.filter(manufacturer => {
+        const year = manufacturer.establishedYear;
+        return year >= establishYearRange[0] && year <= establishYearRange[1];
+      });
+    }
+
+    // Favorites filter
+    if (showFavoritesOnly) {
+      const favoriteIds = favorites.map(fav => fav.id);
+      filtered = filtered.filter(manufacturer => 
+        favoriteIds.includes(manufacturer.id)
+      );
+    }
+
+    return filtered;
+  }, [searchTerm, selectedIndustry, selectedLocation, selectedCertification, establishYearRange, showFavoritesOnly, favorites, useAdvancedSearch, locations, certifications]);
+
+  // Load filter options - updated to use categorization
+  const loadFilterOptions = useCallback(async () => {
+    try {
+      setLoadingFilters(true);
+      
+      // Load all manufacturers first to extract unique values
+      const response = await fetch(`${API_BASE_URL}/users/manufacturers?page=1&limit=1000`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.manufacturers) {
+          const manufacturersData = data.manufacturers;
+          
+          // Extract unique industries
+          const uniqueIndustries = [...new Set(
+            manufacturersData
+              .map((m: ApiManufacturer) => m.industry)
+              .filter((industry: string) => industry && industry.trim())
+              .sort()
+          )] as string[];
+          setIndustries(uniqueIndustries);
+          
+          // Extract unique locations and categorize them
+          const uniqueLocations = [...new Set(
+            manufacturersData
+              .map((m: ApiManufacturer) => m.address)
+              .filter((location: string) => location && location.trim())
+              .sort()
+          )] as string[];
+          setLocations(categorizeLocations(uniqueLocations));
+          
+          // Extract unique certifications - handle both single and multiple certs
+          const uniqueCertifications = [...new Set(
+            manufacturersData
+              .flatMap((m: ApiManufacturer) => {
+                if (!m.certificates) return [];
+                if (Array.isArray(m.certificates)) {
+                  return (m.certificates as string[]).map(cert => cert.trim());
+                } else {
+                  return [(m.certificates as string).trim()];
+                }
+              })
+              .sort()
+          )] as string[];
+          setCertifications(categorizeCertifications(uniqueCertifications));
+          
+          // Calculate establishment year range from actual data
+          const establishYears = manufacturersData
+            .map((m: ApiManufacturer) => m.establish || new Date(m.createdAt).getFullYear())
+            .filter((year: number) => year > 0);
+          
+          if (establishYears.length > 0) {
+            const minYear = Math.min(...establishYears);
+            const maxYear = Math.max(...establishYears);
+            // Update the range if we have actual data, otherwise keep default
+            if (minYear < 1500 || maxYear > new Date().getFullYear()) {
+              setEstablishYearRange([Math.max(minYear, 1500), Math.min(maxYear, new Date().getFullYear())]);
+            }
+          }
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error loading filter options:', error);
+      // Fallback to empty arrays
+      setIndustries([]);
+      setLocations([]);
+      setCertifications([]);
+    } finally {
+      setLoadingFilters(false);
+    }
+  }, [categorizeLocations, categorizeCertifications]);
+
+  // Load manufacturers from API
+  const loadManufacturers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Build search parameters
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '1000' // Load all for client-side filtering
+      });
+      
+      // Add search parameters if available
+      if (searchTerm && searchTerm.trim()) {
+        params.set('q', searchTerm.trim());
+        // Don't send advanced search parameter since backend doesn't need it anymore
+        // We'll handle advanced filtering on the frontend side
+      }
+      
+      // Add industry filter if selected
+      if (selectedIndustry && selectedIndustry !== 'all') {
+        params.set('industry', selectedIndustry);
+      }
+      
+      // Add location filter if selected
+      if (selectedLocation && selectedLocation !== 'all') {
+        params.set('location', selectedLocation);
+      }
+      
+      // Add year range filters if adjusted
+      if (establishYearRange[0] > 1500) {
+        params.set('establish_gte', establishYearRange[0].toString());
+      }
+      
+      if (establishYearRange[1] < new Date().getFullYear()) {
+        params.set('establish_lte', establishYearRange[1].toString());
+      }
+      
+      console.log(`[REQUEST] Fetching manufacturers with params: ${params.toString()}`);
+      const response = await fetch(`${API_BASE_URL}/users/manufacturers?${params}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API error response:', errorData);
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.manufacturers) {
+        const convertedManufacturers = data.manufacturers.map(convertApiToUI);
+        console.log(`[SERVER] Fetched ${data.manufacturers.length} manufacturers`);
+        setManufacturers(convertedManufacturers);
+        setTotalCount(data.total || convertedManufacturers.length);
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (err) {
+      console.error('Error loading manufacturers:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load manufacturers');
+      setManufacturers([]);
+      // Show a toast notification for the error
+      toast.error('Error loading manufacturers. Please try again later.');
+    } finally {
+      setLoading(false);
+    }
+  }, [convertApiToUI, searchTerm, selectedIndustry, selectedLocation, establishYearRange]);
+
+  // Search and filter functions - Updated to match SearchPanel interface
+  const handleSearch = useCallback((query: string) => {
+    setSearchTerm(query || "");
+    setCurrentPage(1);
+  }, []);
+
+  const handleIndustryFilter = useCallback((industry: string) => {
+    setSelectedIndustry(industry === "" ? "all" : industry);
+    setCurrentPage(1);
+  }, []);
+
+  const handleLocationFilter = useCallback((location: string) => {
+    setSelectedLocation(location === "" ? "all" : location);
+    setCurrentPage(1);
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadFilterOptions();
+    loadManufacturers();
+  }, [loadFilterOptions, loadManufacturers]);
+  
+  // Debounced search effect
+  useEffect(() => {
+    // Only trigger search if term is at least 2 characters
+    if (searchTerm.trim().length >= 2 || (searchTerm.trim().length === 0 && document.activeElement?.id !== 'search-input')) {
+      const debounceTimer = setTimeout(() => {
+        console.log(`[SEARCH] Debounced search for: "${searchTerm}"`);
+        loadManufacturers();
+      }, 500); // 500ms debounce time
+      
+      return () => clearTimeout(debounceTimer);
+    }
+  }, [searchTerm, loadManufacturers, useAdvancedSearch]);
+
+  // Apply filters and sorting when dependencies change
+  useEffect(() => {
+    if (manufacturers.length > 0) {
+      const filtered = applyFilters(manufacturers);
+      const sorted = applySorting(filtered, sortBy);
+      // console.log('Filtered and sorted manufacturers:', filtered.length, sorted.length); // Debug log
+      setFilteredManufacturers(sorted);
+      
+      // Update pagination
+      const itemsPerPage = 12;
+      const newTotalPages = Math.ceil(sorted.length / itemsPerPage);
+      setTotalPages(newTotalPages);
+      
+      // Adjust current page if necessary
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(1);
+      }
+    } else {
+      setFilteredManufacturers([]);
+    }
+  }, [manufacturers, applyFilters, applySorting, sortBy, currentPage]);
+
+  // Update search params
   useEffect(() => {
     const manufacturerId = searchParams.get("id");
     if (manufacturerId) {
@@ -381,184 +750,34 @@ const Manufacturers = () => {
       }
     }
 
+    const params = new URLSearchParams(searchParams);
     if (searchTerm) {
-      searchParams.set("q", searchTerm);
+      params.set("q", searchTerm);
     } else {
-      searchParams.delete("q");
+      params.delete("q");
     }
-    setSearchParams(searchParams);
-  }, [searchTerm, searchParams, setSearchParams, manufacturers]);
+    
+    if (showFavoritesOnly) {
+      params.set("favorites", "true");
+    } else {
+      params.delete("favorites");
+    }
+    
+    setSearchParams(params, { replace: true });
+  }, [searchTerm, showFavoritesOnly, searchParams, setSearchParams, manufacturers]);
 
-  // Update filter and sort manufacturers
+  // Check for favorites query parameter
   useEffect(() => {
-    // Check for favorites query parameter
     const showFavorites = searchParams.get("favorites") === "true";
     if (showFavorites) {
       setShowFavoritesOnly(true);
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    let filteredManufacturers = [...originalManufacturers];
-
-    // Filter by favorites
-    if (showFavoritesOnly) {
-      filteredManufacturers = filteredManufacturers.filter(
-        m => favorites.some(f => f.id === m.id)
-      );
-    }
-
-    // Apply other filters only if not showing favorites only or if there are favorites to filter
-    if (!showFavoritesOnly || (showFavoritesOnly && filteredManufacturers.length > 0)) {
-    // Filter by search term
-    if (searchTerm) {
-      filteredManufacturers = filteredManufacturers.filter(
-        manufacturer => 
-          manufacturer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          manufacturer.categories.some(category => 
-            category.toLowerCase().includes(searchTerm.toLowerCase())
-          ) ||
-          manufacturer.location.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    // Filter by category
-    if (activeCategory !== "All Categories") {
-      filteredManufacturers = filteredManufacturers.filter(
-        manufacturer => manufacturer.categories.includes(activeCategory)
-      );
-    }
-
-    // Filter by location
-    if (activeLocation !== "All Locations") {
-      filteredManufacturers = filteredManufacturers.filter(
-        manufacturer => manufacturer.location === activeLocation
-      );
-    }
-
-    // Filter by certifications
-    if (selectedCertifications.length > 0) {
-      filteredManufacturers = filteredManufacturers.filter(manufacturer => 
-        selectedCertifications.every(cert => 
-          manufacturer.certifications.includes(cert)
-        )
-      );
-      }
-
-      // Filter by rating range
-      filteredManufacturers = filteredManufacturers.filter(
-        m => m.rating >= ratingRange[0] && m.rating <= ratingRange[1]
-      );
-
-      // Filter by year range
-      filteredManufacturers = filteredManufacturers.filter(
-        m => m.establishedYear >= yearRange[0] && m.establishedYear <= yearRange[1]
-      );
-
-      // Sort manufacturers
-      switch (sortBy) {
-        case "rating-desc":
-          filteredManufacturers.sort((a, b) => b.rating - a.rating);
-          break;
-        case "rating-asc":
-          filteredManufacturers.sort((a, b) => a.rating - b.rating);
-          break;
-        case "established-desc":
-          filteredManufacturers.sort((a, b) => b.establishedYear - a.establishedYear);
-          break;
-        case "established-asc":
-          filteredManufacturers.sort((a, b) => a.establishedYear - b.establishedYear);
-          break;
-        case "name-asc":
-          filteredManufacturers.sort((a, b) => a.name.localeCompare(b.name));
-          break;
-        case "name-desc":
-          filteredManufacturers.sort((a, b) => b.name.localeCompare(a.name));
-          break;
-      }
-    }
-
-    setManufacturers(filteredManufacturers);
-  }, [
-    searchTerm,
-    activeCategory,
-    activeLocation,
-    selectedCertifications,
-    sortBy,
-    ratingRange,
-    yearRange,
-    showFavoritesOnly,
-    favorites,
-    originalManufacturers
-  ]);
-
-  const toggleCertification = (cert: string) => {
-    setSelectedCertifications(prev => 
-      prev.includes(cert) 
-        ? prev.filter(c => c !== cert) 
-        : [...prev, cert]
-    );
-  };
-
-  const toggleFavoritesView = () => {
-    if (showFavoritesOnly) {
-      // Reset all filters when exiting favorites view
-      clearFilters();
-    }
-    setShowFavoritesOnly(!showFavoritesOnly);
-  };
-
-  const clearFilters = () => {
-    setActiveCategory("All Categories");
-    setActiveLocation("All Locations");
-    setSelectedCertifications([]);
-    setSearchTerm("");
-    setRatingRange([0, 5]);
-    setYearRange([2000, new Date().getFullYear()]);
-    setSortBy("relevance");
-  };
-
-  const handleViewDetails = (id: number) => {
-    const manufacturer = manufacturers.find(m => m.id === id);
-    if (manufacturer) {
-      setSelectedManufacturer(manufacturer);
-      setShowDetails(true);
-    }
-  };
-
-  // Add these arrays for filter options
-  const locationOptions = [
-    "North America",
-    "South America",
-    "Europe",
-    "Asia",
-    "Africa",
-    "Australia"
-  ];
-
-  const leadTimeOptions = [
-    "1-2 weeks",
-    "2-4 weeks",
-    "1-2 months",
-    "2+ months"
-  ];
-
-  const certificationOptions = [
-    "ISO 9001",
-    "ISO 14001",
-    "HACCP",
-    "GMP",
-    "FSSC 22000",
-    "Organic",
-    "Fair Trade",
-    "Kosher",
-    "Halal"
-  ];
-
-  // Add effect for scroll detection
+  // Scroll detection for back-to-top button
   useEffect(() => {
     const handleScroll = () => {
-      setShowBackToTop(window.scrollY > 300);
+      setShowBackToTop(window.scrollY > 400);
     };
     
     window.addEventListener('scroll', handleScroll);
@@ -567,970 +786,863 @@ const Manufacturers = () => {
     };
   }, []);
 
+  const clearFilters = useCallback(() => {
+    setSelectedIndustry("all");
+    setSelectedLocation("all");
+    setSelectedCertification("all");
+    setSearchTerm("");
+    setEstablishYearRange([1500, new Date().getFullYear()]);
+    setSortBy("name-asc");
+    setShowFavoritesOnly(false);
+    setCurrentPage(1);
+    toast.success('Filters cleared');
+  }, []);
+
+  const toggleFavoritesView = useCallback(() => {
+    if (showFavoritesOnly) {
+      clearFilters();
+    }
+    setShowFavoritesOnly(!showFavoritesOnly);
+    setCurrentPage(1);
+  }, [showFavoritesOnly, clearFilters]);
+
+  const handleViewDetails = useCallback((id: number) => {
+    const manufacturer = manufacturers.find(m => m.id === id);
+    if (manufacturer) {
+      setSelectedManufacturer(manufacturer);
+      setShowDetails(true);
+    }
+  }, [manufacturers]);
+
+  const handleRefresh = useCallback(() => {
+    setCurrentPage(1);
+    loadManufacturers();
+    loadFilterOptions();
+    toast.success('Data refreshed');
+  }, [loadManufacturers, loadFilterOptions]);
+
+  // Get paginated results
+  const getPaginatedResults = useCallback(() => {
+    const startIndex = (currentPage - 1) * 12;
+    const endIndex = startIndex + 12;
+    return filteredManufacturers.slice(startIndex, endIndex);
+  }, [filteredManufacturers, currentPage]);
+
+  const hasActiveFilters = selectedIndustry !== "all" || selectedLocation !== "all" || selectedCertification !== "all" || searchTerm || 
+    establishYearRange[0] !== 1500 || establishYearRange[1] !== new Date().getFullYear() || showFavoritesOnly;
+
+  const displayedManufacturers = getPaginatedResults();
+
+  // Update the Location Filter UI to show individual locations with counts
+  const LocationFilter = (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium flex items-center gap-2">
+        <MapPin className="h-4 w-4 text-primary" />
+        Location
+        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </Label>
+      <Select 
+        value={selectedLocation} 
+        onValueChange={setSelectedLocation}
+        disabled={loadingFilters}
+      >
+        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
+          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Locations"} />
+        </SelectTrigger>
+        <SelectContent className="rounded-xl max-h-60 overflow-y-auto">
+          <SelectItem value="all">
+            All Locations ({manufacturers.length})
+          </SelectItem>
+          
+          {/* Show individual locations with counts */}
+          {locations.map((locationCategory) => (
+            <SelectItem 
+              key={locationCategory.id} 
+              value={locationCategory.id} 
+              className="hover:bg-primary/10"
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div>
+                  <span className="font-medium">{locationCategory.label}</span>
+                </div>
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  {locationCategory.count}
+                </Badge>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {/* Show address details when a location is selected */}
+      {selectedLocation !== "all" && (
+        <div className="bg-muted/40 rounded-xl p-3 text-xs">
+          <p className="text-muted-foreground mb-2 flex items-center gap-1">
+            <MapPin className="h-3 w-3" />
+            <span>Manufacturers in this location:</span>
+          </p>
+          <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
+            {locations.find(l => l.id === selectedLocation)?.originalValues.slice(0, 5).map((address, idx) => (
+              <div key={idx} className="flex items-start gap-1.5 bg-muted/30 px-2 py-1 rounded-md">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary/70 mt-1"></div>
+                <span className="leading-tight">{address}</span>
+              </div>
+            ))}
+            {(locations.find(l => l.id === selectedLocation)?.originalValues.length || 0) > 5 && (
+              <div className="text-muted-foreground italic text-center pt-1">
+                And {(locations.find(l => l.id === selectedLocation)?.originalValues.length || 0) - 5} more addresses...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Update the Certification Filter UI with improved categorization
+  const CertificationFilter = (
+    <div className="space-y-3">
+      <Label className="text-sm font-medium flex items-center gap-2">
+        <Award className="h-4 w-4 text-primary" />
+        Certification
+        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+      </Label>
+      <Select 
+        value={selectedCertification} 
+        onValueChange={setSelectedCertification}
+        disabled={loadingFilters}
+      >
+        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
+          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Certifications"} />
+        </SelectTrigger>
+        <SelectContent className="rounded-xl max-h-60">
+          <SelectItem value="all">
+            All Certifications ({manufacturers.length})
+          </SelectItem>
+          
+          {/* Display certification categories with counts */}
+          {certifications.map((certCategory) => (
+            <SelectItem 
+              key={certCategory.id} 
+              value={certCategory.id} 
+              className="hover:bg-primary/10"
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-1.5">
+                  {certCategory.id === 'organic' && <div className="h-2.5 w-2.5 rounded-full bg-green-500"></div>}
+                  {certCategory.id === 'iso9001' && <div className="h-2.5 w-2.5 rounded-full bg-blue-500"></div>}
+                  {certCategory.id === 'iso14001' && <div className="h-2.5 w-2.5 rounded-full bg-cyan-500"></div>}
+                  {certCategory.id === 'kosher' && <div className="h-2.5 w-2.5 rounded-full bg-amber-500"></div>}
+                  {certCategory.id === 'halal' && <div className="h-2.5 w-2.5 rounded-full bg-emerald-500"></div>}
+                  {certCategory.id === 'haccp' && <div className="h-2.5 w-2.5 rounded-full bg-rose-500"></div>}
+                  {certCategory.id === 'gmp' && <div className="h-2.5 w-2.5 rounded-full bg-purple-500"></div>}
+                  {certCategory.id === 'fda' && <div className="h-2.5 w-2.5 rounded-full bg-red-500"></div>}
+                  {certCategory.id === 'fairtrade' && <div className="h-2.5 w-2.5 rounded-full bg-teal-500"></div>}
+                  {certCategory.id === 'nonGMO' && <div className="h-2.5 w-2.5 rounded-full bg-lime-500"></div>}
+                  {certCategory.id === 'glutenFree' && <div className="h-2.5 w-2.5 rounded-full bg-yellow-500"></div>}
+                  {certCategory.id === 'vegan' && <div className="h-2.5 w-2.5 rounded-full bg-green-600"></div>}
+                  {certCategory.id === 'sustainable' && <div className="h-2.5 w-2.5 rounded-full bg-sky-500"></div>}
+                  {certCategory.id === 'other' && <div className="h-2.5 w-2.5 rounded-full bg-gray-500"></div>}
+                  
+                  <span className="truncate font-medium">{certCategory.label}</span>
+                </div>
+                <Badge variant="secondary" className="ml-2 text-xs flex-shrink-0">
+                  {certCategory.count}
+                </Badge>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      
+      {selectedCertification !== "all" && (
+        <div className="bg-muted/40 rounded-xl p-3 text-xs">
+          <p className="text-muted-foreground mb-2 flex items-center gap-1">
+            <Award className="h-3 w-3" />
+            <span>Includes manufacturers with:</span>
+          </p>
+          <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
+            {certifications.find(c => c.id === selectedCertification)?.originalValues.slice(0, 5).map((cert, idx) => (
+              <div key={idx} className="flex items-center gap-1.5 bg-muted/30 px-2 py-1 rounded-md">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary/70"></div>
+                <span className="truncate font-medium">{cert}</span>
+              </div>
+            ))}
+            {(certifications.find(c => c.id === selectedCertification)?.originalValues.length || 0) > 5 && (
+              <div className="text-muted-foreground italic text-center pt-1">
+                And {(certifications.find(c => c.id === selectedCertification)?.originalValues.length || 0) - 5} more...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-background/50 overflow-x-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background/98 to-muted/10">
       <Navbar />
       
       <motion.div 
-        className="container mx-auto px-4 pt-24 pb-12"
-        variants={pageTransition}
+        className="container mx-auto px-4 pt-20 pb-12 max-w-[1600px]"
         initial="hidden"
         animate="visible"
-        exit="exit"
+        variants={headerVariants}
       >
-        <div className="max-w-7xl mx-auto">
+        <div className="w-full">
+          {/* Enhanced Header Section */}
           <motion.div 
-            className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 gap-6"
-            variants={staggerContainer}
+            className="text-center mb-12 space-y-6"
+            variants={containerVariants}
             initial="hidden"
             animate="visible"
           >
             <motion.div variants={itemVariants} className="space-y-4">
-            <h1 className="text-3xl font-bold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-primary via-accent to-primary animate-gradient bg-300%">
+              <h1 className="text-4xl md:text-5xl lg:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary via-primary/120 to-accent">
                 {t('manufacturers-title')}
               </h1>
-              <p className="text-lg text-muted-foreground max-w-2xl">
+              <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto leading-relaxed">
                 {t('manufacturers-description')}
               </p>
-            </motion.div>
-            
-            <motion.div 
-              className="flex items-center gap-3"
-              variants={staggerContainer}
-              initial="hidden"
-              animate="visible"
-            >
-              <motion.div variants={itemVariants}>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowFavoritesSheet(true)}
-                    className={cn(
-                      "flex items-center gap-2 transition-all duration-300 hover:bg-primary hover:text-primary-foreground relative group",
-                      showFavoritesSheet && "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    <motion.span 
-                      animate={favorites.length > 0 ? { scale: [1, 1.2, 1] } : {}}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Heart className={cn(
-                        "h-4 w-4 transition-all",
-                        favorites.length > 0 ? "fill-current" : "group-hover:fill-current"
-                      )} />
-                    </motion.span>
-                    {t('favorites-button')}
-                    {favorites.length > 0 && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15
-                        }}
-                      >
-                        <Badge variant="secondary" className="bg-background/20">
-                          {favorites.length}
-                        </Badge>
-                      </motion.div>
-                    )}
-                  </Button>
+              {filteredManufacturers.length > 0 && (
+                <motion.div 
+                className="flex items-center justify-center gap-3 text-sm text-muted-foreground bg-card/40 backdrop-blur-sm rounded-full px-6 py-3 border border-muted/30 mx-auto w-fit"
+                initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                transition={{ 
+                  type: "spring", 
+                  stiffness: 200, 
+                  damping: 20, 
+                  delay: 0.6,
+                  duration: 0.8
+                }}
+                  whileHover={{
+                    scale: 1.05,
+                    boxShadow: "0 8px 25px rgba(0,0,0,0.1)",
+                    transition: { type: "spring", stiffness: 400, damping: 25 }
+                  }}
+                >
+                  <Building2 className="h-5 w-5 text-primary" />
+                  <span className="font-medium">{filteredManufacturers.length} manufacturers founds</span>
                 </motion.div>
-              </motion.div>
-
-              <motion.div variants={itemVariants}>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={cn(
-                      "flex items-center gap-2 transition-colors duration-300 hover:bg-primary hover:text-primary-foreground",
-                      showFilters && "bg-primary text-primary-foreground"
-                    )}
-                  >
-                    <Filter className="h-4 w-4" />
-                    {t('filters-heading')}
-                    {(selectedCertifications.length > 0 || activeCategory !== "All Categories" || activeLocation !== "All Locations") && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15
-                        }}
-                      >
-                        <Badge variant="secondary" className="ml-1 bg-background/20">
-                          {selectedCertifications.length + (activeCategory !== "All Categories" ? 1 : 0) + (activeLocation !== "All Locations" ? 1 : 0)}
-                        </Badge>
-                      </motion.div>
-                    )}
-                  </Button>
-                </motion.div>
-              </motion.div>
-
-              <motion.div variants={itemVariants}>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className={cn(
-                      "flex items-center gap-2 transition-colors duration-300 hover:bg-primary hover:text-primary-foreground",
-                      compareItems.length > 0 && "bg-primary text-primary-foreground"
-                    )}
-                    disabled={compareItems.length === 0}
-                    onClick={() => setShowCompareSheet(true)}
-                  >
-                    <Scale className="h-4 w-4" />
-                    {t('compare-button')}
-                    {compareItems.length > 0 && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 15
-                        }}
-                      >
-                        <Badge variant="secondary" className="bg-background/20">{compareItems.length}</Badge>
-                      </motion.div>
-                    )}
-                  </Button>
-                </motion.div>
-              </motion.div>
+              )}
             </motion.div>
           </motion.div>
-          
+            
+          {/* Enhanced Control Bar */}
           <motion.div 
-            className="mb-8 space-y-4"
-            variants={fadeIn}
+            className="mb-8 space-y-6"
+            variants={containerVariants}
             initial="hidden"
             animate="visible"
           >
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                type="search"
-                placeholder={t('search-manufacturers-placeholder')}
-                className="pl-10 w-full transition-all duration-300 border-opacity-50 focus:border-opacity-100"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-              {searchTerm && (
-                <motion.div
-                  initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-12 top-1/2 transform -translate-y-1/2"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </motion.div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "absolute right-2 top-1/2 transform -translate-y-1/2 transition-colors duration-300",
-                  showAdvancedSearch && "bg-primary text-primary-foreground"
-                )}
-                onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+            {/* Search Bar */}
+            <motion.div variants={itemVariants} className="relative max-w-5xl mx-auto">
+              <motion.div
+                className="relative"
+                variants={searchBarVariants}
+                initial="unfocused"
+                whileHover="focused"
+                whileFocus="focused"
               >
-                <SlidersHorizontal className="h-4 w-4 mr-2" />
-                {t('advanced-search-button')}
-              </Button>
-            </div>
-
-            <AnimatePresence>
-              {showAdvancedSearch && (
                 <motion.div
-                  initial={{ opacity: 0, height: 0, overflow: "hidden" }}
-                  animate={{ 
-                    opacity: 1, 
-                    height: "auto", 
-                    transition: { 
-                      duration: 0.3,
-                      height: { duration: 0.3 }
-                    } 
+                  className="absolute left-4 top-1/4 transform -translate-y-1/2 text-muted-foreground h-5 w-5"
+                  animate={{
+                    scale: searchTerm ? 0.9 : 1,
+                    color: searchTerm ? "#6366f1" : "#64748b"
                   }}
-                  exit={{ 
-                    opacity: 0, 
-                    height: 0,
-                    transition: { 
-                      duration: 0.2,
-                      height: { duration: 0.2 }
-                    }
-                  }}
-                  className="bg-card border rounded-lg p-6 space-y-6"
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
                 >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* Rating Range */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Star className="h-4 w-4 text-yellow-500" />
-                        {t('rating-range')}
-                      </label>
-                      <div className="pt-2">
-                        <div className="flex items-center gap-4">
-                          <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                            <span className="text-sm font-medium">{ratingRange[0].toFixed(1)}</span>
-                          </div>
-                          <Slider
-                            defaultValue={[4, 5]}
-                            min={0}
-                            max={5}
-                            step={0.1}
-                            value={ratingRange}
-                            onValueChange={setRatingRange}
-                            className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-primary [&_[role=slider]]:shadow-md [&_[role=slider]]:transition-colors [&_[role=slider]]:hover:border-primary/80 [&_[role=slider]]:focus:border-primary/80 [&_[role=slider]]:focus:ring-2 [&_[role=slider]]:focus:ring-primary/20 [&_[role=slider]]:active:scale-95 [&_.range]:bg-primary"
-                          />
-                          <div className="flex items-center gap-1">
-                            <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
-                            <span className="text-sm font-medium">{ratingRange[1].toFixed(1)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Annual Revenue Range */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-emerald-500" />
-                        {t('annual-revenue')}
-                      </label>
-                      <div className="pt-2">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-emerald-600">${revenueRange[0]}M</span>
-                          <Slider
-                            defaultValue={[1, 100]}
-                            min={1}
-                            max={100}
-                            step={1}
-                            value={revenueRange}
-                            onValueChange={setRevenueRange}
-                            className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-emerald-500 [&_[role=slider]]:shadow-md [&_[role=slider]]:transition-colors [&_[role=slider]]:hover:border-emerald-400 [&_[role=slider]]:focus:border-emerald-400 [&_[role=slider]]:focus:ring-2 [&_[role=slider]]:focus:ring-emerald-200 [&_[role=slider]]:active:scale-95"
-                          />
-                          <span className="text-sm font-medium text-emerald-600">${revenueRange[1]}M+</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Employee Count Range */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Users className="h-4 w-4 text-blue-500" />
-                        {t('employee-count')}
-                      </label>
-                      <div className="pt-2">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-blue-600">{employeeRange[0]}</span>
-                          <Slider
-                            defaultValue={[10, 1000]}
-                            min={10}
-                            max={1000}
-                            step={10}
-                            value={employeeRange}
-                            onValueChange={setEmployeeRange}
-                            className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-blue-500 [&_[role=slider]]:shadow-md [&_[role=slider]]:transition-colors [&_[role=slider]]:hover:border-blue-400 [&_[role=slider]]:focus:border-blue-400 [&_[role=slider]]:focus:ring-2 [&_[role=slider]]:focus:ring-blue-200 [&_[role=slider]]:active:scale-95"
-                          />
-                          <span className="text-sm font-medium text-blue-600">{employeeRange[1]}+</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Production Capacity */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Factory className="h-4 w-4 text-purple-500" />
-                        {t('production-capacity')}
-                      </label>
-                      <div className="pt-2">
-                        <div className="flex items-center gap-4">
-                          <span className="text-sm font-medium text-purple-600">{capacityRange[0].toLocaleString()}</span>
-                          <Slider
-                            defaultValue={[1000, 100000]}
-                            min={1000}
-                            max={100000}
-                            step={1000}
-                            value={capacityRange}
-                            onValueChange={setCapacityRange}
-                            className="flex-1 [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:border-2 [&_[role=slider]]:border-purple-500 [&_[role=slider]]:shadow-md [&_[role=slider]]:transition-colors [&_[role=slider]]:hover:border-purple-400 [&_[role=slider]]:focus:border-purple-400 [&_[role=slider]]:focus:ring-2 [&_[role=slider]]:focus:ring-purple-200 [&_[role=slider]]:active:scale-95"
-                          />
-                          <span className="text-sm font-medium text-purple-600">{capacityRange[1].toLocaleString()}+</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Export Markets */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Globe2 className="h-4 w-4 text-indigo-500" />
-                        {t('export-markets')}
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {locationOptions.map((location) => (
-                          <Badge
-                            key={location}
-                            variant={selectedMarkets.includes(location) ? "default" : "outline"}
-                            className={cn(
-                              "cursor-pointer transition-colors",
-                              selectedMarkets.includes(location)
-                                ? "bg-indigo-500 hover:bg-indigo-600"
-                                : "hover:bg-indigo-100"
-                            )}
-                            onClick={() => {
-                              setSelectedMarkets(prev =>
-                                prev.includes(location)
-                                  ? prev.filter(m => m !== location)
-                                  : [...prev, location]
-                              );
-                            }}
-                          >
-                            {location}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Quality Standards */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-teal-500" />
-                        {t('quality-standards')}
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {certificationOptions.map((cert) => (
-                          <Badge
-                            key={cert}
-                            variant={selectedStandards.includes(cert) ? "default" : "outline"}
-                            className={cn(
-                              "cursor-pointer transition-colors",
-                              selectedStandards.includes(cert)
-                                ? "bg-teal-500 hover:bg-teal-600"
-                                : "hover:bg-teal-100"
-                            )}
-                            onClick={() => {
-                              setSelectedStandards(prev =>
-                                prev.includes(cert)
-                                  ? prev.filter(s => s !== cert)
-                                  : [...prev, cert]
-                              );
-                            }}
-                          >
-                            {cert}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Additional Capabilities */}
-                    <div className="col-span-full space-y-4 border-t pt-4">
-                      <label className="text-sm font-medium flex items-center gap-2">
-                        <Settings2 className="h-4 w-4 text-gray-600" />
-                        {t('additional-capabilities')}
-                      </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        <div className="space-y-4">
-                          <div className="flex items-center space-x-3">
-                            <Switch id="r_and_d" checked={hasRandD} onCheckedChange={setHasRandD} />
-                            <Label htmlFor="r_and_d" className="text-sm flex items-center gap-2">
-                              <Microscope className="h-4 w-4 text-rose-500" />
-                              {t('r-and-d-facilities')}
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <Switch id="private_label" checked={hasPrivateLabel} onCheckedChange={setHasPrivateLabel} />
-                            <Label htmlFor="private_label" className="text-sm flex items-center gap-2">
-                              <Tag className="h-4 w-4 text-sky-500" />
-                              {t('private-label-service')}
-                            </Label>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center space-x-3">
-                            <Switch id="oem" checked={hasOEM} onCheckedChange={setHasOEM} />
-                            <Label htmlFor="oem" className="text-sm flex items-center gap-2">
-                              <Factory className="h-4 w-4 text-amber-500" />
-                              {t('oem-service')}
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <Switch id="design" checked={hasDesign} onCheckedChange={setHasDesign} />
-                            <Label htmlFor="design" className="text-sm flex items-center gap-2">
-                              <Paintbrush className="h-4 w-4 text-violet-500" />
-                              {t('design-service')}
-                            </Label>
-                          </div>
-                        </div>
-                        <div className="space-y-4">
-                          <div className="flex items-center space-x-3">
-                            <Switch id="trade_shows" checked={hasTradeShows} onCheckedChange={setHasTradeShows} />
-                            <Label htmlFor="trade_shows" className="text-sm flex items-center gap-2">
-                              <Store className="h-4 w-4 text-orange-500" />
-                              {t('trade-show-presence')}
-                            </Label>
-                          </div>
-                          <div className="flex items-center space-x-3">
-                            <Switch id="samples" checked={hasSamples} onCheckedChange={setHasSamples} />
-                            <Label htmlFor="samples" className="text-sm flex items-center gap-2">
-                              <Package className="h-4 w-4 text-blue-500" />
-                              {t('sample-development')}
-                            </Label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setRatingRange([0, 5]);
-                        setRevenueRange([1, 100]);
-                        setEmployeeRange([10, 1000]);
-                        setCapacityRange([1000, 100000]);
-                        setSelectedMarkets([]);
-                        setSelectedStandards([]);
-                        setHasRandD(false);
-                        setHasPrivateLabel(false);
-                        setHasOEM(false);
-                        setHasDesign(false);
-                        setHasTradeShows(false);
-                        setHasSamples(false);
-                        setShowAdvancedSearch(false);
-                      }}
-                      className="hover:bg-destructive hover:text-destructive-foreground"
-                    >
-                      {t('reset-filters')}
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button variant="outline" onClick={() => setShowAdvancedSearch(false)}>
-                        {t('cancel-button')}
-                      </Button>
-                      <Button onClick={() => setShowAdvancedSearch(false)}>
-                        {t('apply-filters')}
-                      </Button>
-                    </div>
-                  </div>
+                  <Search className="h-5 w-5" />
                 </motion.div>
-              )}
-            </AnimatePresence>
+
+                <Input
+                  id="search-input"
+                  type="text"
+                  placeholder={t('search-manufacturers-placeholder')}
+                  className="pl-14 pr-14 h-18 text-base rounded-2xl border-2 border-transparent focus:border-primary/30 bg-card/60 backdrop-blur-sm shadow-lg transition-all duration-300 hover:shadow-xl"
+                  value={searchTerm}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  aria-label="Search manufacturers"
+                />
+
+                <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                  <AnimatePresence>
+                    {searchTerm && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.8, x: 10 }}
+                        animate={{ opacity: 1, scale: 1, x: 0 }}
+                        exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="hover:bg-muted rounded-full h-10 w-10"
+                          onClick={() => handleSearch("")}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <motion.div
+                  className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-indigo-500/20 -z-10"
+                  animate={{
+                    opacity: searchTerm ? 0.3 : 0,
+                    scale: searchTerm ? 1.02 : 1
+                  }}
+                  transition={{ duration: 0.3 }}
+                />
+              </motion.div>
+              
+              {/* Advanced Search Toggle */}
+              <div className="flex items-center justify-end mt-2">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="advanced-search" className="text-xs text-muted-foreground cursor-pointer">
+                    {useAdvancedSearch ? "Advanced Search: ON" : "Advanced Search: OFF"}
+                  </Label>
+                  <button
+                    onClick={() => setUseAdvancedSearch(!useAdvancedSearch)}
+                    className={cn(
+                      "relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none",
+                      useAdvancedSearch ? "bg-primary" : "bg-muted"
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-300 ease-in-out",
+                        useAdvancedSearch ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                  {searchTerm && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="bg-muted/50 text-xs px-2 py-1 rounded-md text-muted-foreground"
+                    >
+                      {filteredManufacturers.length} results
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Control Row */}
+            <motion.div 
+              variants={itemVariants}
+              className="flex flex-wrap items-center justify-between gap-4"
+            >
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  className="flex items-center gap-2 transition-all duration-300 hover:bg-primary hover:text-primary-foreground rounded-xl h-10 px-4"
+                >
+                  <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                  Refresh
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={toggleFavoritesView}
+                  className={cn(
+                    "flex items-center gap-2 transition-all duration-300 hover:bg-primary hover:text-primary-foreground rounded-xl h-10 px-4",
+                    showFavoritesOnly && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  <Heart className={cn(
+                    "h-4 w-4 transition-all",
+                    (favorites.length > 0 || showFavoritesOnly) ? "fill-current" : ""
+                  )} />
+                  {t('favorites-button')}
+                  {favorites.length > 0 && (
+                    <Badge variant="secondary" className="bg-background/20 ml-1">
+                      {favorites.length}
+                    </Badge>
+                  )}
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={cn(
+                    "flex items-center gap-2 transition-all duration-300 hover:bg-primary hover:text-primary-foreground rounded-xl h-10 px-4",
+                    showFilters && "bg-primary text-primary-foreground"
+                  )}
+                >
+                  <Filter className="h-4 w-4" />
+                  {t('filters-heading')}
+                  {/* {hasActiveFilters && (
+                    <Badge variant="secondary" className="ml-1 bg-background/20">
+                      Active
+                    </Badge>
+                  )} */}
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-muted/50 rounded-xl p-1">
+                  <Button 
+                    variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className="rounded-lg h-9 w-9"
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                    className="rounded-lg h-9 w-9"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {/* Sort Dropdown */}
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-52 bg-card/60 backdrop-blur-sm rounded-xl h-10">
+                    <ArrowUpDown className="h-4 w-4 mr-2" />
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </motion.div>
           </motion.div>
           
-          {/* Active filters with enhanced animations */}
-          <AnimatePresence>
-            {(selectedCertifications.length > 0 || activeCategory !== "All Categories" || activeLocation !== "All Locations" || showFavoritesOnly || ratingRange[0] !== 0 || ratingRange[1] !== 5 || yearRange[0] !== 2000 || yearRange[1] !== new Date().getFullYear()) && (
-              <motion.div 
-                className="mb-6 flex flex-wrap items-center gap-2 bg-muted/30 p-4 rounded-lg"
-                initial={{ opacity: 0, y: -5, height: 0 }}
-                animate={{ opacity: 1, y: 0, height: "auto" }}
-                exit={{ opacity: 0, y: -5, height: 0 }}
-                transition={{ 
-                  duration: 0.2, 
-                  height: { duration: 0.15 },
-                  opacity: { duration: 0.2 }
-                }}
-              >
-                <span className="text-sm font-medium text-foreground/70">{t('active-filters')}</span>
-                
-                {showFavoritesOnly && (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge variant="secondary" className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300">
-                      <Heart className="h-3 w-3" />
-                      {t('favorites-only')}
-                      <motion.button 
-                        onClick={() => setShowFavoritesOnly(false)}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                )}
-              
-                {activeCategory !== "All Categories" && (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge variant="secondary" className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300">
-                      {activeCategory === "All Categories" ? t('all-categories') : activeCategory}
-                      <motion.button 
-                        onClick={() => setActiveCategory("All Categories")}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                )}
-              
-                {activeLocation !== "All Locations" && (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge variant="secondary" className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300">
-                      <MapPin className="h-3 w-3" />
-                      {activeLocation === "All Locations" ? t('all-locations') : activeLocation}
-                      <motion.button 
-                        onClick={() => setActiveLocation("All Locations")}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                )}
-              
-                {selectedCertifications.map(cert => (
-                  <motion.div
-                    key={cert}
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300"
-                    >
-                      {cert}
-                      <motion.button 
-                        onClick={() => toggleCertification(cert)}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                ))}
-              
-                {(ratingRange[0] !== 0 || ratingRange[1] !== 5) && (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge variant="secondary" className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300">
-                      <Star className="h-3 w-3" />
-                      {ratingRange[0]} - {ratingRange[1]}
-                      <motion.button 
-                        onClick={() => setRatingRange([0, 5])}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                )}
-                
-                {(yearRange[0] !== 2000 || yearRange[1] !== new Date().getFullYear()) && (
-                  <motion.div
-                    initial={{ scale: 0.8, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0.8, opacity: 0 }}
-                    whileHover={{ scale: 1.05 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Badge variant="secondary" className="flex items-center gap-1 group hover:bg-destructive hover:text-destructive-foreground transition-all duration-300">
-                      <Calendar className="h-3 w-3" />
-                      {yearRange[0]} - {yearRange[1]}
-                      <motion.button 
-                        onClick={() => setYearRange([2000, new Date().getFullYear()])}
-                        className="group-hover:bg-destructive-foreground/20 rounded-full p-0.5 transition-colors duration-300"
-                        whileHover={{ rotate: 90 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        <X className="h-3 w-3" />
-                      </motion.button>
-                    </Badge>
-                  </motion.div>
-                )}
-                
-                <motion.div 
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={clearFilters} 
-                    className="text-xs hover:bg-destructive hover:text-destructive-foreground transition-colors duration-300"
-                  >
-                    {t('clear-all')}
-                  </Button>
-                </motion.div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          
-          {/* Filter sidebar and manufacturers grid */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            {/* Filter sidebar - improved animations */}
+        
+          {/* Main Content */}
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-8">
+            {/* Enhanced Filter Sidebar */}
             <AnimatePresence>
               {showFilters && (
                 <motion.div
-                  initial={{ opacity: 0, x: -20, boxShadow: "0px 0px 0px rgba(0,0,0,0)" }}
-                  animate={{ 
-                    opacity: 1, 
-                    x: 0, 
-                    boxShadow: "0px 4px 20px rgba(0,0,0,0.05)",
-                    transition: {
-                      type: "spring",
-                      stiffness: 400,
-                      damping: 30
-                    }
-                  }}
-                  exit={{ 
-                    opacity: 0, 
-                    x: -20,
-                    transition: {
-                      duration: 0.2
-                    }
-                  }}
-                  className="md:col-span-1 space-y-6 bg-card p-6 rounded-xl shadow-sm border"
+                  variants={filterVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  className="xl:col-span-1 space-y-6 bg-card/40 backdrop-blur-sm p-6 rounded-2xl shadow-sm border h-fit sticky top-24"
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <Filter className="h-4 w-4" />
+                      <Filter className="h-5 w-5 text-primary" />
                       {t('filters-heading')}
                     </h3>
-                    <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="md:hidden hover:bg-destructive hover:text-destructive-foreground"
-                        onClick={() => setShowFilters(false)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </motion.div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="xl:hidden rounded-full"
+                      onClick={() => setShowFilters(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </div>
                   
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                    className="space-y-6"
-                  >
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        {t('categories-heading')}
-                      </h4>
-                      <div className="space-y-1">
-                        {categories.map((category, index) => (
-                          <motion.div
-                            key={category}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ 
-                              opacity: 1, 
-                              x: 0,
-                              transition: {
-                                delay: 0.05 * index
-                              }
-                            }}
-                          >
-                            <Button
-                              variant={activeCategory === category ? "secondary" : "ghost"}
-                              size="sm"
-                              className={cn(
-                                "w-full justify-start text-sm h-8 transition-all duration-200",
-                                activeCategory === category && "bg-primary/10 text-primary font-medium"
-                              )}
-                              onClick={() => setActiveCategory(category)}
-                            >
-                              {category === "All Categories" ? t('all-categories') : category}
-                            </Button>
-                          </motion.div>
-                        ))}
+                  <div className="space-y-6">
+                    {/* Filter Summary */}
+                    <div className="bg-muted/30 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Package className="h-4 w-4 text-primary" />
+                        <span>Filter Summary</span>
                       </div>
-                    </motion.div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Total</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {manufacturers.length}
+                          </Badge>
+                      </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Filtered</span>
+                          <Badge variant="outline" className={cn(
+                            "font-semibold", 
+                            filteredManufacturers.length < manufacturers.length 
+                              ? "bg-primary/10 text-primary border-primary/20" 
+                              : "bg-background/50"
+                          )}>
+                            {filteredManufacturers.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Industries</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {industries.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2">
+                          <span className="text-muted-foreground">Locations</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {locations.length}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 col-span-2">
+                          <span className="text-muted-foreground">Certifications</span>
+                          <Badge variant="outline" className="font-semibold bg-background/50">
+                            {certifications.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      
+                      {/* Active filters summary */}
+                      {hasActiveFilters && (
+                        <div className="border-t border-muted pt-2 mt-1">
+                          <div className="text-xs font-medium mb-1.5 text-muted-foreground">Active Filters:</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {selectedIndustry !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Building className="h-3 w-3" />
+                                <span>{selectedIndustry}</span>
+                              </Badge>
+                            )}
+                            {selectedLocation !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <MapPin className="h-3 w-3" />
+                                <span>{locations.find(l => l.id === selectedLocation)?.label}</span>
+                              </Badge>
+                            )}
+                            {selectedCertification !== "all" && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Award className="h-3 w-3" />
+                                <span>{certifications.find(c => c.id === selectedCertification)?.label}</span>
+                              </Badge>
+                            )}
+                            {(establishYearRange[0] > 1500 || establishYearRange[1] < new Date().getFullYear()) && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Calendar className="h-3 w-3" />
+                                <span>{establishYearRange[0]} - {establishYearRange[1]}</span>
+                              </Badge>
+                            )}
+                            {showFavoritesOnly && (
+                              <Badge variant="secondary" className="text-xs gap-1 px-2 py-1">
+                                <Heart className="h-3 w-3 fill-current" />
+                                <span>Favorites</span>
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Industry Filter */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <Building className="h-4 w-4 text-primary" />
+                        Industry
+                        {loadingFilters && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                      </Label>
+                      <Select 
+                        value={selectedIndustry} 
+                        onValueChange={setSelectedIndustry}
+                        disabled={loadingFilters}
+                      >
+                        <SelectTrigger className="w-full rounded-xl transition-all duration-200 hover:border-primary/40">
+                          <SelectValue placeholder={loadingFilters ? "Loading..." : "All Industries"} />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-xl">
+                          <SelectItem value="all">
+                            All Industries ({manufacturers.length})
+                          </SelectItem>
+                          {industries.map((industry) => {
+                            const count = manufacturers.filter(m => m.industry === industry).length;
+                            return (
+                              <SelectItem key={industry} value={industry} className="hover:bg-primary/10">
+                                <div className="flex items-center justify-between w-full">
+                                  <span>{industry}</span>
+                                  <Badge variant="secondary" className="ml-2 text-xs">
+                                    {count}
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
                     
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.3 }}
-                    >
-                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                        <MapPin className="h-4 w-4" />
-                        {t('location-heading')}
-                      </h4>
-                      <div className="space-y-1">
-                        {locations.map((location, index) => (
-                          <motion.div
-                            key={location}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ 
-                              opacity: 1, 
-                              x: 0,
-                              transition: {
-                                delay: 0.05 * index
-                              }
-                            }}
-                          >
-                            <Button
-                              variant={activeLocation === location ? "secondary" : "ghost"}
-                              size="sm"
-                              className={cn(
-                                "w-full justify-start text-sm h-8 transition-all duration-200",
-                                activeLocation === location && "bg-primary/10 text-primary font-medium"
-                              )}
-                              onClick={() => setActiveLocation(location)}
-                            >
-                              {location !== "All Locations" && <MapPin className="h-3 w-3 mr-2" />}
-                              {location === "All Locations" ? t('all-locations') : location}
-                            </Button>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
+                    {/* Location Filter - Using the updated component */}
+                    {LocationFilter}
                     
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 }}
-                    >
-                      <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                        <Award className="h-4 w-4" />
-                        {t('certifications-heading')}
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {certifications.map((cert, index) => (
-                          <motion.div
-                            key={cert}
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ 
-                              opacity: 1, 
-                              scale: 1,
-                              transition: {
-                                delay: 0.05 * index
-                              }
-                            }}
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                            transition={{ duration: 0.2 }}
-                          >
-                            <Badge
-                              variant={selectedCertifications.includes(cert) ? "default" : "outline"}
-                              className={cn(
-                                "cursor-pointer transition-colors duration-200",
-                                selectedCertifications.includes(cert) 
-                                  ? "bg-primary/10 text-primary hover:bg-primary/20" 
-                                  : "hover:bg-muted"
-                              )}
-                              onClick={() => toggleCertification(cert)}
-                            >
-                              {cert}
-                            </Badge>
-                          </motion.div>
-                        ))}
+                    {/* Certification Filter - Using the updated component */}
+                    {CertificationFilter}
+                    
+                    {/* Establishment Year Range */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-primary" />
+                        Established Year
+                      </Label>
+                      <div className="pt-2">
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-medium min-w-[3rem]">{establishYearRange[0]}</span>
+                          <Slider
+                            value={establishYearRange}
+                            onValueChange={setEstablishYearRange}
+                            min={1500}
+                            max={new Date().getFullYear()}
+                            step={1}
+                            className="flex-1"
+                          />
+                          <span className="text-sm font-medium min-w-[3rem]">{establishYearRange[1]}</span>
+                        </div>
                       </div>
-                    </motion.div>
-                  </motion.div>
+                    </div>
+                  </div>
                   
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full hover:bg-destructive hover:text-destructive-foreground rounded-xl"
+                    onClick={clearFilters}
                   >
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-4 hover:bg-destructive hover:text-destructive-foreground transition-all duration-300"
-                      onClick={clearFilters}
-                    >
-                      {t('clear-all-filters')}
-                    </Button>
-                  </motion.div>
+                    {t('clear-all-filters')}
+                  </Button>
                 </motion.div>
               )}
             </AnimatePresence>
             
-            {/* Manufacturers grid with enhanced animations */}
+            {/* Manufacturers Grid */}
             <motion.div 
-              className={`${showFilters ? 'md:col-span-3' : 'md:col-span-4'}`}
+              className={`${showFilters ? 'xl:col-span-4' : 'xl:col-span-5'}`}
               variants={containerVariants}
               initial="hidden"
               animate="visible"
             >
-              {manufacturers.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <AnimatePresence mode="popLayout">
-                    {manufacturers.map(manufacturer => (
-                      <motion.div
-                        key={manufacturer.id}
-                        layout
-                        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                        transition={{ 
-                          type: "spring", 
-                          stiffness: 400, 
-                          damping: 25,
-                          duration: 0.3 
-                        }}
-                        whileHover={{ 
-                          y: -5, 
-                          boxShadow: "0px 10px 30px rgba(0, 0, 0, 0.1)", 
-                          transition: { 
-                            type: "spring", 
-                            stiffness: 400, 
-                            damping: 25 
-                          } 
-                        }}
+              {loading ? (
+                <motion.div 
+                  className="flex items-center justify-center py-20"
+                  variants={smoothFadeVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <div className="text-center space-y-6">
+                    <div className="relative">
+                      <Loader2 className="h-16 w-16 animate-spin mx-auto text-primary" />
+                      <div className="absolute inset-0 h-16 w-16 mx-auto border-4 border-primary/20 rounded-full animate-pulse"></div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-lg font-medium text-foreground">Loading manufacturers...</p>
+                      <p className="text-sm text-muted-foreground">Please wait while we fetch the latest data</p>
+                    </div>
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : error ? (
+                <motion.div 
+                  className="text-center py-16 bg-card/40 backdrop-blur-sm rounded-2xl border shadow-sm"
+                  variants={smoothFadeVariants}
+                  initial="hidden"
+                  animate="visible"
+                >
+                  <div className="space-y-6">
+                    <div className="relative">
+                      <AlertCircle className="h-20 w-20 mx-auto text-destructive" />
+                      <div className="absolute inset-0 h-20 w-20 mx-auto border-4 border-destructive/20 rounded-full animate-pulse"></div>
+                    </div>
+                    <div className="space-y-3">
+                      <p className="text-xl font-semibold text-destructive">Error Loading Manufacturers</p>
+                      <p className="text-muted-foreground max-w-md mx-auto">{error}</p>
+                      <p className="text-sm text-muted-foreground">Please check your connection and try again</p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                      <Button 
+                        onClick={handleRefresh} 
+                        className="hover:bg-primary/90 rounded-xl transition-all duration-300"
+                        size="lg"
                       >
-                        <ManufacturerCard 
-                          manufacturer={manufacturer}
-                          onViewDetails={handleViewDetails}
-                        />
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Try Again
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        onClick={clearFilters}
+                        className="rounded-xl transition-all duration-300"
+                        size="lg"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Clear Filters
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : displayedManufacturers.length > 0 ? (
+                <>
+                  <motion.div 
+                    className={cn(
+                      "gap-6",
+                      viewMode === 'grid' 
+                        ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 auto-rows-fr" 
+                        : "space-y-4"
+                    )}
+                    variants={staggerContainerVariants}
+                    initial="hidden"
+                    animate="visible"
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {displayedManufacturers.map((manufacturer, index) => (
+                        <motion.div
+                          key={manufacturer.id}
+                          layout
+                          layoutId={`manufacturer-${manufacturer.id}`}
+                          variants={itemVariants}
+                          initial="hidden"
+                          animate="visible"
+                          exit="hidden"
+                          whileHover="hover"
+                          transition={{ 
+                            layout: { type: "spring", stiffness: 300, damping: 25 },
+                            delay: index * 0.02 
+                          }}
+                          className={cn(
+                            "h-full",
+                            viewMode === 'grid' ? "min-h-[480px]" : ""
+                          )}
+                          style={{ 
+                            gridRowEnd: viewMode === 'grid' ? 'span 1' : 'auto' 
+                          }}
+                        >
+                          <ManufacturerCard 
+                            manufacturer={manufacturer}
+                            onViewDetails={handleViewDetails}
+                            viewMode={viewMode}
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </motion.div>
+                  
+                  {/* Enhanced Pagination */}
+                  {totalPages > 1 && (
+                    <motion.div 
+                      className="flex justify-center mt-12"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ type: "spring", stiffness: 200, damping: 25, delay: 0.3 }}
+                    >
+                      <div className="flex gap-3 items-center bg-card/60 backdrop-blur-sm rounded-2xl p-2 shadow-xl border border-muted/30">
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ChevronUp className="h-5 w-5 mr-2 -rotate-90" />
+                            {t('previous')}
+                          </Button>
+                        </motion.div>
+
+                        <div className="flex gap-2">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum = 1;
+                            if (totalPages <= 5) {
+                              pageNum = i + 1;
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1;
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i;
+                            } else {
+                              pageNum = currentPage - 2 + i;
+                            }
+                            if (pageNum >= 1 && pageNum <= totalPages) {
+                              return (
+                                <motion.div key={pageNum} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                                  <Button
+                                    variant={currentPage === pageNum ? "default" : "outline"}
+                                    size="icon"
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={cn(
+                                      "w-12 h-12 rounded-xl shadow-lg transition-all duration-300",
+                                      currentPage === pageNum && "shadow-xl scale-110"
+                                    )}
+                                  >
+                                    {pageNum}
+                                  </Button>
+                                </motion.div>
+                              );
+                            }
+                            return null;
+                          })}
+                        </div>
+
+                        <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-6 h-12 rounded-xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {t('next')}
+                            <ChevronUp className="h-5 w-5 ml-2 rotate-90" />
+                          </Button>
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  )}
+                </>
               ) : (
                 <motion.div 
-                  className="text-center py-16 bg-card rounded-xl border shadow-sm"
+                  className="text-center py-16 bg-card/40 backdrop-blur-sm rounded-2xl border shadow-sm"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ 
-                    delay: 0.2, 
-                    type: "spring",
-                    stiffness: 200,
-                    damping: 20
-                  }}
                 >
                   {showFavoritesOnly ? (
                     <>
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ 
-                          scale: 1,
-                          transition: { 
-                            type: "spring", 
-                            stiffness: 400, 
-                            damping: 10 
-                          }
-                        }}
-                      >
-                        <Heart className="h-16 w-16 mx-auto text-muted-foreground mb-6" />
-                      </motion.div>
-                      <motion.p 
-                        className="text-xl font-medium text-foreground/70 mb-2"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                      >
+                      <Heart className="h-16 w-16 mx-auto text-muted-foreground mb-6" />
+                      <p className="text-xl font-medium text-foreground/70 mb-2">
                         {t('no-favorite-manufacturers')}
-                      </motion.p>
-                      <motion.p 
-                        className="text-muted-foreground mb-6"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                      >
+                      </p>
+                      <p className="text-muted-foreground mb-6">
                         {t('add-manufacturers-favorites')}
-                      </motion.p>
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowFavoritesOnly(false)}
+                        className="rounded-xl"
                       >
-                        <Button 
-                          variant="outline" 
-                          onClick={() => setShowFavoritesOnly(false)}
-                          className="hover:bg-primary hover:text-primary-foreground transition-colors duration-300"
-                        >
-                          {t('view-all-manufacturers')}
-                        </Button>
-                      </motion.div>
+                        {t('view-all-manufacturers')}
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ 
-                          scale: 1,
-                          transition: { 
-                            type: "spring", 
-                            stiffness: 400, 
-                            damping: 10 
-                          }
-                        }}
-                      >
-                        <Building className="h-16 w-16 mx-auto text-muted-foreground mb-6" />
-                      </motion.div>
-                      <motion.p 
-                        className="text-xl font-medium text-foreground/70 mb-2"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                      >
+                      <Building className="h-16 w-16 mx-auto text-muted-foreground mb-6" />
+                      <p className="text-xl font-medium text-foreground/70 mb-2">
                         {t('no-manufacturers-found')}
-                      </motion.p>
-                      <motion.p 
-                        className="text-muted-foreground mb-6"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.3 }}
-                      >
+                      </p>
+                      <p className="text-muted-foreground mb-6">
                         {t('adjust-filters-or-search')}
-                      </motion.p>
-                      <motion.div
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
+                      </p>
+                      <Button 
+                        variant="outline" 
+                        onClick={clearFilters}
+                        className="rounded-xl"
                       >
-                        <Button 
-                          variant="outline" 
-                          onClick={clearFilters}
-                          className="hover:bg-primary hover:text-primary-foreground transition-colors duration-300"
-                        >
-                          {t('clear-all-filters')}
-                        </Button>
-                      </motion.div>
+                        {t('clear-all-filters')}
+                      </Button>
                     </>
                   )}
                 </motion.div>
@@ -1540,28 +1652,24 @@ const Manufacturers = () => {
         </div>
       </motion.div>
       
-      {/* Add floating back-to-top button */}
+      {/* Enhanced Back to Top Button */}
       <AnimatePresence>
         {showBackToTop && (
-          <motion.div
-            className="fixed bottom-6 right-6 z-50"
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0 }}
-            transition={{ duration: 0.2 }}
+          <motion.button
+            className="fixed bottom-8 right-8 z-50 bg-primary text-primary-foreground rounded-2xl p-4 shadow-lg hover:shadow-xl transition-all backdrop-blur-sm bg-primary/90 border border-primary/0"
+            initial={{ opacity: 0, scale: 0, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0, y: 20 }}
+            whileHover={{ scale: 1.1, y: -2 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           >
-            <motion.button
-              className="bg-primary text-primary-foreground rounded-full p-3 shadow-lg hover:shadow-xl transition-all"
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            >
-              <ChevronUp className="h-5 w-5" />
-            </motion.button>
-          </motion.div>
+            <ChevronUp className="h-4 w-4" />
+          </motion.button>
         )}
       </AnimatePresence>
       
+      {/* Manufacturer Details Modal */}
       {selectedManufacturer && (
         <ManufacturerDetails
           manufacturer={selectedManufacturer}
@@ -1577,3 +1685,4 @@ const Manufacturers = () => {
 };
 
 export default Manufacturers;
+

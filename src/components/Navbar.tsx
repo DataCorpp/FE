@@ -33,7 +33,7 @@ const Navbar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, user, logout, updateUserStatus } = useUser();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   // Handle scroll effect with enhanced animation
   useEffect(() => {
@@ -69,7 +69,7 @@ const Navbar = () => {
   };
 
   // Check if current page should show search
-  const shouldShowSearch = !['/', '/solutions'].includes(location.pathname);
+  const shouldShowSearch = !['/', '/solutions', '/manufacturers', '/products'].includes(location.pathname);
 
   // Handle click outside search panel
   useEffect(() => {
@@ -592,23 +592,6 @@ const Navbar = () => {
 
             {/* Column 3: Tools */}
             <div className="hidden md:flex items-center space-x-3 mr-5">
-              {/* Search Button - Hidden on Home and Solutions pages */}
-              {shouldShowSearch && (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 }}
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleSearchPanel}
-                  >
-                    <Search className="h-4 w-4 text-primary" />
-                  </Button>
-                </motion.div>
-              )}
-
               {/* Language Switcher - Replace with Enhanced version */}
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
@@ -721,9 +704,9 @@ const Navbar = () => {
                   <p className="text-sm text-muted-foreground mb-2">{t('language')}</p>
                   <div className="flex space-x-2">
                     <Button
-                      variant={useTranslation().i18n.language === 'en' ? 'default' : 'outline'}
+                      variant={i18n.language === 'en' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => useTranslation().i18n.changeLanguage('en')}
+                      onClick={() => i18n.changeLanguage('en')}
                       className="flex-1 flex items-center gap-2 justify-center group transition-all duration-300"
                     >
                       <motion.div
@@ -732,7 +715,7 @@ const Navbar = () => {
                         <span className="text-base">🇺🇸</span>
                       </motion.div>
                       <span className="text-xs">{t('english')}</span>
-                      {useTranslation().i18n.language === 'en' && (
+                      {i18n.language === 'en' && (
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
@@ -741,9 +724,9 @@ const Navbar = () => {
                       )}
                     </Button>
                     <Button
-                      variant={useTranslation().i18n.language === 'ja' ? 'default' : 'outline'}
+                      variant={i18n.language === 'ja' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => useTranslation().i18n.changeLanguage('ja')}
+                      onClick={() => i18n.changeLanguage('ja')}
                       className="flex-1 flex items-center gap-2 justify-center group transition-all duration-300"
                     >
                       <motion.div
@@ -752,7 +735,7 @@ const Navbar = () => {
                         <span className="text-base">🇯🇵</span>
                       </motion.div>
                       <span className="text-xs">{t('japanese')}</span>
-                      {useTranslation().i18n.language === 'ja' && (
+                      {i18n.language === 'ja' && (
                         <motion.div
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}

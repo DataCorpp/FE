@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,6 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Factory, ShoppingBag, Store } from "lucide-react";
+import axios from "axios";
 
 const formSchema = z.object({
   email: z.string().email(),
@@ -37,7 +38,7 @@ const SignInForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const { toast } = useToast();
-  const { login } = useUser();
+  const { login, updateUserFromSession } = useUser();
   const navigate = useNavigate();
 
   // Form schema
@@ -64,21 +65,161 @@ const SignInForm = () => {
     },
   });
 
+  // Xử lý message từ popup OAuth
+  useEffect(() => {
+    // Hàm lắng nghe message từ popup Google OAuth
+    const handleOAuthMessage = async (event) => {
+      // Kiểm tra nguồn message để đảm bảo an toàn
+      if (event.origin !== window.location.origin && 
+          !event.origin.includes('accounts.google.com')) {
+        return;
+      }
+      
+      // Kiểm tra nếu đây là message OAuth 
+      if (event.data?.type === 'oauth_response' && event.data?.provider === 'google') {
+        try {
+          setIsLoading(true);
+          
+          const tokenResponse = event.data.response;
+          
+          // Get user info from Google
+          const userInfoResponse = await axios.get(
+            'https://www.googleapis.com/oauth2/v3/userinfo',
+            {
+              headers: {
+                'Authorization': `Bearer ${tokenResponse.access_token}`
+              }
+            }
+          );
+          
+          const userInfo = userInfoResponse.data;
+          
+          // 1. Send data to /api/users/google-login
+          const googleLoginResponse = await axios.post(
+            `${import.meta.env.VITE_API_BASE_URL}/users/google-login`,
+            {
+              token: tokenResponse.access_token,
+              email: userInfo.email,
+              name: userInfo.name,
+              picture: userInfo.picture
+            },
+            {
+              withCredentials: true // Important: enables cookies to be sent with request
+            }
+          );
+
+          if (!googleLoginResponse.data || !googleLoginResponse.data._id) {
+            throw new Error("Google login failed");
+          }
+
+          const { isNewUser } = googleLoginResponse.data;
+
+          // 2. If successful: call GET /users/me to update user in context
+          const userResponse = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/users/me`, {
+            withCredentials: true
+          });
+
+          if (!userResponse.data || !userResponse.data._id) {
+            throw new Error("Failed to get user data after Google login");
+          }
+
+          // 3. Update user state directly (no traditional login call)
+          // Call a simple setter function from context to update user state
+          updateUserFromSession(userResponse.data);
+          
+          // Check if user has completed their profile
+          const needsProfileSetup = isNewUser || !userResponse.data.profileComplete;
+          
+          if (needsProfileSetup) {
+            // Set flag for profile setup flow in session storage
+            sessionStorage.setItem('inProfileSetup', 'true');
+            
+            // Redirect to profile setup
+            toast({
+              title: isNewUser ? t("welcome", "Welcome to Lovely Mate!") : t("welcome-back", "Welcome back"),
+              description: t("complete-profile", "Please complete your profile to continue."),
+            });
+            navigate("/profile-setup");
+          } else {
+            // Redirect existing users to dashboard
+            toast({
+              title: t("welcome-back", "Welcome back"),
+              description: t("sign-in-success", "You've successfully signed in."),
+            });
+            
+            // Check for redirect parameter in URL
+            const params = new URLSearchParams(window.location.search);
+            const redirectPath = params.get('redirect');
+            
+            if (redirectPath) {
+              navigate(redirectPath);
+            } else {
+              navigate("/dashboard");
+            }
+          }
+        } catch (error) {
+          console.error("Google authentication error:", error);
+          toast({
+            title: t("auth-failed", "Authentication failed"),
+            description: t("google-auth-error", "Could not sign in with Google. Please try again."),
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    // Đăng ký listener
+    window.addEventListener('message', handleOAuthMessage);
+    
+    // Cleanup listener khi component unmount
+    return () => {
+      window.removeEventListener('message', handleOAuthMessage);
+    };
+  }, [updateUserFromSession, navigate, t, toast]);
+
   // Sign in form handler
   const onSubmit = async (data: FormValues) => {
     setIsLoading(true);
 
     try {
-      // Use the login function from context with the selected role
-      await login(data.email, data.password, data.accountType);
+      // Use the login function from context
+      await login(data.email, data.password);
 
-      toast({
-        title: t("welcome-back", "Welcome back"),
-        description: t("sign-in-success", "You've successfully signed in."),
+      // Get the user context after login
+      const user = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/users/me`, {
+        withCredentials: true
       });
 
-      // Redirect to dashboard
-      navigate("/dashboard");
+      // Check if profile is complete
+      if (!user.data.profileComplete) {
+        // Set flag for profile setup flow in session storage
+        sessionStorage.setItem('inProfileSetup', 'true');
+        
+        toast({
+          title: t("welcome-back", "Welcome back"),
+          description: t("complete-profile", "Please complete your profile to continue."),
+        });
+        
+        // Redirect to profile setup
+        navigate("/profile-setup");
+      } else {
+        toast({
+          title: t("welcome-back", "Welcome back"),
+          description: t("sign-in-success", "You've successfully signed in."),
+        });
+
+        // Check for redirect parameter in URL
+        const params = new URLSearchParams(window.location.search);
+        const redirectPath = params.get('redirect');
+        
+        if (redirectPath) {
+          navigate(redirectPath);
+        } else {
+          navigate("/dashboard");
+        }
+      }
     } catch (error) {
       console.error("Sign in error:", error);
       toast({
@@ -92,21 +233,40 @@ const SignInForm = () => {
   };
 
   // Social login handlers
-  const handleGoogleSignIn = async () => {
-    try {
-      // Implement Google OAuth
-      toast({
-        title: "Google Sign In",
-        description: "Google authentication will be implemented here.",
-      });
-    } catch (error) {
-      toast({
-        title: "Authentication failed",
-        description: "Could not sign in with Google.",
-        variant: "destructive",
-      });
+  const handleGoogleSignIn = () => {
+    const googleOAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    
+    // Redirect URI must EXACTLY match value in Google Console
+    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin.replace('http://', 'https://')}/google-auth-callback.html`;
+
+    if (!clientId || !redirectUri) {
+      console.error('Missing Google OAuth client ID or redirect URI');
+      return;
     }
+    
+    // Tạo URL OAuth với các tham số cần thiết
+    const queryParams = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'token',
+      scope: 'email profile',
+      prompt: 'select_account',
+      access_type: 'online',
+    });
+
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    window.open(
+      `${googleOAuthUrl}?${queryParams.toString()}`,
+      'Google Sign In',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
   };
+
 
   const handleLineSignIn = async () => {
     try {
@@ -299,7 +459,7 @@ const SignInForm = () => {
           </span>
         </Button>
 
-        <Button
+        {/* <Button
           type="button"
           variant="outline"
           className="w-full flex items-center h-11 transition-all group dark:text-white bg-[#06c755] dark:bg-[#06c755] text-white hover:bg-[#06c755]/90 dark:hover:bg-[#06c755]/90 border-[#06c755] dark:border-[#06c755]"
@@ -332,7 +492,7 @@ const SignInForm = () => {
           <span className="flex-1 text-center group-hover:translate-x-1 transition-transform">
             {t("continue-with-outlook", "Continue with Outlook")}
           </span>
-        </Button>
+        </Button> */}
       </motion.div>
 
       <div className="flex items-center gap-2 my-6 relative z-10">

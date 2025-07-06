@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { authApi, api } from "@/lib/api"; // Import authApi and api
+import { ApiResponse } from "@/lib/api"; // Add this import
 
 export type UserRole = "manufacturer" | "brand" | "retailer";
 
@@ -39,6 +41,7 @@ interface UserData {
   image?: string; // Alternative URL to user image
   profilePic?: string; // URL to profile picture
   status: "online" | "away" | "busy"; // User's online status
+  emailVerified?: boolean; // Flag indicating if email is verified
   // Additional profile information
   phone?: string;
   website?: string;
@@ -50,21 +53,38 @@ interface UserData {
   retailerSettings?: RetailerSettings;
 }
 
+// Define a type for profile update data
+type ProfileUpdateData = Partial<Omit<UserData, 'id' | 'createdAt'>>;
+
+// Define a type for registration response data
+export interface RegistrationResponse {
+  _id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: string;
+  verificationCode?: string;
+}
+
 interface UserContextType {
   role: UserRole;
   isAuthenticated: boolean;
   user: UserData | null;
-  login: (email: string, password: string, role?: UserRole) => Promise<void>;
-  register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<void>;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  googleLogin: (token: string, email: string, name: string, picture?: string) => Promise<{ isNewUser: boolean }>;
+  updateUserFromSession: (userData: Record<string, unknown>) => void;
+  register: (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }) => Promise<RegistrationResponse>;
+  logout: () => Promise<void>;
   switchRole: (newRole: UserRole) => void;
-  updateUserProfile: (updatedData: Partial<UserData>) => void;
+  updateUserProfile: (updatedData: Partial<UserData>) => Promise<void>;
   updateRoleSettings: <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>) => void;
   updateUserStatus: (status: "online" | "away" | "busy") => void;
   updateUserAvatar: (avatarUrl: string) => void;
   verifyEmail: (email: string, verificationCode: string) => Promise<void>;
-  resendVerificationEmail: (email: string) => Promise<void>;
-  updateProfile: (profileData: any) => Promise<void>;
+  resendVerificationEmail: (email: string) => Promise<ApiResponse>;
+  updateProfile: (profileData: ProfileUpdateData) => Promise<void>;
+  updateUserRole: (newRole: UserRole) => Promise<void>;
+  updateRoleSettingsInDb: <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>) => Promise<void>;
 }
 
 export const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -73,156 +93,275 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<UserData | null>(null);
   const [role, setRole] = useState<UserRole>("manufacturer");
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Check if user is already logged in from localStorage
+  // Check session on app load (call /users/me once)
   useEffect(() => {
-    const storedUser = localStorage.getItem("user");
-    if (storedUser) {
-      const userData = JSON.parse(storedUser);
+    let isMounted = true;
+
+    const fetchSession = async () => {
+      try {
+        const res = await authApi.getCurrentUser(); // -> /users/me
+
+        if (!isMounted) return; // Component unmounted while waiting
+
+        const data = res.data as Record<string, unknown> | undefined;
+
+        if (data && data._id) {
+          // Build UserData object
+          const sessionUser: UserData = {
+            id: data._id as string,
+            name: data.name as string,
+            email: data.email as string,
+            companyName: (data.companyName as string) || "Demo Company",
+            role: data.role as UserRole,
+            profileComplete: (data.profileComplete as boolean) || false,
+            createdAt: (data.createdAt as string) || new Date().toISOString(),
+            lastLogin: (data.lastLogin as string) || new Date().toISOString(),
+            notifications: (data.notifications as number) || 0,
+            avatar: (data.avatar as string) || "",
+            status: (data.status as "online" | "away" | "busy") || "online",
+            emailVerified: true,
+            phone: data.phone as string,
+            website: data.website as string,
+            address: data.address as string,
+            description: data.description as string,
+            manufacturerSettings: data.manufacturerSettings as ManufacturerSettings,
+            brandSettings: data.brandSettings as BrandSettings,
+            retailerSettings: data.retailerSettings as RetailerSettings,
+          };
+
+          setUser(sessionUser);
+          setRole(sessionUser.role);
+          setIsAuthenticated(true);
+        } else {
+          // No valid session data
+          setUser(null);
+          setRole("manufacturer");
+          setIsAuthenticated(false);
+        }
+      } catch (error) {
+        // Any error -> treat as no active session, but DON'T redirect
+        setUser(null);
+        setRole("manufacturer");
+        setIsAuthenticated(false);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const login = async (email: string, password: string): Promise<void> => {
+    // Tránh gọi login nếu password rỗng (có thể từ Google login)
+    if (!password || password.trim() === '') {
+      console.warn('Login skipped: empty password provided');
+      return;
+    }
+
+    try {
+      // First, authenticate with credentials
+      await authApi.login(email, password);
+      
+      // Then get user data
+      const response = await authApi.getCurrentUser();
+      
+      if (!response.data || !response.data._id) {
+        throw new Error("Failed to get user data after login");
+      }
+      
+      // Convert API response to UserData format  
+      const responseData = response.data as Record<string, unknown>;
+      const userData: UserData = {
+        id: responseData._id as string,
+        name: responseData.name as string,
+        email: responseData.email as string,
+        companyName: (responseData.companyName as string) || "Demo Company",
+        role: responseData.role as UserRole,
+        profileComplete: (responseData.profileComplete as boolean) || false,
+        createdAt: (responseData.createdAt as string) || new Date().toISOString(),
+        lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
+        notifications: (responseData.notifications as number) || 0,
+        avatar: (responseData.avatar as string) || "",
+        status: (responseData.status as "online" | "away" | "busy") || "online",
+        emailVerified: true,
+        phone: responseData.phone as string,
+        website: responseData.website as string,
+        address: responseData.address as string,
+        description: responseData.description as string,
+        manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
+        brandSettings: responseData.brandSettings as BrandSettings,
+        retailerSettings: responseData.retailerSettings as RetailerSettings,
+      };
+      
       setUser(userData);
       setRole(userData.role);
       setIsAuthenticated(true);
+      
+    } catch (error) {
+      console.error("Login error:", error);
+      throw error;
     }
-  }, []);
+  };
 
-  const login = async (email: string, password: string, selectedRole?: UserRole): Promise<void> => {
-    // In a real app, this would make an API call to authenticate
-    // For now, we'll simulate a successful login
-    
-    // Use the provided role or default to manufacturer
-    const roleToUse = selectedRole || "manufacturer";
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Create mock role-specific settings based on the role
-    let roleSpecificSettings = {};
-    
-    if (roleToUse === "manufacturer") {
-      roleSpecificSettings = {
-        manufacturerSettings: {
-          productionCapacity: 50000,
-          certifications: ["ISO 9001", "Organic", "Fair Trade"],
-          preferredCategories: ["Food", "Beverage", "Personal Care"],
-          minimumOrderValue: 10000
-        }
+  const googleLogin = async (token: string, email: string, name: string, picture?: string): Promise<{ isNewUser: boolean }> => {
+    try {
+      // Call Google login API endpoint
+      const response = await api.post('/users/google-login', {
+        token,
+        email,
+        name,
+        picture
+      });
+
+      if (!response.data || !response.data._id) {
+        throw new Error("Google login failed");
+      }
+
+      // Extract isNewUser flag
+      const { isNewUser, ...userData } = response.data;
+
+      // Get updated user data from session
+      const userResponse = await authApi.getCurrentUser();
+      
+      if (!userResponse.data || !userResponse.data._id) {
+        throw new Error("Failed to get user data after Google login");
+      }
+
+      // Convert API response to UserData format
+      const responseData = userResponse.data as Record<string, unknown>;
+      const userDataFormatted: UserData = {
+        id: responseData._id as string,
+        name: responseData.name as string,
+        email: responseData.email as string,
+        companyName: (responseData.companyName as string) || "Demo Company",
+        role: responseData.role as UserRole,
+        profileComplete: (responseData.profileComplete as boolean) || false,
+        createdAt: (responseData.createdAt as string) || new Date().toISOString(),
+        lastLogin: (responseData.lastLogin as string) || new Date().toISOString(),
+        notifications: (responseData.notifications as number) || 0,
+        avatar: (responseData.avatar as string) || picture || "",
+        status: (responseData.status as "online" | "away" | "busy") || "online",
+        emailVerified: true,
+        phone: responseData.phone as string,
+        website: responseData.website as string,
+        address: responseData.address as string,
+        description: responseData.description as string,
+        manufacturerSettings: responseData.manufacturerSettings as ManufacturerSettings,
+        brandSettings: responseData.brandSettings as BrandSettings,
+        retailerSettings: responseData.retailerSettings as RetailerSettings,
       };
-    } else if (roleToUse === "brand") {
-      roleSpecificSettings = {
-        brandSettings: {
-          marketSegments: ["Health-conscious", "Eco-friendly", "Premium"],
-          brandValues: ["Sustainability", "Quality", "Innovation"],
-          targetDemographics: ["Millennials", "Gen Z", "Health enthusiasts"],
-          productCategories: ["Organic Foods", "Wellness", "Eco-friendly products"]
-        }
-      };
-    } else if (roleToUse === "retailer") {
-      roleSpecificSettings = {
-        retailerSettings: {
-          storeLocations: 12,
-          averageOrderValue: 75,
-          customerBase: ["Urban professionals", "Health-conscious families", "Millennials"],
-          preferredCategories: ["Organic", "Local", "Sustainable", "Health food"]
-        }
-      };
+
+      setUser(userDataFormatted);
+      setRole(userDataFormatted.role);
+      setIsAuthenticated(true);
+
+      return { isNewUser: Boolean(isNewUser) };
+
+    } catch (error) {
+      console.error("Google login error:", error);
+      throw error;
     }
-    
-    // Create mock user data
-    const userData: UserData = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: "Demo User", // In a real app, this would come from the API
-      email,
-      companyName: "Demo Company", // In a real app, this would come from the API
-      role: roleToUse,
-      profileComplete: false,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      notifications: Math.floor(Math.random() * 10),
-      avatar: "", // In a real app, this would come from the API
-      status: "online", // In a real app, this would come from the API
-      ...roleSpecificSettings
+  };
+
+  const updateUserFromSession = (userData: Record<string, unknown>): void => {
+    // Convert API response to UserData format
+    const userDataFormatted: UserData = {
+      id: userData._id as string,
+      name: userData.name as string,
+      email: userData.email as string,
+      companyName: (userData.companyName as string) || "Demo Company",
+      role: userData.role as UserRole,
+      profileComplete: (userData.profileComplete as boolean) || false,
+      createdAt: (userData.createdAt as string) || new Date().toISOString(),
+      lastLogin: (userData.lastLogin as string) || new Date().toISOString(),
+      notifications: (userData.notifications as number) || 0,
+      avatar: (userData.avatar as string) || "",
+      status: (userData.status as "online" | "away" | "busy") || "online",
+      emailVerified: true,
+      phone: userData.phone as string,
+      website: userData.website as string,
+      address: userData.address as string,
+      description: userData.description as string,
+      manufacturerSettings: userData.manufacturerSettings as ManufacturerSettings,
+      brandSettings: userData.brandSettings as BrandSettings,
+      retailerSettings: userData.retailerSettings as RetailerSettings,
     };
-    
-    // Save to localStorage for persistence
-    localStorage.setItem("user", JSON.stringify(userData));
-    
-    // Update state
-    setUser(userData);
-    setRole(roleToUse);
+
+    setUser(userDataFormatted);
+    setRole(userDataFormatted.role);
     setIsAuthenticated(true);
   };
 
-  const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<void> => {
-    // In a real app, this would make an API call to register the user
-    // For now, we'll simulate a successful registration
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Create role-specific settings based on the role
-    let roleSpecificSettings = {};
-    
-    if (userData.role === "manufacturer") {
-      roleSpecificSettings = {
-        manufacturerSettings: {
-          productionCapacity: 0,
-          certifications: [],
-          preferredCategories: [],
-          minimumOrderValue: 0
-        }
+  const register = async (userData: Omit<UserData, "id" | "profileComplete" | "createdAt" | "lastLogin" | "notifications"> & { password: string }): Promise<RegistrationResponse> => {
+    try {
+      // Use authApi to register the user with the backend
+      const response = await authApi.register({
+        name: userData.name,
+        email: userData.email,
+        password: userData.password,
+        role: userData.role,
+        company: userData.companyName || undefined,
+        phone: userData.phone || undefined
+      });
+      
+      // Check if response has data with _id, which indicates a successful registration
+      if (!response.data || !response.data._id) {
+        throw new Error(response.data?.message || "Registration failed");
+      }
+      
+      // Create user object from response
+      const newUser: UserData = {
+        id: response.data._id || Math.random().toString(36).substr(2, 9),
+        name: userData.name,
+        email: userData.email,
+        companyName: userData.companyName || "",
+        role: userData.role,
+        profileComplete: false,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+        notifications: 0,
+        avatar: "", 
+        status: "online",
+        emailVerified: false
       };
-    } else if (userData.role === "brand") {
-      roleSpecificSettings = {
-        brandSettings: {
-          marketSegments: [],
-          brandValues: [],
-          targetDemographics: [],
-          productCategories: []
-        }
-      };
-    } else if (userData.role === "retailer") {
-      roleSpecificSettings = {
-        retailerSettings: {
-          storeLocations: 0,
-          averageOrderValue: 0,
-          customerBase: [],
-          preferredCategories: []
-        }
-      };
+      
+      // Update state
+      setUser(newUser);
+      setRole(newUser.role);
+      setIsAuthenticated(true);
+      
+      console.log('✅ Registration successful');
+      console.log('- User ID:', newUser.id);
+      console.log('- User role:', newUser.role);
+      
+      // Return the response data (including any verificationCode for dev mode)
+      return response.data as RegistrationResponse;
+    } catch (error) {
+      console.error("Registration error:", error);
+      throw error;
     }
-    
-    // Create user with random ID and default values
-    const newUser: UserData = {
-      ...userData,
-      id: Math.random().toString(36).substr(2, 9),
-      profileComplete: false,
-      createdAt: new Date().toISOString(),
-      lastLogin: new Date().toISOString(),
-      notifications: 0,
-      avatar: "", // In a real app, this would come from the API
-      status: "online", // In a real app, this would come from the API
-      ...roleSpecificSettings
-    };
-    
-    // Omit password before storing in state
-    const { password, ...userWithoutPassword } = userData;
-    
-    // Save to localStorage for persistence
-    localStorage.setItem("user", JSON.stringify(newUser));
-    
-    // Update state
-    setUser(newUser);
-    setRole(newUser.role);
-    setIsAuthenticated(true);
   };
 
-  const logout = (): void => {
-    // Clear local storage
-    localStorage.removeItem("user");
-    
-    // Reset state
-    setUser(null);
-    setIsAuthenticated(false);
+  const logout = async (): Promise<void> => {
+    try {
+      // Call logout API to destroy session
+      await authApi.logout();
+    } catch (error) {
+      console.error("Logout API error:", error);
+      // Continue with logout even if API call fails
+    } finally {
+      // Reset state
+      setUser(null);
+      setIsAuthenticated(false);
+      setRole("manufacturer");
+      console.log('✅ Logout successful');
+    }
   };
 
   const switchRole = (newRole: UserRole): void => {
@@ -233,35 +372,43 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         role: newRole
       };
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
       // Update state
       setUser(updatedUser);
       setRole(newRole);
     }
   };
 
-  const updateUserProfile = (updatedData: Partial<UserData>): void => {
+  const updateUserProfile = async (updatedData: Partial<UserData>): Promise<void> => {
     if (user) {
-      // Update user with new profile data
-      const updatedUser = {
-        ...user,
-        ...updatedData,
-        lastLogin: new Date().toISOString()
-      };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
+      try {
+        // Call API to update the user's profile in the database
+        const response = await authApi.updateProfile(updatedData);
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update user with new profile data
+        const updatedUser = {
+          ...user,
+          ...updatedData,
+        };
+        
+        // Update state
+        setUser(updatedUser);
+        
+        console.log("User profile updated in the database");
+      } catch (error) {
+        console.error("Profile update error:", error);
+        throw error;
+      }
     }
   };
 
   const updateRoleSettings = <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>): void => {
     if (user) {
       let updatedUser;
+      let settingsKey: string;
       
       // Update appropriate settings based on role
       if (role === "manufacturer" && user.manufacturerSettings) {
@@ -272,6 +419,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "manufacturerSettings";
       } else if (role === "brand" && user.brandSettings) {
         updatedUser = {
           ...user,
@@ -280,6 +428,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "brandSettings";
       } else if (role === "retailer" && user.retailerSettings) {
         updatedUser = {
           ...user,
@@ -288,20 +437,98 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
             ...settings
           }
         };
+        settingsKey = "retailerSettings";
       } else {
         // If settings don't exist yet, create them
-        const settingsKey = `${role}Settings` as keyof UserData;
+        settingsKey = `${role}Settings` as keyof UserData;
         updatedUser = {
           ...user,
           [settingsKey]: settings
         };
       }
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
       // Update state
       setUser(updatedUser);
+      
+      // Update in database (fire and forget)
+      try {
+        // Create a payload with the role-specific settings under the appropriate key
+        const payload = {
+          [settingsKey]: updatedUser[settingsKey as keyof UserData]
+        };
+        
+        authApi.updateProfile(payload)
+          .then(response => {
+            if (!response.data.success) {
+              console.error("Failed to save role settings in database:", response.data.message);
+            } else {
+              console.log(`${settingsKey} updated in database`);
+            }
+          })
+          .catch(error => {
+            console.error("Error updating role settings in database:", error);
+          });
+      } catch (error) {
+        console.error("Error preparing role settings update:", error);
+      }
+    }
+  };
+
+  // Add a dedicated async function for updating role settings with await
+  const updateRoleSettingsInDb = async <T extends ManufacturerSettings | BrandSettings | RetailerSettings>(settings: Partial<T>): Promise<void> => {
+    if (user) {
+      try {
+        let settingsKey: string;
+        let updatedSettings: Record<string, unknown> = {};
+        
+        // Prepare settings based on role
+        if (role === "manufacturer") {
+          settingsKey = "manufacturerSettings";
+          updatedSettings = {
+            ...user.manufacturerSettings,
+            ...settings
+          };
+        } else if (role === "brand") {
+          settingsKey = "brandSettings";
+          updatedSettings = {
+            ...user.brandSettings,
+            ...settings
+          };
+        } else if (role === "retailer") {
+          settingsKey = "retailerSettings";
+          updatedSettings = {
+            ...user.retailerSettings,
+            ...settings
+          };
+        } else {
+          throw new Error("Invalid role type");
+        }
+        
+        // Update in the database
+        const response = await authApi.updateProfile({
+          [settingsKey]: updatedSettings
+        });
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update local user state
+        const updatedUser = {
+          ...user,
+          [settingsKey]: updatedSettings
+        };
+        
+        // Update state
+        setUser(updatedUser);
+        
+        console.log(`${settingsKey} updated successfully in database`);
+      } catch (error) {
+        console.error("Role settings update error:", error);
+        throw error;
+      }
+    } else {
+      throw new Error("No user is logged in");
     }
   };
 
@@ -312,9 +539,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         ...user,
         status: status
       };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
       
       // Update state
       setUser(updatedUser);
@@ -329,85 +553,144 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         avatar: avatarUrl
       };
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
       // Update state
       setUser(updatedUser);
     }
   };
 
   const verifyEmail = async (email: string, verificationCode: string): Promise<void> => {
-    // In a real app, this would make an API call to verify the email
-    // For now, we'll simulate successful verification
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // Verify hard-coded verification code for demo purposes
-    if (verificationCode !== "123456") {
-      throw new Error("Invalid verification code");
-    }
-    
-    // If we got here, verification was successful
-    // In a real app, we would update the user's email verification status in the backend
-    
-    if (user) {
-      // Update user to mark email as verified
-      const updatedUser = {
-        ...user,
-        emailVerified: true,
-      };
+    try {
+      const response = await authApi.verifyEmail(email, verificationCode);
       
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
-    }
-  };
-
-  const resendVerificationEmail = async (email: string): Promise<void> => {
-    // In a real app, this would make an API call to resend the verification email
-    // For now, we'll simulate a successful resend
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // In a real app, we would trigger an email sending from the backend
-    console.log(`Verification email resent to ${email}`);
-    
-    // Nothing to update in the state for this operation
-  };
-
-  const updateProfile = async (profileData: any): Promise<void> => {
-    // In a real app, this would make an API call to update the user's profile
-    // For now, we'll simulate a successful profile update
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (user) {
-      // Update user with the new profile data
-      const updatedUser = {
-        ...user,
-        ...profileData,
-        profileComplete: true,
-        lastUpdated: new Date().toISOString(),
-      };
-      
-      // Save to localStorage
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      
-      // Update state
-      setUser(updatedUser);
-      
-      // If role was updated, update the role state as well
-      if (profileData.role && profileData.role !== user.role) {
-        setRole(profileData.role);
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
       }
+      
+      if (user) {
+        // Update user to mark email as verified
+        const updatedUser: UserData = {
+          ...user,
+          emailVerified: true,
+          status: "online"
+        };
+        
+        // Update state
+        setUser(updatedUser);
+      }
+    } catch (error) {
+      console.error("Email verification error:", error);
+      throw error;
     }
   };
+
+  const resendVerificationEmail = async (email: string) => {
+    try {
+      const response = await authApi.resendVerificationEmail(email);
+      
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
+      }
+      
+      // Return response data to access verificationCode in development mode
+      return response.data;
+    } catch (error) {
+      console.error("Resend verification email error:", error);
+      throw error;
+    }
+  };
+
+  const updateProfile = async (profileData: ProfileUpdateData): Promise<void> => {
+    try {
+      // Make a real API call to update the user's profile in the database
+      const response = await authApi.updateProfile(profileData);
+      
+      if (!response.data.success && response.data.message) {
+        throw new Error(response.data.message);
+      }
+      
+      if (user) {
+        // Update user with the new profile data
+        const updatedUser: UserData = {
+          ...user,
+          ...profileData,
+          profileComplete: profileData.profileComplete ?? user.profileComplete,
+        };
+        
+        // Update state
+        setUser(updatedUser);
+        
+        // If role was updated, update the role state as well
+        if (profileData.role && profileData.role !== user.role) {
+          setRole(profileData.role);
+        }
+      }
+      
+      console.log("Profile updated successfully in database");
+    } catch (error) {
+      console.error("Profile update error:", error);
+      throw error;
+    }
+  };
+
+  const updateUserRole = async (newRole: UserRole): Promise<void> => {
+    if (user) {
+      try {
+        // Call API to update the user's role in the database
+        const response = await authApi.updateProfile({ role: newRole });
+        
+        if (!response.data.success && response.data.message) {
+          throw new Error(response.data.message);
+        }
+        
+        // Update user with new role
+        const updatedUser = {
+          ...user,
+          role: newRole
+        };
+        
+        // Update state
+        setUser(updatedUser);
+        setRole(newRole);
+        
+        console.log(`User role updated to ${newRole} in the database`);
+      } catch (error) {
+        console.error("Role update error:", error);
+        throw error;
+      }
+    } else {
+      throw new Error("No user is logged in");
+    }
+  };
+
+  // Show loading state while checking session
+  if (isLoading) {
+    return (
+      <UserContext.Provider 
+        value={{ 
+          role,
+          isAuthenticated: false, 
+          user: null, 
+          login,
+          googleLogin,
+          updateUserFromSession,
+          register, 
+          logout,
+          switchRole,
+          updateUserProfile,
+          updateRoleSettings,
+          updateUserStatus,
+          updateUserAvatar,
+          verifyEmail,
+          resendVerificationEmail,
+          updateProfile,
+          updateUserRole,
+          updateRoleSettingsInDb
+        }}
+      >
+        {children}
+      </UserContext.Provider>
+    );
+  }
 
   return (
     <UserContext.Provider 
@@ -415,7 +698,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         role,
         isAuthenticated, 
         user, 
-        login, 
+        login,
+        googleLogin,
+        updateUserFromSession,
         register, 
         logout,
         switchRole,
@@ -425,7 +710,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         updateUserAvatar,
         verifyEmail,
         resendVerificationEmail,
-        updateProfile
+        updateProfile,
+        updateUserRole,
+        updateRoleSettingsInDb
       }}
     >
       {children}

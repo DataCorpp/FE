@@ -1,172 +1,705 @@
-import { motion } from "framer-motion";
-import { StarIcon, Heart, Info, CheckCircle2, ArrowUpRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, useMotionValue, useTransform, AnimatePresence, Variants } from "framer-motion";
+import { 
+  CheckCircle2, 
+  Eye, 
+  ShoppingCart, 
+  Star, 
+  MapPin, 
+  Calendar, 
+  Package, 
+  Leaf,
+  Heart,
+  Loader,
+  ArrowUpRight,
+  ImageOff
+} from 'lucide-react';
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Link, useNavigate } from "react-router-dom";
+import { useTheme } from "@/contexts/ThemeContext";
+import { useProductFavorites } from "@/contexts/ProductFavoriteContext";
 
+// Define currency symbols for price formatting
+const CURRENCY_SYMBOLS = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+  JPY: "¥",
+  CNY: "¥",
+  KRW: "₩",
+  VND: "₫",
+  THB: "฿",
+  DEFAULT: "$"
+};
+
+// Price formatter function for different currencies
+const formatPrice = (priceInput: string | number, currencyCode?: string): string => {
+  // Convert number to string for consistent processing
+  const priceStr = typeof priceInput === 'number' ? priceInput.toString() : priceInput;
+
+  // Check if price already has a currency symbol
+  const hasCurrencySymbol = /^[^\d\s.,]+/.test(priceStr);
+  if (hasCurrencySymbol) {
+    return priceStr; // Return as is if already has a symbol
+  }
+
+  // Default to USD if not specified
+  const symbol = currencyCode
+    ? CURRENCY_SYMBOLS[currencyCode as keyof typeof CURRENCY_SYMBOLS] || CURRENCY_SYMBOLS.DEFAULT
+    : CURRENCY_SYMBOLS.DEFAULT;
+
+  // Handle different currency formatting
+  if (currencyCode === 'JPY' || currencyCode === 'KRW' || currencyCode === 'VND') {
+    // These currencies typically don't use decimal points
+    const numericValue = parseFloat(priceStr.replace(/[^\d.-]/g, ''));
+    return `${symbol}${Math.round(numericValue).toLocaleString()}`;
+  }
+
+  // Default behaviour: 2 decimal places
+  const numericValue = parseFloat(priceStr.replace(/[^\d.-]/g, ''));
+  return `${symbol}${numericValue.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`;
+};
+
+// Define the Product interface with all required fields
 interface Product {
-  id: number;
+  _id: string;
   name: string;
+  productName?: string;
   category: string;
   manufacturer: string;
+  manufacturerName?: string;
+  manufacturerRegion?: string;
   image: string;
-  price: string;
+  images?: string[];
+  price: string | number;
+  priceCurrency?: string;
+  currency?: string;
+  pricePerUnit?: number;
   rating: number;
   productType: string;
-  description?: string;
-  minOrderQuantity?: number;
-  leadTime?: string;
-  sustainable?: boolean;
+  description: string;
+  minOrderQuantity: number;
+  leadTime: string;
+  leadTimeUnit?: string;
+  sustainable: boolean;
+  sku?: string;
+  unitType?: string;
+  currentAvailable?: number;
+  packagingSize?: string;
+  shelfLife?: string;
+  flavorType?: string[];
+  ingredients?: string[];
+  usage?: string[];
 }
 
+// Props interface for the ProductCard component
 interface ProductCardProps {
   product: Product;
-  className?: string;
-  isFavorite?: boolean;
-  onFavoriteToggle?: () => void;
-  onDetailsClick?: () => void;
+  onFindMatching: (productId: string) => Promise<void>;
 }
 
-const ProductCard = ({ 
-  product, 
-  className,
-  isFavorite = false,
-  onFavoriteToggle,
-  onDetailsClick 
-}: ProductCardProps) => {
-  // Convert rating to array of stars (filled and unfilled)
-  const renderRating = (rating: number) => {
-    const stars = [];
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-    
-    // Add filled stars
-    for (let i = 0; i < fullStars; i++) {
-      stars.push(<StarIcon key={`star-${i}`} className="h-4 w-4 fill-primary text-primary" />);
+// Enhanced card animations
+const tiltCardVariants: Variants = {
+  initial: { 
+    scale: 1, 
+    y: 0, 
+    rotateY: 0, 
+    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)" 
+  },
+  hover: { 
+    scale: 1.03, 
+    y: -5, 
+    boxShadow: "0 25px 30px -12px rgba(0, 0, 0, 0.15), 0 15px 15px -10px rgba(0, 0, 0, 0.08)",
+    transition: {
+      type: "spring",
+      stiffness: 350,
+      damping: 25
     }
-    
-    // Add half star if needed
-    if (hasHalfStar) {
-      stars.push(
-        <div key="half-star" className="relative">
-          <StarIcon className="h-4 w-4 text-muted-foreground" />
-          <div className="absolute top-0 left-0 w-1/2 overflow-hidden">
-            <StarIcon className="h-4 w-4 fill-primary text-primary" />
-          </div>
-        </div>
-      );
+  }
+};
+
+// Enhanced button animations
+const buttonVariants: Variants = {
+  initial: { scale: 1 },
+  hover: { 
+    scale: 1.05,
+    transition: { 
+      type: "spring",
+      stiffness: 500,
+      damping: 10
     }
-    
-    // Add empty stars
-    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-    for (let i = 0; i < emptyStars; i++) {
-      stars.push(<StarIcon key={`empty-${i}`} className="h-4 w-4 text-muted-foreground" />);
+  },
+  tap: { scale: 0.97 }
+};
+
+// Badge animations
+const badgeVariants: Variants = {
+  initial: { scale: 0, opacity: 0 },
+  animate: { 
+    scale: 1, 
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 500,
+      damping: 15,
+      delay: 0.1
     }
+  }
+};
+
+// Base64 encoded placeholder image for fallback
+const DEFAULT_PLACEHOLDER_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiNGMkYyRjIiLz4KICA8cGF0aCBkPSJNODAgNjBIMTIwVjE0MEg4MFY2MFoiIGZpbGw9IiNEOEQ4RDgiLz4KICA8cGF0aCBkPSJNMTEwIDkwQzExMCA5NS41MjI5IDEwNS41MjMgMTAwIDEwMCAxMDBDOTQuNDc3MSAxMDAgOTAgOTUuNTIyOSA5MCA5MEM5MCA4NC40NzcxIDk0LjQ3NzEgODAgMTAwIDgwQzEwNS41MjMgODAgMTEwIDg0LjQ3NzEgMTEwIDkwWiIgZmlsbD0iI0JEQkRCRCIvPgogIDxwYXRoIGQ9Ik0xNDAgMTMwSDYwVjE0MEgxNDBWMTMwWiIgZmlsbD0iI0JEQkRCRCIvPgogIDx0ZXh0IHg9IjEwMCIgeT0iMTcwIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiM4ODg4ODgiPk5vIGltYWdlIGF2YWlsYWJsZTwvdGV4dD4KPC9zdmc+";
+
+// Helper function to validate image URLs
+const isValidImageUrl = (url: string): boolean => {
+  if (!url) return false;
+  
+  // Check if it's a data URL (e.g. base64 image)
+  if (url.startsWith('data:')) return true;
+  
+  // Check if URL is relative or absolute
+  if (url.startsWith('/')) return true; // Relative URL
+  
+  try {
+    new URL(url);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
+// Function to add crossorigin for S3 URLs if needed
+const addCrossOriginToS3Url = (url: string): string => {
+  if (url && (
+    url.includes('amazonaws.com') || 
+    url.includes('cloudfront.net') || 
+    url.includes('s3.')
+  )) {
+    // Try to parse and reconstruct the URL with necessary parameters
+    try {
+      const urlObj = new URL(url);
+      return urlObj.toString();
+    } catch (e) {
+      return url;
+    }
+  }
+  return url;
+};
+
+const ProductCard = ({ product, onFindMatching }: ProductCardProps) => {
+  const [isFindingMatch, setIsFindingMatch] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [imgLoadError, setImgLoadError] = useState(false);
+  const navigate = useNavigate();
+  const { isFavorite, toggleFavorite } = useProductFavorites();
+  
+  // Mouse position values for tilt effect
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  
+  // Transform values for tilt
+  const rotateY = useTransform(x, [-100, 100], [-3, 3]);
+  const rotateX = useTransform(y, [-100, 100], [3, -3]);
+  
+  // Use priceCurrency if present, otherwise fallback to currency field
+  const currencyCode = (product as any).priceCurrency || (product as any).currency;
+  const formattedPrice = formatPrice(product.price, currencyCode);
+  
+  // Handle mouse move for tilt effect
+  const handleMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    // Calculate the mouse position relative to the card center
+    const newX = event.clientX - rect.left - rect.width / 2;
+    const newY = event.clientY - rect.top - rect.height / 2;
     
-    return stars;
+    x.set(newX);
+    y.set(newY);
+  };
+  
+  // Reset tilt when mouse leaves
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+    setIsHovered(false);
   };
 
-  return (
-    <Card className={cn("overflow-hidden transition-all duration-300 hover:shadow-md border group", className)}>
-      <div className="relative pt-4 px-4">
-        <motion.div 
-          className="aspect-square bg-muted rounded-md flex items-center justify-center p-4 overflow-hidden"
-          whileHover={{ scale: 1.03 }}
-          transition={{ duration: 0.3 }}
-        >
-          <motion.img 
-            src={product.image} 
-            alt={product.name} 
-            className="w-24 h-24 object-contain"
-            whileHover={{ 
-              scale: 1.1,
-              transition: { duration: 0.5 }
-            }}
+  const handleMouseEnter = () => {
+    setIsHovered(true);
+  };
+  
+  // Handle see details click
+  const handleDetailsClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/products/${product._id}`);
+  };
+  
+  // Handle find matching click with loading state
+  const handleFindMatchingClick = async () => {
+    setIsFindingMatch(true);
+    try {
+      await onFindMatching(product._id);
+    } finally {
+      setIsFindingMatch(false);
+    }
+  };
+  
+  // Handle image load error
+  const handleImageError = () => {
+    console.warn('Failed to load product image:', product.image);
+    setImgLoadError(true);
+  };
+  
+  // Convert rating to array of stars
+  const renderRating = (rating: number) => {
+    return (
+      <div className="flex items-center gap-0.5">
+        {[...Array(5)].map((_, i) => (
+          <Star 
+            key={`star-${i}`} 
+            className={cn(
+              "h-3.5 w-3.5", 
+              i < Math.floor(rating) 
+                ? "text-yellow-400 fill-yellow-400" 
+                : i < Math.ceil(rating) && i > Math.floor(rating) - 1 
+                  ? "text-yellow-400 fill-yellow-400/50" 
+                  : "text-gray-300"
+            )} 
           />
-          {product.sustainable && (
+        ))}
+        <span className="ml-1 text-xs font-medium">{rating.toFixed(1)}</span>
+      </div>
+    );
+  };
+
+  // Card fields
+  const displayName = product.productName || product.name;
+
+  const { theme } = useTheme();
+
+  return (
+    <motion.div
+      className="relative overflow-visible"
+      initial="initial"
+      whileHover="hover"
+      variants={tiltCardVariants}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{ rotateY, rotateX, perspective: 1000 }}
+      layoutId={`product-card-${product._id}`}
+    >
+      {/* Modern card */}
+      <div className={cn(
+        "rounded-2xl overflow-hidden border shadow-lg h-full flex flex-col transition-colors duration-300",
+        theme === 'dark' ? "bg-zinc-900 border-zinc-800" : "bg-white border-zinc-200"
+      )}>
+        {/* Single Image Display */}
+        <div className="relative p-3 pt-4">
+          {product.image && !imgLoadError ? (
+            <div className="aspect-square rounded-xl flex items-center justify-center p-0 overflow-hidden w-full h-full bg-white dark:bg-zinc-900">
+              <motion.img
+                src={product.image}
+                alt={displayName}
+                className="w-full h-full object-contain"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                loading="lazy"
+                whileHover={{ scale: 1.04 }}
+                onError={handleImageError}
+              />
+            </div>
+          ) : (
+            <div className="aspect-square rounded-xl flex items-center justify-center p-0 overflow-hidden w-full h-full bg-white dark:bg-zinc-900">
+              <motion.img
+                src={DEFAULT_PLACEHOLDER_IMAGE}
+                alt={`${displayName} - no image available`}
+                className="w-full h-full object-contain"
+                initial={{ opacity: 0, scale: 0.97 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground">
+                <ImageOff className="h-10 w-10 mb-2 opacity-50" />
+                <span className="text-xs">Image not available</span>
+              </div>
+            </div>
+          )}
+          
+          {/* Sustainable badge with enhanced animation */}
+          <AnimatePresence>
+            {product.sustainable && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <motion.div 
+                      className="absolute top-5 left-5 bg-green-100 text-green-800 rounded-full p-1.5 z-10 shadow-sm"
+                      variants={badgeVariants}
+                      initial="initial"
+                      animate="animate"
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                    </motion.div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>Sustainable Product</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+          </AnimatePresence>
+          
+          {/* Favorite Button */}
+          <motion.div
+            className={cn(
+              "absolute top-5 z-10 shadow-sm",
+              product.sustainable ? "left-16" : "left-5"
+            )}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 400, damping: 15 }}
+          >
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <div className="absolute top-6 left-6 bg-green-100 text-green-800 rounded-full p-1">
-                    <CheckCircle2 className="h-4 w-4" />
-                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={cn(
+                      "rounded-full p-1.5 h-auto w-auto backdrop-blur-sm transition-all duration-300",
+                      isFavorite(product._id)
+                        ? "bg-red-100 text-red-600 hover:bg-red-200"
+                        : "bg-white/80 text-gray-600 hover:bg-white hover:text-red-600"
+                    )}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleFavorite({ ...product, price: String(product.price) } as any);
+                    }}
+                  >
+                    <Heart 
+                      className={cn(
+                        "h-4 w-4 transition-all duration-300",
+                        isFavorite(product._id) ? "fill-current" : ""
+                      )} 
+                    />
+                  </Button>
                 </TooltipTrigger>
-                <TooltipContent>
-                  <p>Sustainable Product</p>
+                <TooltipContent side="right">
+                  <p>{isFavorite(product._id) ? "Remove from favorites" : "Add to favorites"}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-          )}
-        </motion.div>
+          </motion.div>
+          
+          {/* Animated Category Badge */}
+          <motion.div
+            className="absolute top-5 right-5 z-10"
+            initial={{ x: 10, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.1, duration: 0.2 }}
+          >
+            <Badge className="shadow-sm font-medium">{product.category}</Badge>
+          </motion.div>
+        </div>
         
-        <Badge className="absolute top-6 right-6 animate-fadeIn">{product.category}</Badge>
+        {/* Content with improved text handling */}
+        <div className="p-4 flex-1 flex flex-col">
+          {/* Product name with improved truncation */}
+          <div className="h-14 mb-1"> {/* Fixed height for consistency */}
+            <h3 className="text-xl font-semibold line-clamp-2 tracking-tight leading-tight">
+              {displayName}
+            </h3>
+          </div>
+          
+          {/* Price info with enhanced visual hierarchy and formatted currency */}
+          <div className="flex justify-between items-end mb-3">
+            <div>
+              <p className="text-lg font-medium bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+                {formattedPrice}
+                <span className="text-xs text-foreground/70 ml-1">
+                  {product.unitType && `/${product.unitType}`}
+                </span>
+              </p>
+              {currencyCode && (
+                <p className="text-xs text-muted-foreground">
+                  {currencyCode}
+                </p>
+              )}
+            </div>
+            <motion.div
+              whileHover={{ scale: 1.1 }}
+              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+            >
+              {renderRating(product.rating)}
+            </motion.div>
+          </div>
+          
+          {/* Key info with icons in a more organized layout */}
+          <div className="space-y-2 mb-4">
+            {/* Manufacturer info with better visibility */}
+            <div className="text-sm font-medium text-foreground/80 mb-1 line-clamp-1">
+              {product.manufacturerName || product.manufacturer}
+              {product.manufacturerRegion && (
+                <span className="before:content-[','] before:mr-1 text-foreground/60">{product.manufacturerRegion}</span>
+              )}
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {product.packagingSize && (
+                <motion.div 
+                  className="flex items-center gap-1 text-sm text-foreground/80 bg-muted/40 px-2 py-0.5 rounded-md"
+                  whileHover={{ y: -2 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  <Package className="h-3 w-3 text-primary/80" />
+                  <span>{product.packagingSize}</span>
+                </motion.div>
+              )}
+              
+              {product.shelfLife && (
+                <motion.div 
+                  className="flex items-center gap-1 text-sm text-foreground/80 bg-muted/40 px-2 py-0.5 rounded-md"
+                  whileHover={{ y: -2 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                >
+                  <Calendar className="h-3 w-3 text-primary/80" />
+                  <span>{product.shelfLife}</span>
+                </motion.div>
+              )}
+            </div>
+          </div>
+          
+          {/* Min Order & Type with improved visual design */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <motion.div whileHover={{ scale: 1.05 }}>
+              <Badge variant="secondary" className="text-xs font-medium">
+                {product.productType}
+              </Badge>
+            </motion.div>
+            
+            {product.minOrderQuantity && (
+              <motion.div whileHover={{ scale: 1.05 }}>
+                <Badge variant="outline" className="text-xs">
+                  Min: {product.minOrderQuantity} {product.unitType || "units"}
+                </Badge>
+              </motion.div>
+            )}
+          </div>
+          
+          {/* Description */}
+          <div className="mb-4 text-sm text-foreground/80 line-clamp-2 min-h-[2.5em]">{product.description}</div>
+          
+          {/* Action buttons with enhanced animations */}
+          <div className="flex gap-2 mt-auto">
+            <motion.div variants={buttonVariants} className="flex-1">
+              <Button 
+                className="w-full rounded-full bg-primary hover:bg-primary/90 shadow-sm hover:shadow-md transition-all duration-300"
+                onClick={() => setShowDetails(true)}
+              >
+                <Eye className="h-4 w-4 mr-2" />
+                See Details
+              </Button>
+            </motion.div>
+            
+            <motion.div variants={buttonVariants} className="flex-1">
+              <Button 
+                variant="outline" 
+                className="w-full rounded-full border-primary/30 hover:bg-primary/10 transition-all duration-300"
+                onClick={handleFindMatchingClick}
+                disabled={isFindingMatch}
+              >
+                {isFindingMatch ? (
+                  <Loader className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <ArrowUpRight className="h-4 w-4 mr-2" />
+                )}
+                Find Matching
+              </Button>
+            </motion.div>
+          </div>
+        </div>
       </div>
       
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start">
-          <h3 className="font-semibold line-clamp-1 group-hover:text-primary transition-colors duration-300 flex-1">
-            {product.name}
-          </h3>
-          
-          <motion.button 
-            className={`p-1.5 ml-2 rounded-full ${isFavorite ? 'text-red-500 bg-red-50' : 'text-muted-foreground hover:text-red-500 bg-transparent hover:bg-muted'} transition-colors duration-300`}
-            onClick={onFavoriteToggle}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+      {/* Product Details Modal */}
+      <AnimatePresence>
+        {showDetails && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setShowDetails(false)}
           >
-            <Heart className="h-4 w-4" fill={isFavorite ? "currentColor" : "none"} />
-          </motion.button>
-        </div>
-        
-        <p className="text-sm text-foreground/70 mb-2">{product.manufacturer}</p>
-        
-        <div className="flex items-center gap-1 mb-1">
-          {renderRating(product.rating)}
-          <span className="text-xs text-foreground/70 ml-1">{product.rating.toFixed(1)}</span>
-        </div>
-        
-        {product.minOrderQuantity && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Min. Order: {product.minOrderQuantity} units
-          </p>
+            <motion.div
+              className={cn(
+                "rounded-2xl shadow-2xl max-w-lg w-full p-8 relative overflow-y-auto max-h-[90vh] border transition-colors duration-300",
+                theme === 'dark'
+                  ? "bg-zinc-900 border-zinc-700 text-white"
+                  : "bg-white border-zinc-200 text-zinc-900"
+              )}
+              initial={{ scale: 0.95, y: 40, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 40, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30, duration: 0.3 }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                className="absolute top-4 right-4 text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => setShowDetails(false)}
+                aria-label="Close"
+              >
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
+              {/* Product image */}
+              <div className="flex flex-col items-center mb-6">
+                {!imgLoadError ? (
+                  <img
+                    src={product.image}
+                    alt={displayName}
+                    className="w-32 h-32 object-contain rounded-xl shadow mb-2 bg-white dark:bg-zinc-900"
+                    style={{ background: theme === 'dark' ? '#18181b' : '#fff' }}
+                    onError={handleImageError}
+                  />
+                ) : (
+                  <div className="w-32 h-32 flex items-center justify-center rounded-xl shadow mb-2 bg-white dark:bg-zinc-900">
+                    <ImageOff className="w-10 h-10 text-muted-foreground/50" />
+                  </div>
+                )}
+                <h2 className="text-2xl font-bold text-center mb-1" style={{ color: theme === 'dark' ? '#fff' : '#18181b' }}>{displayName}</h2>
+                <div className={cn("text-lg font-semibold mb-2", theme === 'dark' ? "text-primary" : "text-primary")}>
+                  {formattedPrice} {product.unitType && <span className="text-xs text-foreground/70">/{product.unitType}</span>}
+                </div>
+                {currencyCode && (
+                  <Badge variant="outline" className="mb-2">{currencyCode}</Badge>
+                )}
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge>{product.category}</Badge>
+                  {product.flavorType && product.flavorType.length > 0 && (
+                    <Badge variant="outline">{product.flavorType.join(', ')}</Badge>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mb-2">
+                  {renderRating(product.rating)}
+                </div>
+              </div>
+              {/* Details grid */}
+              <div className="grid grid-cols-1 gap-2 mb-4">
+                {product.description && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Description</div>
+                    <div className="text-sm font-medium text-foreground/90">{product.description}</div>
+                  </div>
+                )}
+                {product.ingredients && product.ingredients.length > 0 && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Ingredients</div>
+                    <div className="flex flex-wrap gap-1">
+                      {product.ingredients.map((ing, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">{ing}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {product.usage && product.usage.length > 0 && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Usage</div>
+                    <div className="flex flex-wrap gap-1">
+                      {product.usage.map((u, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">{u}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {product.packagingSize && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Packaging Size</div>
+                    <div className="text-sm font-medium text-foreground/90">{product.packagingSize}</div>
+                  </div>
+                )}
+                {product.shelfLife && (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Shelf Life</div>
+                    <div className="text-sm font-medium text-foreground/90">{product.shelfLife}</div>
+                  </div>
+                )}
+                {product.manufacturerName || product.manufacturer ? (
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Manufacturer</div>
+                    <div className="text-sm font-medium text-foreground/90">
+                      {product.manufacturerName || product.manufacturer}
+                      {product.manufacturerRegion && (
+                        <span className="ml-1 text-muted-foreground">({product.manufacturerRegion})</span>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-        
-        <div className="flex justify-between items-center mt-3">
-          <p className="font-medium bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent group-hover:opacity-100 opacity-90 transition-opacity duration-300">
-            {product.price}
-          </p>
-          <Badge variant="secondary" className="text-xs">
-            {product.productType}
-          </Badge>
-        </div>
-      </CardContent>
+      </AnimatePresence>
       
-      <CardFooter className="p-4 pt-0 flex gap-2">
-        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex-1">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="w-full flex items-center justify-center gap-1 group-hover:border-primary transition-colors duration-300"
-            onClick={onDetailsClick}
-          >
-            <Info className="h-4 w-4 group-hover:animate-pulse" />
-            Details
-          </Button>
-        </motion.div>
-        <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="flex-1">
-          <Button 
-            size="sm" 
-            className="w-full flex items-center justify-center gap-1"
-          >
-            Match
-            <ArrowUpRight className="h-4 w-4 opacity-70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-          </Button>
-        </motion.div>
-      </CardFooter>
-    </Card>
+      {/* CSS for button ripple effect */}
+      <style>
+        {`
+          /* Improved ripple effect for buttons */
+          button {
+            position: relative;
+            overflow: hidden;
+          }
+          
+          button:after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 5px;
+            height: 5px;
+            background: rgba(255, 255, 255, 0.4);
+            opacity: 0;
+            border-radius: 100%;
+            transform: scale(1, 1) translate(-50%, -50%);
+            transform-origin: 50% 50%;
+          }
+          
+          button:focus:not(:active)::after {
+            animation: ripple 0.6s ease-out;
+          }
+          
+          @keyframes ripple {
+            0% {
+              transform: scale(0, 0);
+              opacity: 0.5;
+            }
+            20% {
+              transform: scale(25, 25);
+              opacity: 0.3;
+            }
+            100% {
+              opacity: 0;
+              transform: scale(40, 40);
+            }
+          }
+
+          /* Shimmer effect for price gradient */
+          @keyframes shimmer {
+            0% {
+              background-position: -100% 0;
+            }
+            100% {
+              background-position: 200% 0;
+            }
+          }
+        `}
+      </style>
+    </motion.div>
   );
 };
 

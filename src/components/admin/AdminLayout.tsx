@@ -18,7 +18,9 @@ import {
   HelpCircle,
   ChevronLeft,
   Search,
-  ShoppingBag
+  ShoppingBag,
+  Moon,
+  Sun
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -26,6 +28,25 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTheme } from '@/contexts/ThemeContext';
 import ThemeToggle from '@/components/ThemeToggle';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+
+// Define interface for admin user
+interface AdminUser {
+  email: string;
+  role: string;
+  name?: string;
+  loginTime?: string;
+  id?: string;
+  avatar?: string;
+  permissions?: string[];
+  settings?: Record<string, unknown>;
+}
 
 const AdminLayout = () => {
   const navigate = useNavigate();
@@ -34,23 +55,56 @@ const AdminLayout = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 1024);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [adminUser, setAdminUser] = useState<any>(null);
+  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const prefersReducedMotion = useReducedMotion();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
 
   // Check authentication
   useEffect(() => {
-    const adminAuth = localStorage.getItem('adminAuth');
-    const adminUserData = localStorage.getItem('adminUser');
+    const checkAdminAuth = () => {
+      const adminAuth = localStorage.getItem('adminAuth');
+      const adminUserData = localStorage.getItem('adminUser');
+      
+      if (adminAuth === 'true' && adminUserData) {
+        try {
+          const parsedUser = JSON.parse(adminUserData);
+          // Validate that this is actually an admin user with the required fields
+          if (parsedUser && parsedUser.role === 'admin' && parsedUser.email) {
+            setIsAuthenticated(true);
+            setAdminUser(parsedUser);
+            return true;
+          }
+        } catch (error) {
+          console.error('Error parsing admin user data:', error);
+          // Invalid user data in localStorage
+          localStorage.removeItem('adminAuth');
+          localStorage.removeItem('adminUser');
+        }
+      }
+      
+      // Not authenticated or invalid data
+      setIsAuthenticated(false);
+      navigate('/admin/login', { 
+        state: { 
+          from: location.pathname,
+          message: 'Please log in to access the admin panel' 
+        }
+      });
+      return false;
+    };
     
-    if (adminAuth === 'true' && adminUserData) {
-      setIsAuthenticated(true);
-      setAdminUser(JSON.parse(adminUserData));
-    } else {
-      navigate('/admin/login');
-    }
-  }, [navigate]);
+    checkAdminAuth();
+    
+    // Check session every 5 minutes
+    const sessionCheckInterval = setInterval(() => {
+      if (!checkAdminAuth()) {
+        clearInterval(sessionCheckInterval);
+      }
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(sessionCheckInterval);
+  }, [navigate, location.pathname]);
 
   // Handle responsive changes
   useEffect(() => {
@@ -67,9 +121,24 @@ const AdminLayout = () => {
   }, []);
 
   const handleLogout = () => {
+    // Clear admin session data
     localStorage.removeItem('adminAuth');
     localStorage.removeItem('adminUser');
-    navigate('/admin/login');
+    
+    // Clear any other sensitive data
+    sessionStorage.clear();
+    
+    // Set state to trigger UI update
+    setIsAuthenticated(false);
+    setAdminUser(null);
+    
+    // Redirect to login page
+    navigate('/admin/login', { 
+      state: { 
+        loggedOut: true,
+        message: 'You have been logged out successfully' 
+      } 
+    });
   };
 
   const navigation = [
@@ -503,36 +572,6 @@ const AdminLayout = () => {
             {/* Bottom actions */}
             <div className={`p-3 pt-2 mt-auto border-t ${isDark ? 'border-gray-800' : 'border-gray-200'} ${collapsed ? 'grid grid-cols-1 gap-3' : 'space-y-2'}`}>
               <TooltipProvider delayDuration={0}>
-                {/* <Tooltip>
-                  <TooltipTrigger asChild>
-                    <motion.div
-                      whileHover="hover"
-                      whileTap="tap"
-                      variants={navItemVariants}
-                      className={collapsed ? "flex justify-center" : ""}
-                    >
-                      <Button
-                        variant="outline"
-                        size={collapsed ? 'icon' : 'default'}
-                        className={`${collapsed ? "h-10 w-10 p-0" : "w-full justify-start"} group`}
-                        onClick={() => navigate('/admin/profile')}
-                      >
-                        <motion.span 
-                          className={`${collapsed ? '' : 'mr-2'} group-hover:text-primary`}
-                          whileHover={{ rotate: [0, -10, 10, 0] }}
-                          transition={{ duration: 0.5 }}
-                        >
-                          <UserCog className="h-5 w-5" />
-                        </motion.span>
-                        {!collapsed && 'Account'}
-                      </Button>
-                    </motion.div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className={collapsed ? 'block' : 'hidden'}>
-                    Account
-                  </TooltipContent>
-                </Tooltip> */}
-
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <motion.div
@@ -592,8 +631,6 @@ const AdminLayout = () => {
                     Help
                   </TooltipContent>
                 </Tooltip>
-
-                {/* ThemeToggle is commented out */}
 
                 <Tooltip>
                   <TooltipTrigger asChild>

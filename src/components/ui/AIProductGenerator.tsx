@@ -6,7 +6,7 @@ import { Progress } from "./progress";
 import AnimatedTitle from "./animated-title";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Clipboard, Check } from "lucide-react";
 import { useTranslation } from 'react-i18next';
 
 const AIProductGenerator = () => {
@@ -16,6 +16,8 @@ const AIProductGenerator = () => {
   const [showResult, setShowResult] = useState(false);
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
+  const MAX_DESC_LENGTH = 500;
 
   // Gọi API BE (chuẩn bị cho backend)
   const callAIGenerator = async (desc: string) => {
@@ -53,6 +55,17 @@ const AIProductGenerator = () => {
     }
     setLoading(false);
     setShowResult(true);
+  };
+
+  const handleCopy = async () => {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
@@ -128,7 +141,12 @@ const AIProductGenerator = () => {
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 disabled={loading}
+                maxLength={MAX_DESC_LENGTH}
+                onKeyDown={e => { if (e.ctrlKey && e.key === "Enter") handleGenerate(); }}
               />
+              <div className="w-full text-right text-xs text-muted-foreground mt-1">
+                {description.length}/{MAX_DESC_LENGTH}
+              </div>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -162,7 +180,7 @@ const AIProductGenerator = () => {
           </CardContent>
         </Card>
         {/* Popup Dialog for result hoặc lỗi */}
-        <Dialog open={showResult || !!error} onOpenChange={v => { setShowResult(v); setError(""); }}>
+        <Dialog open={showResult || !!error} onOpenChange={v => { setShowResult(v); setError(""); setCopySuccess(false); }}>
           <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle>{error ? t('ai-product-generator.error-title') : t('ai-product-generator.result-title')}</DialogTitle>
@@ -173,6 +191,17 @@ const AIProductGenerator = () => {
             <div className="whitespace-pre-line text-base text-foreground/90 mt-4">
               {error ? error : result}
             </div>
+            {result && !error && (
+              <Button
+                variant="outline"
+                className="mt-6"
+                onClick={handleCopy}
+                disabled={copySuccess}
+              >
+                {copySuccess ? <Check className="w-4 h-4 mr-2" /> : <Clipboard className="w-4 h-4 mr-2" />} 
+                {copySuccess ? t('ai-product-generator.copied') || 'Copied!' : t('ai-product-generator.copy') || 'Copy'}
+              </Button>
+            )}
           </DialogContent>
         </Dialog>
       </motion.div>
